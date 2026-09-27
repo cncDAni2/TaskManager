@@ -1,0 +1,66 @@
+{
+  "next_id": 21,
+  "work_seconds": 1038,
+  "last_reset": 1790493300,
+  "work_history": [{"date": "2026-09-13", "seconds": 19137}, {"date": "2026-09-14", "seconds": 12561}, {"date": "2026-09-15", "seconds": 10157}, {"date": "2026-09-16", "seconds": 11310}, {"date": "2026-09-17", "seconds": 7337}, {"date": "2026-09-18", "seconds": 8609}, {"date": "2026-09-19", "seconds": 9134}, {"date": "2026-09-20", "seconds": 6944}, {"date": "2026-09-21", "seconds": 25199}, {"date": "2026-09-22", "seconds": 17856}, {"date": "2026-09-23", "seconds": 25824}, {"date": "2026-09-24", "seconds": 8747}, {"date": "2026-09-25", "seconds": 13304}, {"date": "2026-09-26", "seconds": 22047}],
+  "sync_file_path": "C:\\Users\\z004c74j\\OneDrive - Siemens AG\\TaskManager\\tasks.json",
+  "active_order": [19, 11, 7, 6, 12, 8, 10, 13, 1000003, 1000004],
+  "tasks": [
+    {
+      "id": 6,
+      "text": "Multicamera review",
+      "completed": false,
+      "created_at": 1790426413,
+      "completed_at": 0
+    },
+    {
+      "id": 7,
+      "text": "E2E: Done -> Lévai",
+      "completed": false,
+      "created_at": 1790426415,
+      "completed_at": 0
+    },
+    {
+      "id": 8,
+      "text": "Letső Camera parameter change Review",
+      "completed": false,
+      "created_at": 1790426419,
+      "completed_at": 0
+    },
+    {
+      "id": 10,
+      "text": "robot test: Audit run from 0 in new box",
+      "completed": false,
+      "created_at": 1790430183,
+      "completed_at": 0
+    },
+    {
+      "id": 11,
+      "text": "18as box HIBA!?",
+      "completed": false,
+      "created_at": 1790430188,
+      "completed_at": 0
+    },
+    {
+      "id": 12,
+      "text": "E2E-es reject reset hiba (lsd MD file E2E-nél) vizsgálat",
+      "completed": false,
+      "created_at": 1790430237,
+      "completed_at": 0
+    },
+    {
+      "id": 13,
+      "text": "Test cases: Continue...",
+      "completed": false,
+      "created_at": 1790430427,
+      "completed_at": 0
+    },
+    {
+      "id": 19,
+      "text": "DEMO készülés + Attila",
+      "completed": false,
+      "created_at": 1790508780,
+      "completed_at": 0
+    }
+  ]
+}
