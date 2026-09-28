@@ -51,7 +51,12 @@ Egy minimális erőforrásigényű (közel 0% CPU, ~2-4 MB RAM aktív állapotba
      - **Kuka ikon (`🗑`)**: végleges törlés.
      - **Jelölőnégyzet (`[✓]`)**: visszakattintva a feladat újra aktívvá válik! (Szerkesztési lehetőség itt a kérésnek megfelelően nincs, csak törlés és újra-aktiválás).
 
-6. **Közel 0 erőforrásigény**:
+6. **Munkaidő nézet**:
+   - Az **`Idők`** gombbal a napi és heti munkaidő-előzmény jelenik meg.
+   - A **`Manuális`** gombbal dátumonként szerkeszthető a kézi idő órában; a kiválasztott nap meglévő értéke előtöltődik, a `0` törli azt.
+   - A mért és manuálisan hozzáadott idő eltérő színű csíkszakaszt kap; a részletek a csík fölötti eszköztippben láthatók.
+
+7. **Közel 0 erőforrásigény**:
    - Tiszta Win32 C++ (nincs keretrendszer, nincs háttérben pörgő felesleges szál vagy timer).
    - Eseményvezérelt `GetMessage` üzenetciklus (0.00% CPU tétlen állapotban).
    - Elrejtéskor a rendszer automatikusan kiüríti a memóriát (`SetProcessWorkingSetSize`), így az alkalmazás minimális memóriát foglal.
@@ -64,4 +69,4 @@ A mellékelt `build.bat` parancsfájl azonnal lefordítja az alkalmazást:
 ```cmd
 build.bat
 ```
-A generált futtatható fájl: `TaskManager.exe` (~350 KB méretű önálló natív exe).
+A generált futtatható fájl: `TaskManager.exe` (~350 KB méretű önálló natív exe). A fordítás köztes fájljai a `dist/` mappába kerülnek.

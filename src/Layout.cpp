@@ -99,6 +99,7 @@ void UpdateControlsVisibility() {
         ShowWindow(g_hSyncFolderBtn, SW_HIDE);
         ShowWindow(g_hToggleViewBtn, SW_HIDE);
         ShowWindow(g_hTimeHistoryBtn, SW_HIDE);
+        ShowWindow(g_hManualWorkBtn, SW_HIDE);
         ShowWindow(g_hCloseBtn, SW_HIDE);
         ShowWindow(g_hPinBtn, SW_HIDE);
         ShowWindow(g_hFilterRecentBtn, SW_HIDE);
@@ -115,7 +116,8 @@ void UpdateControlsVisibility() {
     bool isHistory = (g_viewMode == ViewMode::WorkHistory);
     ShowWindow(g_hTimeHistoryBtn, isHistory ? SW_HIDE : SW_SHOW);
     SetWindowPos(g_hToggleViewBtn, nullptr, isHistory ? 286 : 345, 10,
-        isHistory ? 184 : 125, 28, SWP_NOZORDER | SWP_NOACTIVATE);
+        isHistory ? 104 : 125, 28, SWP_NOZORDER | SWP_NOACTIVATE);
+    ShowWindow(g_hManualWorkBtn, isHistory ? SW_SHOW : SW_HIDE);
     ShowWindow(g_hEdit, isActive ? SW_SHOW : SW_HIDE);
     ShowWindow(g_hAddBtn, isActive ? SW_SHOW : SW_HIDE);
     ShowWindow(g_hSyncToggleBtn, isActive ? SW_SHOW : SW_HIDE);

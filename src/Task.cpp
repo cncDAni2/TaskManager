@@ -165,7 +165,19 @@ std::vector<Task> TaskStore::GetAllCompletedTasks() const {
 
 std::vector<WorkHistory::DisplayEntry> TaskStore::GetWorkHistory() const {
     time_t currentDay = last_reset_time != 0 ? last_reset_time : time(nullptr);
-    return WorkHistory::GetDisplayEntries(work_history, currentDay, work_seconds_today);
+    return WorkHistory::GetDisplayEntries(work_history, manual_work_history, currentDay, work_seconds_today);
+}
+
+void TaskStore::SetManualWork(const std::string& date, int seconds) {
+    if (date.size() != 10) return;
+    if (seconds <= 0) {
+        manual_work_history.erase(date);
+        auto measuredIt = work_history.find(date);
+        if (measuredIt != work_history.end() && measuredIt->second <= 0) work_history.erase(measuredIt);
+    } else {
+        manual_work_history[date] = seconds;
+    }
+    SaveLocal();
 }
 
 void TaskStore::SetSyncFilePath(const std::wstring& newPath) {
@@ -182,7 +194,7 @@ void TaskStore::SaveLocal() {
     out << "{\n  \"next_id\": " << next_id << ",\n"
         << "  \"work_seconds\": " << work_seconds_today << ",\n"
         << "  \"last_reset\": " << (unsigned long long)last_reset_time << ",\n";
-    WorkHistory::WriteJson(out, work_history);
+    WorkHistory::WriteJson(out, work_history, manual_work_history);
     out << "  \"sync_file_path\": \"" << TaskUtils::EscapeJsonString(TaskUtils::WideToUtf8(syncFilePath)) << "\",\n"
         << "  \"active_order\": [";
     for (size_t i = 0; i < active_order.size(); ++i) {
@@ -272,7 +284,7 @@ bool TaskStore::LoadSync() {
 
     std::string content((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
     in.close();
-    WorkHistory::LoadFromJson(content, work_history);
+    WorkHistory::LoadFromJson(content, work_history, manual_work_history);
 
     size_t pos = 0;
     int maxSyncId = 1000000;
@@ -381,6 +393,7 @@ void TaskStore::LoadLocal() {
 
     std::string content((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
     in.close();
+    WorkHistory::LoadFromJson(content, work_history, manual_work_history);
 
     size_t nextIdPos = content.find("\"next_id\":");
     if (nextIdPos != std::string::npos) {

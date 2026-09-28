@@ -12,12 +12,14 @@ namespace WorkHistory {
             std::string date;
             std::wstring label;
             int seconds;
+            int manualSeconds;
             bool isSunday;
         };
 
         struct WeekEntries {
             int weekNumber = 0;
             long long totalSeconds = 0;
+            long long manualSeconds = 0;
             std::vector<DayEntry> days;
         };
 
@@ -60,7 +62,7 @@ namespace WorkHistory {
         return buffer;
     }
 
-    void LoadFromJson(const std::string& content, Records& records) {
+    void LoadFromJson(const std::string& content, Records& records, Records& manualRecords) {
         size_t historyPos = content.find("\"work_history\":");
         if (historyPos == std::string::npos) return;
         size_t arrayStart = content.find('[', historyPos);
@@ -74,6 +76,7 @@ namespace WorkHistory {
             std::string object = content.substr(position, objectEnd - position + 1);
             size_t datePos = object.find("\"date\"");
             size_t secondsPos = object.find("\"seconds\"");
+            size_t manualSecondsPos = object.find("\"manual_seconds\"");
             if (datePos != std::string::npos && secondsPos != std::string::npos) {
                 size_t dateStart = object.find('"', object.find(':', datePos) + 1);
                 size_t dateEnd = dateStart == std::string::npos ? std::string::npos : object.find('"', dateStart + 1);
@@ -82,28 +85,46 @@ namespace WorkHistory {
                     std::string date = object.substr(dateStart + 1, dateEnd - dateStart - 1);
                     size_t valueEnd = object.find_first_not_of("0123456789", valueStart);
                     int seconds = std::stoi(object.substr(valueStart, valueEnd - valueStart));
-                    if (date.size() == 10 && seconds >= 0) records[date] = seconds;
+                    if (date.size() == 10 && seconds >= 0) {
+                        records[date] = seconds;
+                        if (manualSecondsPos != std::string::npos) {
+                            size_t manualStart = object.find_first_of("0123456789", object.find(':', manualSecondsPos) + 1);
+                            if (manualStart != std::string::npos) {
+                                size_t manualEnd = object.find_first_not_of("0123456789", manualStart);
+                                int manualSeconds = std::stoi(object.substr(manualStart, manualEnd - manualStart));
+                                if (manualSeconds > 0) manualRecords[date] = manualSeconds;
+                                else manualRecords.erase(date);
+                            }
+                        }
+                    }
                 }
             }
             position = objectEnd + 1;
         }
     }
 
-    void WriteJson(std::ostream& out, const Records& records) {
+    void WriteJson(std::ostream& out, const Records& records, const Records& manualRecords) {
         out << "  \"work_history\": [";
         bool first = true;
-        for (const auto& entry : records) {
+        std::map<std::string, std::pair<int, int>> combined;
+        for (const auto& entry : records) combined[entry.first].first = entry.second;
+        for (const auto& entry : manualRecords) combined[entry.first].second = entry.second;
+        for (const auto& entry : combined) {
+            if (entry.second.first <= 0 && entry.second.second <= 0) continue;
             if (!first) out << ", ";
             first = false;
-            out << "{\"date\": \"" << entry.first << "\", \"seconds\": " << entry.second << "}";
+            out << "{\"date\": \"" << entry.first << "\", \"seconds\": " << entry.second.first;
+            if (entry.second.second > 0) out << ", \"manual_seconds\": " << entry.second.second;
+            out << "}";
         }
         out << "],\n";
     }
 
     std::vector<DisplayEntry> GetDisplayEntries(
-        const Records& records, time_t currentDay, int currentSeconds) {
+        const Records& records, const Records& manualRecords, time_t currentDay, int currentSeconds) {
         Records displayRecords = records;
         displayRecords[DateKey(currentDay)] = currentSeconds;
+        for (const auto& entry : manualRecords) displayRecords.emplace(entry.first, 0);
 
         std::map<std::string, WeekEntries> weeks;
         for (auto it = displayRecords.rbegin(); it != displayRecords.rend(); ++it) {
@@ -114,11 +135,17 @@ namespace WorkHistory {
 
             WeekEntries& week = weeks[weekStart];
             week.weekNumber = weekNumber;
-            week.totalSeconds += std::max(0, it->second);
+            int manualSeconds = 0;
+            auto manualIt = manualRecords.find(it->first);
+            if (manualIt != manualRecords.end()) manualSeconds = std::max(0, manualIt->second);
+            int measuredSeconds = std::max(0, it->second);
+            if (measuredSeconds == 0 && manualSeconds == 0 && it->first != DateKey(currentDay)) continue;
+            week.totalSeconds += measuredSeconds + manualSeconds;
+            week.manualSeconds += manualSeconds;
 
             std::wstring label = std::to_wstring(it->first[5] - '0') + std::to_wstring(it->first[6] - '0') + L"." +
                 std::to_wstring(it->first[8] - '0') + std::to_wstring(it->first[9] - '0');
-            week.days.push_back({ it->first, label, it->second, isSunday });
+            week.days.push_back({ it->first, label, measuredSeconds + manualSeconds, manualSeconds, isSunday });
         }
 
         std::vector<DisplayEntry> entries;
@@ -137,9 +164,11 @@ namespace WorkHistory {
                 if (i == summaryIndex) {
                     int totalSeconds = static_cast<int>(std::min<long long>(
                         week.totalSeconds, std::numeric_limits<int>::max()));
-                    entries.push_back({ std::to_wstring(week.weekNumber) + L". hét", totalSeconds, true });
+                    int manualSeconds = static_cast<int>(std::min<long long>(
+                        week.manualSeconds, std::numeric_limits<int>::max()));
+                    entries.push_back({ std::to_wstring(week.weekNumber) + L". hét", totalSeconds, manualSeconds, true });
                 }
-                entries.push_back({ week.days[i].label, week.days[i].seconds, false });
+                entries.push_back({ week.days[i].label, week.days[i].seconds, week.days[i].manualSeconds, false });
             }
         }
         return entries;

@@ -6,6 +6,7 @@ HWND g_hEdit = nullptr;
 HWND g_hAddBtn = nullptr;
 HWND g_hToggleViewBtn = nullptr;
 HWND g_hTimeHistoryBtn = nullptr;
+HWND g_hManualWorkBtn = nullptr;
 HWND g_hCloseBtn = nullptr;
 HWND g_hPinBtn = nullptr;
 HWND g_hSyncFolderBtn = nullptr;

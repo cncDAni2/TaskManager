@@ -6,6 +6,7 @@
 #include "Paint.h"
 #include "UIEventHandler.h"
 #include "PopupNotice.h"
+#include "BarTooltips.h"
 #include <windowsx.h>
 #include <commctrl.h>
 #include <algorithm>
@@ -128,6 +129,11 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                 286, 10, 54, 28, hWnd, (HMENU)IDC_TIME_HISTORY_BTN, hInst, nullptr);
             SendMessageW(g_hTimeHistoryBtn, WM_SETFONT, (WPARAM)g_hFontSmall, TRUE);
 
+            g_hManualWorkBtn = CreateWindowW(L"BUTTON", L"Manuális",
+                WS_CHILD | BS_PUSHBUTTON | WS_TABSTOP,
+                394, 10, 80, 28, hWnd, (HMENU)IDC_MANUAL_WORK_BTN, hInst, nullptr);
+            SendMessageW(g_hManualWorkBtn, WM_SETFONT, (WPARAM)g_hFontSmall, TRUE);
+
             g_hToggleViewBtn = CreateWindowW(L"BUTTON", L"Elkészült (0)",
                 WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON | WS_TABSTOP,
                 345, 10, 125, 28, hWnd, (HMENU)IDC_TOGGLE_VIEW_BTN, hInst, nullptr);
@@ -174,6 +180,14 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                 tiClose.uId = (UINT_PTR)g_hCloseBtn;
                 tiClose.lpszText = (LPWSTR)L"Bezárás (PIN módból kilépés)";
                 SendMessageW(hTooltip, TTM_ADDTOOL, 0, (LPARAM)&tiClose);
+
+                TOOLINFOW tiManualWork{};
+                tiManualWork.cbSize = sizeof(TOOLINFOW);
+                tiManualWork.uFlags = TTF_SUBCLASS | TTF_IDISHWND;
+                tiManualWork.hwnd = hWnd;
+                tiManualWork.uId = (UINT_PTR)g_hManualWorkBtn;
+                tiManualWork.lpszText = (LPWSTR)L"Manuális munkaidő szerkesztése";
+                SendMessageW(hTooltip, TTM_ADDTOOL, 0, (LPARAM)&tiManualWork);
             }
 
             g_hEdit = CreateWindowExW(WS_EX_CLIENTEDGE, L"EDIT", L"",
@@ -396,6 +410,11 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 
         case WM_DRAWITEM: {
             if (HandleDrawItem(hWnd, (DRAWITEMSTRUCT*)lParam)) return TRUE;
+            break;
+        }
+
+        case WM_NOTIFY: {
+            if (BarTooltips::HandleNotify(lParam)) return 0;
             break;
         }
 

@@ -8,7 +8,8 @@ For feature overview and usage, see [README.md](README.md).
 
 - **Build**: Run [build.bat](build.bat) via terminal (`cmd.exe /c "cd /d C:\work\TaskManager && build.bat"`).
   - Uses MSVC x64 (`vcvars64.bat`), compiles resources via `rc.exe`, and builds `src\*.cpp` with `/utf-8 /std:c++17 /O2 /MT /W4`.
-  - Output binary: `TaskManager.exe`.
+  - Intermediate object and resource files: `dist\obj\` and `dist\TaskManager.res` (ignored by Git).
+  - Output binary: `TaskManager.exe` (kept beside `tasks.json`, which the app locates relative to its executable).
 - **Process locking**: Before rebuilding or testing, ensure any running instance is stopped (`Stop-Process -Name TaskManager -Force -ErrorAction SilentlyContinue`).
 - **Testing**:
   - Logic tests: compile against [Task.h](Task.h) or `src/Task.h` with MSVC (`cl.exe /nologo /EHsc /std:c++17 test_*.cpp user32.lib secur32.lib`) and clean up test binaries.

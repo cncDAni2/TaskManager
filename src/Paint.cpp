@@ -3,6 +3,51 @@
 #include "Drawing.h"
 #include "Layout.h"
 #include "TaskUtils.h"
+#include "BarTooltips.h"
+
+namespace {
+    int CurrentManualWorkSeconds() {
+        time_t currentDay = g_store.last_reset_time != 0 ? g_store.last_reset_time : time(nullptr);
+        auto it = g_store.manual_work_history.find(WorkHistory::DateKey(currentDay));
+        return it == g_store.manual_work_history.end() ? 0 : std::max(0, it->second);
+    }
+
+    std::wstring FormatTooltipDuration(int seconds) {
+        int minutes = std::max(0, seconds) / 60;
+        return std::to_wstring(minutes / 60) + L" óra " + std::to_wstring(minutes % 60) + L" perc";
+    }
+
+    std::wstring BuildWorkTooltip(int measuredSeconds, int manualSeconds) {
+        return L"Mért: " + FormatTooltipDuration(measuredSeconds) +
+            L"\nKézi: " + FormatTooltipDuration(manualSeconds) +
+            L"\nÖsszesen: " + FormatTooltipDuration(measuredSeconds + manualSeconds);
+    }
+
+    void DrawBarSegments(HDC hdc, const RECT& track, int measuredSeconds, int manualSeconds,
+        int denominator, COLORREF measuredColor, COLORREF manualColor) {
+        int trackWidth = std::max(0, static_cast<int>(track.right - track.left));
+        if (trackWidth == 0 || denominator <= 0) return;
+        long long totalSeconds = (long long)std::max(0, measuredSeconds) + std::max(0, manualSeconds);
+        int totalWidth = static_cast<int>((long long)trackWidth * std::min<long long>(totalSeconds, denominator) / denominator);
+        int measuredWidth = static_cast<int>((long long)trackWidth * std::min(std::max(0, measuredSeconds), denominator) / denominator);
+        measuredWidth = std::min(measuredWidth, totalWidth);
+        if (measuredWidth > 0) {
+            RECT fill = track;
+            fill.right = fill.left + measuredWidth;
+            HBRUSH brush = CreateSolidBrush(measuredColor);
+            FillRect(hdc, &fill, brush);
+            DeleteObject(brush);
+        }
+        if (totalWidth > measuredWidth) {
+            RECT fill = track;
+            fill.left += measuredWidth;
+            fill.right = track.left + totalWidth;
+            HBRUSH brush = CreateSolidBrush(manualColor);
+            FillRect(hdc, &fill, brush);
+            DeleteObject(brush);
+        }
+    }
+}
 
 static const std::wstring& CurrentUserName() {
     static const std::wstring userName = TaskUtils::GetCleanUserName();
@@ -166,18 +211,14 @@ void PaintMiniWindow(HWND hWnd, HDC hdc) {
 
     int workSec = g_store.work_seconds_today;
     const int targetWorkSec = 8 * 3600;
-    double ratio = (double)workSec / (double)targetWorkSec;
-    if (ratio > 1.0) ratio = 1.0;
-    if (ratio < 0.0) ratio = 0.0;
-    int barWidth = (int)(clientW * ratio);
-
-    if (barWidth > 0) {
-        COLORREF fillCol = g_isWorkActive ? RGB(34, 197, 94) : RGB(239, 68, 68);
-        HBRUSH hBrFill = CreateSolidBrush(fillCol);
-        RECT rcFill = { 0, clientH - 3, barWidth, clientH };
-        FillRect(hdcMem, &rcFill, hBrFill);
-        DeleteObject(hBrFill);
-    }
+    int manualSec = CurrentManualWorkSeconds();
+    RECT rcMiniBar = { 0, clientH - 3, clientW, clientH };
+    DrawBarSegments(hdcMem, rcMiniBar, workSec, manualSec, targetWorkSec,
+        g_isWorkActive ? RGB(34, 197, 94) : RGB(239, 68, 68), RGB(245, 158, 11));
+    std::vector<BarTooltips::Region> barToolRegions = {
+        { rcMiniBar, BuildWorkTooltip(workSec, manualSec) }
+    };
+    BarTooltips::Update(hWnd, barToolRegions);
 
     BitBlt(hdc, 0, 0, clientW, clientH, hdcMem, 0, 0, SRCCOPY);
 
@@ -199,6 +240,7 @@ void PaintMainWindow(HWND hWnd, HDC hdc) {
     HGDIOBJ hOldBmp = SelectObject(hdcMem, hBmp);
 
     const bool isHistory = g_viewMode == ViewMode::WorkHistory;
+    std::vector<BarTooltips::Region> barToolRegions;
     const COLORREF historyBg = RGB(8, 25, 54);
     HBRUSH hBrushBg = CreateSolidBrush(isHistory ? historyBg : th.bgWindow);
     FillRect(hdcMem, &rcClient, hBrushBg);
@@ -292,10 +334,27 @@ void PaintMainWindow(HWND hWnd, HDC hdc) {
                 : (int)((long long)(rcBar.right - rcBar.left) * std::max(0, entry.seconds) / maxSeconds);
             if (barWidth > 0) {
                 RECT rcFill = rcBar;
-                rcFill.right = rcFill.left + barWidth;
+                int manualWidth = entry.isWeeklySummary
+                    ? (int)((long long)(rcBar.right - rcBar.left) * std::min(entry.manualSeconds, 40 * 60 * 60) / (40 * 60 * 60))
+                    : (int)((long long)(rcBar.right - rcBar.left) * std::max(0, entry.manualSeconds) / maxSeconds);
+                manualWidth = std::min(manualWidth, barWidth);
+                int measuredWidth = barWidth - manualWidth;
+                rcFill.right = rcFill.left + measuredWidth;
                 HBRUSH hFill = CreateSolidBrush(entry.isWeeklySummary ? RGB(255, 205, 64) : RGB(55, 145, 232));
-                FillRect(hdcMem, &rcFill, hFill);
+                if (measuredWidth > 0) FillRect(hdcMem, &rcFill, hFill);
                 DeleteObject(hFill);
+                if (manualWidth > 0) {
+                    rcFill.left += measuredWidth;
+                    rcFill.right = rcFill.left + manualWidth;
+                    HBRUSH hManual = CreateSolidBrush(entry.isWeeklySummary ? RGB(244, 122, 52) : RGB(245, 158, 11));
+                    FillRect(hdcMem, &rcFill, hManual);
+                    DeleteObject(hManual);
+                }
+            }
+            RECT rcRowTooltip = { 0, std::max(rowTop, topOffset), clientW, std::min(rowTop + 18, listBottom) };
+            if (rcRowTooltip.top < rcRowTooltip.bottom) {
+                barToolRegions.push_back({ rcRowTooltip,
+                    BuildWorkTooltip(entry.seconds - entry.manualSeconds, entry.manualSeconds) });
             }
         }
     } else if (g_displayItems.empty()) {
@@ -567,22 +626,15 @@ void PaintMainWindow(HWND hWnd, HDC hdc) {
     DeleteObject(hPenTrack);
 
     int workSec = g_store.work_seconds_today;
+    int manualSec = CurrentManualWorkSeconds();
+    int totalWorkSec = workSec + manualSec;
     const int targetWorkSec = 8 * 3600;
-    double ratio = (double)workSec / (double)targetWorkSec;
-    if (ratio > 1.0) ratio = 1.0;
-    if (ratio < 0.0) ratio = 0.0;
-    int trackInnerW = (rcTrack.right - 1) - (rcTrack.left + 1);
-    int barWidth = (int)(trackInnerW * ratio);
-
-    if (barWidth > 0) {
-        RECT rcFill = { rcTrack.left + 1, rcTrack.top + 1, rcTrack.left + 1 + barWidth, rcTrack.bottom - 1 };
-        COLORREF fillCol = g_isWorkActive 
-            ? (g_darkMode ? RGB(37, 99, 235) : RGB(147, 197, 253)) 
-            : (g_darkMode ? RGB(71, 85, 105) : RGB(203, 213, 225));
-        HBRUSH hBrFill = CreateSolidBrush(fillCol);
-        FillRect(hdcMem, &rcFill, hBrFill);
-        DeleteObject(hBrFill);
-    }
+    RECT rcFill = { rcTrack.left + 1, rcTrack.top + 1, rcTrack.right - 1, rcTrack.bottom - 1 };
+    COLORREF measuredColor = g_isWorkActive
+        ? (g_darkMode ? RGB(37, 99, 235) : RGB(147, 197, 253))
+        : (g_darkMode ? RGB(71, 85, 105) : RGB(203, 213, 225));
+    DrawBarSegments(hdcMem, rcFill, workSec, manualSec, targetWorkSec, measuredColor, RGB(245, 158, 11));
+    barToolRegions.push_back({ rcTrack, BuildWorkTooltip(workSec, manualSec) });
 
     int dotY = rcTrack.top + (rcTrack.bottom - rcTrack.top) / 2;
     int dotX = rcTrack.left + 10;
@@ -605,8 +657,8 @@ void PaintMainWindow(HWND hWnd, HDC hdc) {
     SetBkMode(hdcMem, TRANSPARENT);
     SetTextColor(hdcMem, isHistory ? RGB(235, 242, 252) : (g_darkMode ? RGB(255, 255, 255) : RGB(15, 23, 42)));
 
-    std::wstring workStr = TaskUtils::FormatWorkDuration(workSec);
-    double pct = ((double)workSec / (double)targetWorkSec) * 100.0;
+    std::wstring workStr = TaskUtils::FormatWorkDuration(totalWorkSec);
+    double pct = ((double)totalWorkSec / (double)targetWorkSec) * 100.0;
     wchar_t labelBuf[128];
     if (g_isWorkActive) {
         swprintf_s(labelBuf, L"Munkaidő: %s (%.0f%%)", workStr.c_str(), pct);
@@ -618,6 +670,7 @@ void PaintMainWindow(HWND hWnd, HDC hdc) {
     RECT rcLabel = { dotX + 10, rcTrack.top, rcTrack.right - 10, rcTrack.bottom };
     DrawTextW(hdcMem, labelBuf, -1, &rcLabel, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
 
+    BarTooltips::Update(hWnd, barToolRegions);
     BitBlt(hdc, 0, 0, clientW, clientH, hdcMem, 0, 0, SRCCOPY);
 
     SelectObject(hdcMem, hOldBmp);

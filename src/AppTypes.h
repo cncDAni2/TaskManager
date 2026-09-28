@@ -24,6 +24,7 @@
 #define IDC_SYNC_TOGGLE_BTN 2009
 #define IDC_SYNC_FOLDER_BTN 2010
 #define IDC_TIME_HISTORY_BTN 2011
+#define IDC_MANUAL_WORK_BTN  2012
 
 // System Tray and Menu IDs
 #define IDM_TRAY_OPEN       3001

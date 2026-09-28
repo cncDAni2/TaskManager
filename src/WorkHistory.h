@@ -13,12 +13,13 @@ namespace WorkHistory {
     struct DisplayEntry {
         std::wstring label;
         int seconds;
+        int manualSeconds;
         bool isWeeklySummary;
     };
 
     std::string DateKey(time_t timestamp);
-    void LoadFromJson(const std::string& content, Records& records);
-    void WriteJson(std::ostream& out, const Records& records);
+    void LoadFromJson(const std::string& content, Records& records, Records& manualRecords);
+    void WriteJson(std::ostream& out, const Records& records, const Records& manualRecords);
     std::vector<DisplayEntry> GetDisplayEntries(
-        const Records& records, time_t currentDay, int currentSeconds);
+        const Records& records, const Records& manualRecords, time_t currentDay, int currentSeconds);
 }

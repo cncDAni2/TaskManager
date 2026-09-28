@@ -14,6 +14,7 @@ public:
     int work_seconds_today = 0;
     time_t last_reset_time = 0;
     WorkHistory::Records work_history;
+    WorkHistory::Records manual_work_history;
     std::wstring filePath;
     std::wstring syncFilePath;
     FILETIME lastSyncFileTime = { 0, 0 };
@@ -32,6 +33,7 @@ public:
     std::vector<Task> GetRecentCompletedTasks() const;
     std::vector<Task> GetAllCompletedTasks() const;
     std::vector<WorkHistory::DisplayEntry> GetWorkHistory() const;
+    void SetManualWork(const std::string& date, int seconds);
 
     void SetSyncFilePath(const std::wstring& newPath);
     void SaveLocal();

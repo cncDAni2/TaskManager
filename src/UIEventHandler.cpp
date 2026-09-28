@@ -4,6 +4,7 @@
 #include "Layout.h"
 #include "InlineEdit.h"
 #include "MainWindow.h"
+#include "WorkTimeDialog.h"
 #include <windowsx.h>
 #include <commdlg.h>
 #include <algorithm>
@@ -516,6 +517,15 @@ bool HandleCommand(HWND hWnd, int id) {
         UpdateControlsVisibility();
         RecalculateLayout();
         InvalidateRect(hWnd, nullptr, TRUE);
+        return true;
+    } else if (id == IDC_MANUAL_WORK_BTN) {
+        std::string date;
+        int seconds = 0;
+        if (ShowManualWorkDialog(hWnd, g_store.manual_work_history, date, seconds)) {
+            g_store.SetManualWork(date, seconds);
+            RecalculateLayout();
+            InvalidateRect(hWnd, nullptr, FALSE);
+        }
         return true;
     } else if (id == IDC_TOGGLE_VIEW_BTN) {
         CommitInlineEdit();

@@ -10,6 +10,7 @@ extern HWND g_hEdit;
 extern HWND g_hAddBtn;
 extern HWND g_hToggleViewBtn;
 extern HWND g_hTimeHistoryBtn;
+extern HWND g_hManualWorkBtn;
 extern HWND g_hCloseBtn;
 extern HWND g_hPinBtn;
 extern HWND g_hSyncFolderBtn;
