@@ -85,6 +85,27 @@ void DrawPencilIcon(HDC hdc, const RECT& rc, COLORREF color) {
     DeleteObject(hPen);
 }
 
+void DrawFocusIcon(HDC hdc, const RECT& rc, COLORREF color) {
+    int cx = rc.left + (rc.right - rc.left) / 2;
+    int cy = rc.top + (rc.bottom - rc.top) / 2;
+    HPEN hPen = CreatePen(PS_SOLID, 2, color);
+    HGDIOBJ hOldPen = SelectObject(hdc, hPen);
+    HGDIOBJ hOldBrush = SelectObject(hdc, GetStockObject(NULL_BRUSH));
+    Ellipse(hdc, cx - 6, cy - 6, cx + 7, cy + 7);
+    Ellipse(hdc, cx - 2, cy - 2, cx + 3, cy + 3);
+    MoveToEx(hdc, cx, cy - 9, nullptr);
+    LineTo(hdc, cx, cy - 6);
+    MoveToEx(hdc, cx, cy + 6, nullptr);
+    LineTo(hdc, cx, cy + 9);
+    MoveToEx(hdc, cx - 9, cy, nullptr);
+    LineTo(hdc, cx - 6, cy);
+    MoveToEx(hdc, cx + 6, cy, nullptr);
+    LineTo(hdc, cx + 9, cy);
+    SelectObject(hdc, hOldBrush);
+    SelectObject(hdc, hOldPen);
+    DeleteObject(hPen);
+}
+
 void DrawPinIcon(HDC hdc, const RECT& rc, COLORREF color, bool /*isPinned*/) {
     int cx = rc.left + (rc.right - rc.left) / 2;
     int cy = rc.top + (rc.bottom - rc.top) / 2;

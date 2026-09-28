@@ -10,6 +10,7 @@ extern HWND g_hEdit;
 extern HWND g_hAddBtn;
 extern HWND g_hToggleViewBtn;
 extern HWND g_hTimeHistoryBtn;
+extern HWND g_hFocusModeBtn;
 extern HWND g_hManualWorkBtn;
 extern HWND g_hCloseBtn;
 extern HWND g_hPinBtn;
@@ -78,6 +79,8 @@ extern ULONGLONG g_lastCommitTick;
 
 // Work Tracking State
 extern bool g_isWorkActive;
+extern bool g_focusMode;
+extern bool g_isSessionLocked;
 extern bool g_isIdlePaused;
 extern bool g_isExcludedApp;
 extern std::wstring g_excludedAppName;

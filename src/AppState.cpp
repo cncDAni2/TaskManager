@@ -6,6 +6,7 @@ HWND g_hEdit = nullptr;
 HWND g_hAddBtn = nullptr;
 HWND g_hToggleViewBtn = nullptr;
 HWND g_hTimeHistoryBtn = nullptr;
+HWND g_hFocusModeBtn = nullptr;
 HWND g_hManualWorkBtn = nullptr;
 HWND g_hCloseBtn = nullptr;
 HWND g_hPinBtn = nullptr;
@@ -74,6 +75,8 @@ ULONGLONG g_lastCommitTick = 0;
 
 // Work Tracking State
 bool g_isWorkActive = false;
+bool g_focusMode = false;
+bool g_isSessionLocked = false;
 bool g_isIdlePaused = false;
 bool g_isExcludedApp = false;
 std::wstring g_excludedAppName = L"";

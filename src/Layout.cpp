@@ -88,7 +88,11 @@ ScrollbarMetrics GetScrollbarMetrics() {
 }
 
 RECT GetMiniDragHandleRect(int clientWidth) {
-    return { clientWidth - 34, 2, clientWidth, 24 };
+    return { clientWidth - 32, 2, clientWidth - 4, 24 };
+}
+
+RECT GetMiniFocusButtonRect(int clientWidth) {
+    return { clientWidth - 66, 2, clientWidth - 34, 24 };
 }
 
 void UpdateControlsVisibility() {
@@ -99,6 +103,7 @@ void UpdateControlsVisibility() {
         ShowWindow(g_hSyncFolderBtn, SW_HIDE);
         ShowWindow(g_hToggleViewBtn, SW_HIDE);
         ShowWindow(g_hTimeHistoryBtn, SW_HIDE);
+        ShowWindow(g_hFocusModeBtn, SW_HIDE);
         ShowWindow(g_hManualWorkBtn, SW_HIDE);
         ShowWindow(g_hCloseBtn, SW_HIDE);
         ShowWindow(g_hPinBtn, SW_HIDE);
@@ -109,6 +114,7 @@ void UpdateControlsVisibility() {
 
     ShowWindow(g_hCloseBtn, SW_SHOW);
     ShowWindow(g_hPinBtn, SW_SHOW);
+    ShowWindow(g_hFocusModeBtn, SW_SHOW);
     ShowWindow(g_hSyncFolderBtn, SW_SHOW);
     ShowWindow(g_hToggleViewBtn, SW_SHOW);
 
@@ -226,6 +232,11 @@ void RecalculateMiniLayout() {
         rcDragHandle.right, rcDragHandle.bottom);
     CombineRgn(hMiniRegion, hMiniRegion, hHandleRegion, RGN_OR);
     DeleteObject(hHandleRegion);
+    RECT rcFocusButton = GetMiniFocusButtonRect(miniW);
+    HRGN hFocusButtonRegion = CreateRectRgn(rcFocusButton.left, rcFocusButton.top,
+        rcFocusButton.right, rcFocusButton.bottom);
+    CombineRgn(hMiniRegion, hMiniRegion, hFocusButtonRegion, RGN_OR);
+    DeleteObject(hFocusButtonRegion);
     if (!SetWindowRgn(g_hWnd, hMiniRegion, TRUE)) {
         DeleteObject(hMiniRegion);
     }

@@ -5,6 +5,7 @@
 #include "InlineEdit.h"
 #include "MainWindow.h"
 #include "WorkTimeDialog.h"
+#include "FocusMode.h"
 #include <windowsx.h>
 #include <commdlg.h>
 #include <algorithm>
@@ -141,6 +142,11 @@ bool HandleLButtonDown(HWND hWnd, LPARAM lParam) {
         RECT rcClient;
         GetClientRect(hWnd, &rcClient);
         RECT rcDragHandle = GetMiniDragHandleRect(rcClient.right);
+        RECT rcFocusButton = GetMiniFocusButtonRect(rcClient.right);
+        if (g_pinMode && PtInRect(&rcFocusButton, { mx, my })) {
+            FocusMode::Toggle();
+            return true;
+        }
         if (g_pinMode && PtInRect(&rcDragHandle, { mx, my })) {
             ReleaseCapture();
             SendMessageW(hWnd, WM_NCLBUTTONDOWN, HTCAPTION, 0);
@@ -493,6 +499,9 @@ bool HandleCommand(HWND hWnd, int id) {
         g_miniPositionValid = false;
         if (g_hPinBtn) InvalidateRect(g_hPinBtn, nullptr, TRUE);
         return true;
+    } else if (id == IDC_FOCUS_MODE_BTN) {
+        FocusMode::Toggle();
+        return true;
     } else if (id == IDC_SYNC_TOGGLE_BTN) {
         g_syncToggle = !g_syncToggle;
         if (g_hSyncToggleBtn) InvalidateRect(g_hSyncToggleBtn, nullptr, TRUE);
@@ -644,6 +653,7 @@ bool HandleCommand(HWND hWnd, int id) {
         g_hEditBrush = CreateSolidBrush(th.bgEdit);
         ApplyDarkModeTitleBar(hWnd, g_darkMode);
         if (g_hPinBtn) InvalidateRect(g_hPinBtn, nullptr, TRUE);
+        if (g_hFocusModeBtn) InvalidateRect(g_hFocusModeBtn, nullptr, TRUE);
         InvalidateRect(hWnd, nullptr, TRUE);
         return true;
     } else if (id == IDM_TRAY_EXIT) {
@@ -658,7 +668,28 @@ bool HandleDrawItem(HWND /*hWnd*/, DRAWITEMSTRUCT* pDIS) {
     ThemeColors th = g_darkMode ? GetDarkTheme() : GetLightTheme();
     bool isSelected = (pDIS->itemState & ODS_SELECTED) != 0;
 
-    if (pDIS->CtlID == IDC_PIN_BTN) {
+    if (pDIS->CtlID == IDC_FOCUS_MODE_BTN) {
+        COLORREF bgBtn = g_focusMode
+            ? (g_darkMode ? RGB(37, 99, 235) : RGB(59, 130, 246))
+            : (isSelected ? (g_darkMode ? RGB(55, 65, 81) : RGB(226, 232, 240)) : th.bgHeader);
+        COLORREF borderBtn = g_focusMode
+            ? (g_darkMode ? RGB(96, 165, 250) : RGB(37, 99, 235))
+            : (isSelected ? th.borderCardHover : th.borderSep);
+        COLORREF iconColor = g_focusMode ? RGB(255, 255, 255)
+            : (isSelected ? th.textPrimary : th.textSecondary);
+        HBRUSH hBr = CreateSolidBrush(bgBtn);
+        HPEN hPen = CreatePen(PS_SOLID, 1, borderBtn);
+        HGDIOBJ hOldBr = SelectObject(pDIS->hDC, hBr);
+        HGDIOBJ hOldPen = SelectObject(pDIS->hDC, hPen);
+        RoundRect(pDIS->hDC, pDIS->rcItem.left, pDIS->rcItem.top,
+            pDIS->rcItem.right, pDIS->rcItem.bottom, 6, 6);
+        SelectObject(pDIS->hDC, hOldBr);
+        SelectObject(pDIS->hDC, hOldPen);
+        DeleteObject(hBr);
+        DeleteObject(hPen);
+        DrawFocusIcon(pDIS->hDC, pDIS->rcItem, iconColor);
+        return true;
+    } else if (pDIS->CtlID == IDC_PIN_BTN) {
         bool isPinned = g_pinMode;
         COLORREF bgBtn;
         COLORREF borderBtn;

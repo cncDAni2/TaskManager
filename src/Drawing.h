@@ -3,6 +3,7 @@
 #include "AppTypes.h"
 
 void DrawPencilIcon(HDC hdc, const RECT& rc, COLORREF color);
+void DrawFocusIcon(HDC hdc, const RECT& rc, COLORREF color);
 void DrawPinIcon(HDC hdc, const RECT& rc, COLORREF color, bool isPinned);
 void DrawCloudIcon(HDC hdc, const RECT& rc, COLORREF color, bool filled = false);
 void DrawFolderCloudIcon(HDC hdc, const RECT& rc, COLORREF color);

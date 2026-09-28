@@ -7,6 +7,7 @@
 #include "UIEventHandler.h"
 #include "PopupNotice.h"
 #include "BarTooltips.h"
+#include "FocusMode.h"
 #include <windowsx.h>
 #include <commctrl.h>
 #include <algorithm>
@@ -128,6 +129,10 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                 286, 10, 54, 28, hWnd, (HMENU)IDC_TIME_HISTORY_BTN, hInst, nullptr);
             SendMessageW(g_hTimeHistoryBtn, WM_SETFONT, (WPARAM)g_hFontSmall, TRUE);
 
+            g_hFocusModeBtn = CreateWindowW(L"BUTTON", L"",
+                WS_CHILD | WS_VISIBLE | BS_OWNERDRAW | WS_TABSTOP,
+                252, 10, 28, 28, hWnd, (HMENU)IDC_FOCUS_MODE_BTN, hInst, nullptr);
+
             g_hManualWorkBtn = CreateWindowW(L"BUTTON", L"Manuális",
                 WS_CHILD | BS_PUSHBUTTON | WS_TABSTOP,
                 394, 10, 80, 28, hWnd, (HMENU)IDC_MANUAL_WORK_BTN, hInst, nullptr);
@@ -171,6 +176,14 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                 tiPin.uId = (UINT_PTR)g_hPinBtn;
                 tiPin.lpszText = (LPWSTR)L"PIN mód (fókuszvesztéskor kisméretű lista)";
                 SendMessageW(hTooltip, TTM_ADDTOOL, 0, (LPARAM)&tiPin);
+
+                TOOLINFOW tiFocus{};
+                tiFocus.cbSize = sizeof(TOOLINFOW);
+                tiFocus.uFlags = TTF_SUBCLASS | TTF_IDISHWND;
+                tiFocus.hwnd = hWnd;
+                tiFocus.uId = (UINT_PTR)g_hFocusModeBtn;
+                tiFocus.lpszText = (LPWSTR)L"Fókusz mód (zároláskor automatikusan kikapcsol)";
+                SendMessageW(hTooltip, TTM_ADDTOOL, 0, (LPARAM)&tiFocus);
 
                 TOOLINFOW tiClose{};
                 tiClose.cbSize = sizeof(TOOLINFOW);
@@ -227,6 +240,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 
             RegisterHotKey(hWnd, ID_HOTKEY_TOGGLE, MOD_CONTROL, VK_F1);
             RegisterHotKey(hWnd, ID_HOTKEY_UNPIN, MOD_CONTROL, VK_F2);
+            FocusMode::RegisterSessionNotifications(hWnd);
 
             SetTimer(hWnd, IDT_WORK_TIMER, 1000, nullptr);
 
@@ -320,7 +334,8 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                     }
                 }
 
-                bool countWork = !g_isIdlePaused && !g_isExcludedApp;
+                bool countWork = !g_isSessionLocked &&
+                    (g_focusMode || (!g_isIdlePaused && !g_isExcludedApp));
                 g_isWorkActive = countWork;
 
                 if (countWork) {
@@ -395,6 +410,11 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                 }
             }
             return 0;
+        }
+
+        case WM_WTSSESSION_CHANGE: {
+            if (FocusMode::HandleSessionChange(wParam)) return 0;
+            break;
         }
 
         case WM_APP_TRAY: {
@@ -541,6 +561,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         }
 
         case WM_DESTROY: {
+            FocusMode::UnregisterSessionNotifications(hWnd);
             UnregisterHotKey(hWnd, ID_HOTKEY_TOGGLE);
             UnregisterHotKey(hWnd, ID_HOTKEY_UNPIN);
             Shell_NotifyIconW(NIM_DELETE, &g_nid);

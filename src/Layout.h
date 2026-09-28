@@ -10,3 +10,4 @@ void UpdateControlsVisibility();
 void EnsureVisible(int itemIndex);
 ScrollbarMetrics GetScrollbarMetrics();
 RECT GetMiniDragHandleRect(int clientWidth);
+RECT GetMiniFocusButtonRect(int clientWidth);

@@ -99,6 +99,22 @@ void PaintMiniWindow(HWND hWnd, HDC hdc) {
     SelectObject(hdcMem, hOldDotsBrush);
     DeleteObject(hBrushGripDots);
 
+    RECT rcFocusButton = GetMiniFocusButtonRect(clientW);
+    COLORREF focusBg = g_focusMode ? RGB(37, 99, 235) : th.bgCard;
+    COLORREF focusBorder = g_focusMode ? RGB(96, 165, 250) : th.borderSep;
+    COLORREF focusIcon = g_focusMode ? RGB(255, 255, 255) : th.textSecondary;
+    HBRUSH hFocusBrush = CreateSolidBrush(focusBg);
+    HPEN hFocusPen = CreatePen(PS_SOLID, 1, focusBorder);
+    HGDIOBJ hOldFocusBrush = SelectObject(hdcMem, hFocusBrush);
+    HGDIOBJ hOldFocusPen = SelectObject(hdcMem, hFocusPen);
+    RoundRect(hdcMem, rcFocusButton.left, rcFocusButton.top, rcFocusButton.right,
+        rcFocusButton.bottom, 6, 6);
+    SelectObject(hdcMem, hOldFocusPen);
+    SelectObject(hdcMem, hOldFocusBrush);
+    DeleteObject(hFocusPen);
+    DeleteObject(hFocusBrush);
+    DrawFocusIcon(hdcMem, rcFocusButton, focusIcon);
+
     if (g_displayItems.empty()) {
         SelectObject(hdcMem, g_hFontNormal);
         SetTextColor(hdcMem, th.textEmpty);

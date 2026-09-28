@@ -14,6 +14,7 @@
 #pragma comment(lib, "advapi32.lib")
 #pragma comment(lib, "secur32.lib")
 #pragma comment(lib, "comdlg32.lib")
+#pragma comment(lib, "wtsapi32.lib")
 
 int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR, int) {
     HANDLE hMutex = CreateMutexW(nullptr, TRUE, L"TaskManager_SingleInstance_Mutex_98741");
