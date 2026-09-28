@@ -53,11 +53,10 @@ void ShowAppWindow() {
         ExitMiniMode(false);
     }
 
-    int winW = 585;
-    int winH = 550;
-
     RECT rcWork;
     SystemParametersInfoW(SPI_GETWORKAREA, 0, &rcWork, 0);
+    int winW = 585;
+    int winH = 550;
     int x = rcWork.right - winW - 12;
     int y = rcWork.bottom - winH - 12;
 

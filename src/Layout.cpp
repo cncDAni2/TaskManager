@@ -209,8 +209,8 @@ void RecalculateMiniLayout() {
     int maxH = (rcWork.bottom - rcWork.top) - 30;
     if (totalH > maxH) totalH = maxH;
 
-    int x = g_miniPositionValid ? g_miniWinX : g_fullWinX + (g_fullWinW - miniW);
-    int y = g_miniPositionValid ? g_miniWinY : g_fullWinY + (g_fullWinH - totalH);
+    int x = g_miniPositionValid ? g_miniWinX : rcWork.right - miniW - 12;
+    int y = g_miniPositionValid ? g_miniWinY : rcWork.bottom - totalH - 12;
     if (y < rcWork.top) y = rcWork.top;
     if (x < rcWork.left) x = rcWork.left;
     if (x + miniW > rcWork.right) x = rcWork.right - miniW;
@@ -246,18 +246,10 @@ void EnterMiniMode() {
     int defaultX = rcWork.right - defaultW - 12;
     int defaultY = rcWork.bottom - defaultH - 12;
 
-    RECT rc;
-    if (GetWindowRect(g_hWnd, &rc) && (rc.right - rc.left > 300) && (rc.left > 0 || rc.top > 0)) {
-        g_fullWinX = rc.left;
-        g_fullWinY = rc.top;
-        g_fullWinW = rc.right - rc.left;
-        g_fullWinH = rc.bottom - rc.top;
-    } else if (g_fullWinX <= 0 && g_fullWinY <= 0) {
-        g_fullWinX = defaultX;
-        g_fullWinY = defaultY;
-        g_fullWinW = defaultW;
-        g_fullWinH = defaultH;
-    }
+    g_fullWinX = defaultX;
+    g_fullWinY = defaultY;
+    g_fullWinW = defaultW;
+    g_fullWinH = defaultH;
 
     g_isMiniMode = true;
     g_scrollbarHovered = false;
