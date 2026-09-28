@@ -43,6 +43,9 @@ extern int g_fullWinX;
 extern int g_fullWinY;
 extern int g_fullWinW;
 extern int g_fullWinH;
+extern int g_miniWinX;
+extern int g_miniWinY;
+extern bool g_miniPositionValid;
 
 // Session Tasks Cache
 extern std::vector<int> g_sessionActiveTaskIds;

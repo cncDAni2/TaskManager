@@ -87,6 +87,10 @@ ScrollbarMetrics GetScrollbarMetrics() {
     return m;
 }
 
+RECT GetMiniDragHandleRect(int clientWidth) {
+    return { clientWidth - 34, 2, clientWidth, 24 };
+}
+
 void UpdateControlsVisibility() {
     if (g_isMiniMode) {
         ShowWindow(g_hEdit, SW_HIDE);
@@ -145,7 +149,7 @@ void RecalculateMiniLayout() {
     int miniW = g_fullWinW / 2;
     if (miniW < 260) miniW = 292;
 
-    int curY = 6;
+    int curY = 26;
     const int itemH = 22;
     const int spacing = 4;
     const time_t now = time(nullptr);
@@ -193,7 +197,7 @@ void RecalculateMiniLayout() {
 
     int totalH = 0;
     if (activeCount == 0) {
-        totalH = 50 + 3;
+        totalH = 70 + 3;
     } else {
         totalH = curY - spacing + 6 + 3;
     }
@@ -203,10 +207,26 @@ void RecalculateMiniLayout() {
     int maxH = (rcWork.bottom - rcWork.top) - 30;
     if (totalH > maxH) totalH = maxH;
 
-    int x = g_fullWinX + (g_fullWinW - miniW);
-    int y = g_fullWinY + (g_fullWinH - totalH);
+    int x = g_miniPositionValid ? g_miniWinX : g_fullWinX + (g_fullWinW - miniW);
+    int y = g_miniPositionValid ? g_miniWinY : g_fullWinY + (g_fullWinH - totalH);
     if (y < rcWork.top) y = rcWork.top;
     if (x < rcWork.left) x = rcWork.left;
+    if (x + miniW > rcWork.right) x = rcWork.right - miniW;
+    if (y + totalH > rcWork.bottom) y = rcWork.bottom - totalH;
+
+    g_miniWinX = x;
+    g_miniWinY = y;
+    g_miniPositionValid = true;
+
+    RECT rcDragHandle = GetMiniDragHandleRect(miniW);
+    HRGN hMiniRegion = CreateRectRgn(0, rcDragHandle.bottom - 4, miniW, totalH);
+    HRGN hHandleRegion = CreateRectRgn(rcDragHandle.left, rcDragHandle.top,
+        rcDragHandle.right, rcDragHandle.bottom);
+    CombineRgn(hMiniRegion, hMiniRegion, hHandleRegion, RGN_OR);
+    DeleteObject(hHandleRegion);
+    if (!SetWindowRgn(g_hWnd, hMiniRegion, TRUE)) {
+        DeleteObject(hMiniRegion);
+    }
 
     SetWindowPos(g_hWnd, HWND_TOPMOST, x, y, miniW, totalH, SWP_SHOWWINDOW | SWP_NOACTIVATE);
     InvalidateRect(g_hWnd, nullptr, TRUE);
@@ -254,7 +274,16 @@ void EnterMiniMode() {
 
 void ExitMiniMode(bool toHidden) {
     if (!g_isMiniMode) return;
+    if (!toHidden && g_pinMode) {
+        RECT rc;
+        if (GetWindowRect(g_hWnd, &rc)) {
+            g_miniWinX = rc.left;
+            g_miniWinY = rc.top;
+            g_miniPositionValid = true;
+        }
+    }
     g_isMiniMode = false;
+    SetWindowRgn(g_hWnd, nullptr, TRUE);
 
     SetLayeredWindowAttributes(g_hWnd, 0, 255, LWA_ALPHA);
     LONG_PTR exStyle = GetWindowLongPtrW(g_hWnd, GWL_EXSTYLE);

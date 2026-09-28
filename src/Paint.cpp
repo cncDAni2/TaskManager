@@ -37,6 +37,23 @@ void PaintMiniWindow(HWND hWnd, HDC hdc) {
     SelectObject(hdcMem, hOldBrush);
     DeleteObject(hPenBorder);
 
+    RECT rcDragHandle = GetMiniDragHandleRect(clientW);
+    HBRUSH hBrushGripDots = CreateSolidBrush(g_darkMode ? RGB(212, 212, 216) : RGB(71, 85, 105));
+    HGDIOBJ hOldDotsBrush = SelectObject(hdcMem, hBrushGripDots);
+    HGDIOBJ hOldDotsPen = SelectObject(hdcMem, GetStockObject(NULL_PEN));
+    int gripCenterX = rcDragHandle.left + (rcDragHandle.right - rcDragHandle.left) / 2;
+    int gripCenterY = rcDragHandle.top + (rcDragHandle.bottom - rcDragHandle.top) / 2;
+    for (int row = -1; row <= 1; ++row) {
+        for (int column = 0; column < 2; ++column) {
+            int dotX = gripCenterX + (column == 0 ? -4 : 4);
+            int dotY = gripCenterY + row * 5;
+            Ellipse(hdcMem, dotX - 2, dotY - 2, dotX + 2, dotY + 2);
+        }
+    }
+    SelectObject(hdcMem, hOldDotsPen);
+    SelectObject(hdcMem, hOldDotsBrush);
+    DeleteObject(hBrushGripDots);
+
     if (g_displayItems.empty()) {
         SelectObject(hdcMem, g_hFontNormal);
         SetTextColor(hdcMem, th.textEmpty);

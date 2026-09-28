@@ -39,6 +39,9 @@ int g_fullWinX = 0;
 int g_fullWinY = 0;
 int g_fullWinW = 585;
 int g_fullWinH = 550;
+int g_miniWinX = 0;
+int g_miniWinY = 0;
+bool g_miniPositionValid = false;
 
 // Session Tasks Cache
 std::vector<int> g_sessionActiveTaskIds;

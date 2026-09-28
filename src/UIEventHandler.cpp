@@ -115,6 +115,14 @@ bool HandleLButtonDown(HWND hWnd, LPARAM lParam) {
     if (g_isMiniMode) {
         int mx = GET_X_LPARAM(lParam);
         int my = GET_Y_LPARAM(lParam);
+        RECT rcClient;
+        GetClientRect(hWnd, &rcClient);
+        RECT rcDragHandle = GetMiniDragHandleRect(rcClient.right);
+        if (g_pinMode && PtInRect(&rcDragHandle, { mx, my })) {
+            ReleaseCapture();
+            SendMessageW(hWnd, WM_NCLBUTTONDOWN, HTCAPTION, 0);
+            return true;
+        }
 
         for (size_t i = 0; i < g_displayItems.size(); ++i) {
             const auto& item = g_displayItems[i];
@@ -449,11 +457,13 @@ bool HandleLButtonUp(HWND hWnd, LPARAM) {
 bool HandleCommand(HWND hWnd, int id) {
     if (id == IDC_CLOSE_BTN) {
         g_pinMode = false;
+        g_miniPositionValid = false;
         if (g_hPinBtn) InvalidateRect(g_hPinBtn, nullptr, TRUE);
         HideAppWindow();
         return true;
     } else if (id == IDC_PIN_BTN) {
         g_pinMode = !g_pinMode;
+        g_miniPositionValid = false;
         if (g_hPinBtn) InvalidateRect(g_hPinBtn, nullptr, TRUE);
         return true;
     } else if (id == IDC_SYNC_TOGGLE_BTN) {
@@ -581,6 +591,7 @@ bool HandleCommand(HWND hWnd, int id) {
         return true;
     } else if (id == IDM_TRAY_PIN) {
         g_pinMode = !g_pinMode;
+        g_miniPositionValid = false;
         if (!g_pinMode && g_isMiniMode) {
             ExitMiniMode(false);
         }

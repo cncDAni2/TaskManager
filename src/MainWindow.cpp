@@ -354,10 +354,12 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             } else if (wParam == ID_HOTKEY_UNPIN) {
                 if (IsWindowVisible(hWnd)) {
                     g_pinMode = false;
+                    g_miniPositionValid = false;
                     if (g_hPinBtn) InvalidateRect(g_hPinBtn, nullptr, TRUE);
                     HideAppWindow();
                 } else {
                     g_pinMode = true;
+                    g_miniPositionValid = false;
                     if (g_hPinBtn) InvalidateRect(g_hPinBtn, nullptr, TRUE);
 
                     g_sessionActiveTaskIds = g_store.active_order;
@@ -365,6 +367,18 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                     g_selectedIndex = -1;
 
                     EnterMiniMode();
+                }
+            }
+            return 0;
+        }
+
+        case WM_EXITSIZEMOVE: {
+            if (g_isMiniMode && g_pinMode) {
+                RECT rc;
+                if (GetWindowRect(hWnd, &rc)) {
+                    g_miniWinX = rc.left;
+                    g_miniWinY = rc.top;
+                    g_miniPositionValid = true;
                 }
             }
             return 0;
@@ -405,6 +419,22 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             UpdateInlineEditPos();
             InvalidateRect(hWnd, nullptr, TRUE);
             return 0;
+        }
+
+        case WM_SETCURSOR: {
+            if (g_isMiniMode && g_pinMode && LOWORD(lParam) == HTCLIENT) {
+                POINT cursorPoint;
+                GetCursorPos(&cursorPoint);
+                ScreenToClient(hWnd, &cursorPoint);
+                RECT rcClient;
+                GetClientRect(hWnd, &rcClient);
+                RECT rcDragHandle = GetMiniDragHandleRect(rcClient.right);
+                if (PtInRect(&rcDragHandle, cursorPoint)) {
+                    SetCursor(LoadCursorW(nullptr, IDC_SIZEALL));
+                    return TRUE;
+                }
+            }
+            break;
         }
 
         case WM_MOUSEMOVE: {
