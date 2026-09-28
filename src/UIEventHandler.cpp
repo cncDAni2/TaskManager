@@ -9,6 +9,28 @@
 #include <commdlg.h>
 #include <algorithm>
 
+namespace {
+HWND g_messageBoxOwner = nullptr;
+
+LRESULT CALLBACK CenterMessageBoxHook(int code, WPARAM wParam, LPARAM lParam) {
+    if (code == HCBT_ACTIVATE) {
+        HWND hDialog = (HWND)wParam;
+        wchar_t className[16]{};
+        if (GetClassNameW(hDialog, className, _countof(className)) &&
+            wcscmp(className, L"#32770") == 0 && g_messageBoxOwner) {
+            RECT ownerRect{};
+            RECT dialogRect{};
+            if (GetWindowRect(g_messageBoxOwner, &ownerRect) && GetWindowRect(hDialog, &dialogRect)) {
+                int x = ownerRect.left + ((ownerRect.right - ownerRect.left) - (dialogRect.right - dialogRect.left)) / 2;
+                int y = ownerRect.top + ((ownerRect.bottom - ownerRect.top) - (dialogRect.bottom - dialogRect.top)) / 2;
+                SetWindowPos(hDialog, nullptr, x, y, 0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
+            }
+        }
+    }
+    return CallNextHookEx(nullptr, code, wParam, lParam);
+}
+}
+
 bool HandleKeyDown(HWND hWnd, WPARAM wParam) {
     if (wParam == VK_ESCAPE) {
         if (g_pinMode && !g_isMiniMode) {
@@ -238,8 +260,12 @@ bool HandleLButtonDown(HWND hWnd, LPARAM lParam) {
             std::wstring confirmText = L"Biztos törli ezt a feladatot?\n" + taskName;
             bool wasInContextMenu = g_inContextMenu;
             g_inContextMenu = true;
+            g_messageBoxOwner = hWnd;
+            HHOOK messageBoxHook = SetWindowsHookExW(WH_CBT, CenterMessageBoxHook, nullptr, GetCurrentThreadId());
             int answer = MessageBoxW(hWnd, confirmText.c_str(), L"Feladat törlése",
                 MB_YESNO | MB_ICONQUESTION | MB_DEFBUTTON2);
+            if (messageBoxHook) UnhookWindowsHookEx(messageBoxHook);
+            g_messageBoxOwner = nullptr;
             g_inContextMenu = wasInContextMenu;
             if (answer != IDYES) return true;
 
