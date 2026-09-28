@@ -68,13 +68,33 @@ void PaintMiniWindow(HWND hWnd, HDC hdc) {
 
             RECT rcChk = item.checkRect;
             bool chkHovered = (isHovered && g_hoverButtonType == 1);
-            HBRUSH hChkBrush = CreateSolidBrush(chkHovered ? (g_darkMode ? RGB(55, 65, 81) : RGB(241, 245, 249)) : th.bgCard);
-            HPEN hChkPen = CreatePen(PS_SOLID, chkHovered ? 2 : 1, chkHovered ? th.checkActiveHover : th.checkActiveBorder);
-            SelectObject(hdcMem, hChkBrush);
-            SelectObject(hdcMem, hChkPen);
-            RoundRect(hdcMem, rcChk.left, rcChk.top, rcChk.right, rcChk.bottom, 5, 5);
-            DeleteObject(hChkBrush);
-            DeleteObject(hChkPen);
+            if (item.task.completed) {
+                HBRUSH hChkBrush = CreateSolidBrush(chkHovered ? th.checkDoneHover : th.checkDoneBg);
+                HPEN hChkPen = CreatePen(PS_SOLID, 1, th.checkDoneHover);
+                SelectObject(hdcMem, hChkBrush);
+                SelectObject(hdcMem, hChkPen);
+                RoundRect(hdcMem, rcChk.left, rcChk.top, rcChk.right, rcChk.bottom, 5, 5);
+                DeleteObject(hChkBrush);
+                DeleteObject(hChkPen);
+
+                HPEN hTickPen = CreatePen(PS_SOLID, 2, RGB(255, 255, 255));
+                SelectObject(hdcMem, hTickPen);
+                POINT tickPts[3] = {
+                    { rcChk.left + 4, rcChk.top + 10 },
+                    { rcChk.left + 8, rcChk.top + 14 },
+                    { rcChk.left + 15, rcChk.top + 6 }
+                };
+                Polyline(hdcMem, tickPts, 3);
+                DeleteObject(hTickPen);
+            } else {
+                HBRUSH hChkBrush = CreateSolidBrush(chkHovered ? (g_darkMode ? RGB(55, 65, 81) : RGB(241, 245, 249)) : th.bgCard);
+                HPEN hChkPen = CreatePen(PS_SOLID, chkHovered ? 2 : 1, chkHovered ? th.checkActiveHover : th.checkActiveBorder);
+                SelectObject(hdcMem, hChkBrush);
+                SelectObject(hdcMem, hChkPen);
+                RoundRect(hdcMem, rcChk.left, rcChk.top, rcChk.right, rcChk.bottom, 5, 5);
+                DeleteObject(hChkBrush);
+                DeleteObject(hChkPen);
+            }
 
             if (item.task.is_sync) {
                 int cy = (r.top + r.bottom) / 2;

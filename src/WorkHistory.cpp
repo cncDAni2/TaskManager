@@ -4,7 +4,6 @@
 #include <iomanip>
 #include <limits>
 #include <map>
-#include <random>
 #include <sstream>
 
 namespace WorkHistory {
@@ -59,27 +58,6 @@ namespace WorkHistory {
         char buffer[11]{};
         std::strftime(buffer, sizeof(buffer), "%Y-%m-%d", &localTime);
         return buffer;
-    }
-
-    bool SeedIfEmpty(Records& records) {
-        if (!records.empty()) return false;
-
-        std::random_device randomDevice;
-        std::mt19937 generator(randomDevice());
-        std::uniform_int_distribution<int> duration(45 * 60, 8 * 60 * 60);
-        time_t now = time(nullptr);
-        for (int daysAgo = 14; daysAgo >= 1; --daysAgo) {
-            time_t sampleDay = now;
-            tm localTime{};
-            localtime_s(&localTime, &sampleDay);
-            localTime.tm_hour = 12;
-            localTime.tm_min = 0;
-            localTime.tm_sec = 0;
-            localTime.tm_mday -= daysAgo;
-            sampleDay = mktime(&localTime);
-            records[DateKey(sampleDay)] = duration(generator);
-        }
-        return true;
     }
 
     void LoadFromJson(const std::string& content, Records& records) {

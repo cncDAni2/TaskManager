@@ -17,7 +17,6 @@ namespace WorkHistory {
     };
 
     std::string DateKey(time_t timestamp);
-    bool SeedIfEmpty(Records& records);
     void LoadFromJson(const std::string& content, Records& records);
     void WriteJson(std::ostream& out, const Records& records);
     std::vector<DisplayEntry> GetDisplayEntries(

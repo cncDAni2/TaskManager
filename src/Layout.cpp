@@ -148,12 +148,16 @@ void RecalculateMiniLayout() {
     int curY = 6;
     const int itemH = 22;
     const int spacing = 4;
+    const time_t now = time(nullptr);
+    const auto shouldShowTask = [now](const Task& task) {
+        return !task.completed || (task.completed_at > 0 && now - task.completed_at < 20);
+    };
 
     std::vector<Task> orderedActiveTasks;
     std::set<int> seenIds;
     for (int id : g_sessionActiveTaskIds) {
         for (const auto& t : g_store.tasks) {
-            if (t.id == id && !t.completed) {
+            if (t.id == id && shouldShowTask(t)) {
                 seenIds.insert(id);
                 orderedActiveTasks.push_back(t);
                 break;
@@ -161,8 +165,8 @@ void RecalculateMiniLayout() {
         }
     }
     for (const auto& t : g_store.tasks) {
-        if (!t.completed && seenIds.find(t.id) == seenIds.end()) {
-            g_sessionActiveTaskIds.push_back(t.id);
+        if (shouldShowTask(t) && seenIds.find(t.id) == seenIds.end()) {
+            if (!t.completed) g_sessionActiveTaskIds.push_back(t.id);
             orderedActiveTasks.push_back(t);
         }
     }

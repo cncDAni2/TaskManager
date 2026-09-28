@@ -17,7 +17,6 @@ TaskStore::TaskStore() {
     }
     syncFilePath = TaskUtils::GetDefaultSyncFilePath();
     Load();
-    if (WorkHistory::SeedIfEmpty(work_history)) SaveLocal();
     CheckWorkReset();
 }
 

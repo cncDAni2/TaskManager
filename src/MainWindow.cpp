@@ -266,6 +266,19 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 
         case WM_TIMER: {
             if (wParam == IDT_WORK_TIMER) {
+                if (g_isMiniMode && IsWindowVisible(hWnd)) {
+                    const time_t now = time(nullptr);
+                    const bool hasExpiredCompletedTask = std::any_of(
+                        g_displayItems.begin(), g_displayItems.end(), [now](const DisplayItem& item) {
+                            return !item.isHeader && item.task.completed && item.task.completed_at > 0 &&
+                                now - item.task.completed_at >= 20;
+                        });
+                    if (hasExpiredCompletedTask) {
+                        RecalculateMiniLayout();
+                        InvalidateRect(hWnd, nullptr, FALSE);
+                    }
+                }
+
                 g_store.CheckWorkReset();
 
                 LASTINPUTINFO lii = { sizeof(LASTINPUTINFO) };
