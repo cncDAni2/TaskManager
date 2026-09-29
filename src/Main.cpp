@@ -31,6 +31,8 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR, int) {
     icc.dwICC = ICC_STANDARD_CLASSES | ICC_WIN95_CLASSES | ICC_DATE_CLASSES;
     InitCommonControlsEx(&icc);
 
+    g_darkMode = g_store.dark_mode;
+
     WNDCLASSW wc{};
     wc.style = CS_HREDRAW | CS_VREDRAW | CS_DBLCLKS;
     wc.lpfnWndProc = WndProc;

@@ -100,7 +100,7 @@ void UpdateControlsVisibility() {
         ShowWindow(g_hEdit, SW_HIDE);
         ShowWindow(g_hAddBtn, SW_HIDE);
         ShowWindow(g_hSyncToggleBtn, SW_HIDE);
-        ShowWindow(g_hSyncFolderBtn, SW_HIDE);
+        ShowWindow(g_hSettingsBtn, SW_HIDE);
         ShowWindow(g_hToggleViewBtn, SW_HIDE);
         ShowWindow(g_hTimeHistoryBtn, SW_HIDE);
         ShowWindow(g_hFocusModeBtn, SW_HIDE);
@@ -115,7 +115,7 @@ void UpdateControlsVisibility() {
     ShowWindow(g_hCloseBtn, SW_SHOW);
     ShowWindow(g_hPinBtn, SW_SHOW);
     ShowWindow(g_hFocusModeBtn, SW_SHOW);
-    ShowWindow(g_hSyncFolderBtn, SW_SHOW);
+    ShowWindow(g_hSettingsBtn, SW_SHOW);
     ShowWindow(g_hToggleViewBtn, SW_SHOW);
 
     bool isActive = (g_viewMode == ViewMode::ActiveTasks);
@@ -303,7 +303,7 @@ void ExitMiniMode(bool toHidden) {
     UpdateControlsVisibility();
     RecalculateLayout();
     if (g_hPinBtn) InvalidateRect(g_hPinBtn, nullptr, TRUE);
-    if (g_hSyncFolderBtn) InvalidateRect(g_hSyncFolderBtn, nullptr, TRUE);
+    if (g_hSettingsBtn) InvalidateRect(g_hSettingsBtn, nullptr, TRUE);
     if (g_hSyncToggleBtn) InvalidateRect(g_hSyncToggleBtn, nullptr, TRUE);
     InvalidateRect(g_hWnd, nullptr, TRUE);
 }

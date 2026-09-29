@@ -5,9 +5,9 @@
 #include "InlineEdit.h"
 #include "MainWindow.h"
 #include "WorkTimeDialog.h"
+#include "SettingsDialog.h"
 #include "FocusMode.h"
 #include <windowsx.h>
-#include <commdlg.h>
 #include <algorithm>
 
 namespace {
@@ -507,42 +507,8 @@ bool HandleCommand(HWND hWnd, int id) {
         if (g_hSyncToggleBtn) InvalidateRect(g_hSyncToggleBtn, nullptr, TRUE);
         SetFocus(g_hEdit);
         return true;
-    } else if (id == IDC_SYNC_FOLDER_BTN) {
-        wchar_t szFile[MAX_PATH] = { 0 };
-        if (!g_store.syncFilePath.empty()) {
-            wcsncpy_s(szFile, g_store.syncFilePath.c_str(), MAX_PATH - 1);
-        } else {
-            std::wstring defPath = TaskUtils::GetDefaultSyncFilePath();
-            wcsncpy_s(szFile, defPath.c_str(), MAX_PATH - 1);
-        }
-
-        OPENFILENAMEW ofn = { 0 };
-        ofn.lStructSize = sizeof(ofn);
-        ofn.hwndOwner = hWnd;
-        ofn.lpstrFile = szFile;
-        ofn.nMaxFile = sizeof(szFile) / sizeof(wchar_t);
-        ofn.lpstrFilter = L"JSON fájlok (*.json)\0*.json\0Minden fájl (*.*)\0*.*\0";
-        ofn.nFilterIndex = 1;
-        ofn.lpstrTitle = L"Szinkronizált feladatok fájljának kiválasztása";
-        ofn.Flags = OFN_PATHMUSTEXIST | OFN_ENABLESIZING | OFN_NOCHANGEDIR;
-
-        std::wstring initDir;
-        size_t lastSlash = g_store.syncFilePath.find_last_of(L"\\/");
-        if (lastSlash != std::wstring::npos) {
-            initDir = g_store.syncFilePath.substr(0, lastSlash);
-            ofn.lpstrInitialDir = initDir.c_str();
-        }
-
-        g_inContextMenu = true;
-        BOOL ok = GetOpenFileNameW(&ofn);
-        g_inContextMenu = false;
-
-        if (ok) {
-            g_store.SetSyncFilePath(szFile);
-            UpdateControlsVisibility();
-            RecalculateLayout();
-            InvalidateRect(hWnd, nullptr, TRUE);
-        }
+    } else if (id == IDC_SETTINGS_BTN) {
+        ShowSettingsDialog(hWnd);
         return true;
     } else if (id == IDC_TIME_HISTORY_BTN) {
         CommitInlineEdit();
@@ -576,48 +542,8 @@ bool HandleCommand(HWND hWnd, int id) {
         RecalculateLayout();
         InvalidateRect(hWnd, nullptr, TRUE);
         return true;
-    } else if (id == IDC_FILTER_RECENT) {
-        g_completedFilter = CompletedFilter::SinceYesterday930;
-        g_scrollY = 0;
-        g_selectedIndex = -1;
-        UpdateControlsVisibility();
-        RecalculateLayout();
-        InvalidateRect(hWnd, nullptr, TRUE);
-        return true;
-    } else if (id == IDC_FILTER_ALL) {
-        g_completedFilter = CompletedFilter::AllByDay;
-        g_scrollY = 0;
-        g_selectedIndex = -1;
-        UpdateControlsVisibility();
-        RecalculateLayout();
-        InvalidateRect(hWnd, nullptr, TRUE);
-        return true;
-    } else if (id == IDC_ADD_TASK_BTN) {
-        int len = GetWindowTextLengthW(g_hEdit);
-        if (len > 0) {
-            std::vector<wchar_t> buf(len + 1);
-            GetWindowTextW(g_hEdit, buf.data(), len + 1);
-            std::wstring text = buf.data();
-            while (!text.empty() && iswspace(text.front())) text.erase(text.begin());
-            while (!text.empty() && iswspace(text.back())) text.pop_back();
-
-            if (!text.empty()) {
-                g_store.Add(text, g_syncToggle);
-                if (!g_store.tasks.empty()) {
-                    int newTaskId = g_store.tasks.back().id;
-                    g_sessionActiveTaskIds.insert(g_sessionActiveTaskIds.begin(), newTaskId);
-                }
-                if (g_syncToggle) {
-                    g_syncToggle = false;
-                    if (g_hSyncToggleBtn) InvalidateRect(g_hSyncToggleBtn, nullptr, TRUE);
-                }
-                SetWindowTextW(g_hEdit, L"");
-                UpdateControlsVisibility();
-                RecalculateLayout();
-                InvalidateRect(hWnd, nullptr, TRUE);
-            }
-        }
-        SetFocus(g_hEdit);
+    } else if (id == IDC_SETTINGS_BTN) {
+        ShowSettingsDialog(hWnd);
         return true;
     } else if (id == IDM_TRAY_OPEN) {
         if (g_isMiniMode) {
@@ -648,6 +574,8 @@ bool HandleCommand(HWND hWnd, int id) {
         return true;
     } else if (id == IDM_TRAY_THEME) {
         g_darkMode = !g_darkMode;
+        g_store.dark_mode = g_darkMode;
+        g_store.SaveLocal();
         ThemeColors th = g_darkMode ? GetDarkTheme() : GetLightTheme();
         if (g_hEditBrush) DeleteObject(g_hEditBrush);
         g_hEditBrush = CreateSolidBrush(th.bgEdit);
@@ -723,7 +651,7 @@ bool HandleDrawItem(HWND /*hWnd*/, DRAWITEMSTRUCT* pDIS) {
         if (isSelected) OffsetRect(&rcPin, 1, 1);
         DrawPinIcon(pDIS->hDC, rcPin, pinColor, isPinned);
         return true;
-    } else if (pDIS->CtlID == IDC_SYNC_FOLDER_BTN) {
+    } else if (pDIS->CtlID == IDC_SETTINGS_BTN) {
         COLORREF bgBtn = isSelected ? (g_darkMode ? RGB(55, 65, 81) : RGB(226, 232, 240)) : th.bgHeader;
         COLORREF borderBtn = isSelected ? th.borderCardHover : th.borderSep;
         COLORREF iconColor = isSelected ? th.textPrimary : th.textSecondary;
@@ -740,7 +668,7 @@ bool HandleDrawItem(HWND /*hWnd*/, DRAWITEMSTRUCT* pDIS) {
 
         RECT rcIcon = pDIS->rcItem;
         if (isSelected) OffsetRect(&rcIcon, 1, 1);
-        DrawFolderCloudIcon(pDIS->hDC, rcIcon, iconColor);
+        DrawSettingsIcon(pDIS->hDC, rcIcon, iconColor);
         return true;
     } else if (pDIS->CtlID == IDC_SYNC_TOGGLE_BTN) {
         COLORREF bgBtn;

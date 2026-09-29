@@ -14,7 +14,7 @@ extern HWND g_hFocusModeBtn;
 extern HWND g_hManualWorkBtn;
 extern HWND g_hCloseBtn;
 extern HWND g_hPinBtn;
-extern HWND g_hSyncFolderBtn;
+extern HWND g_hSettingsBtn;
 extern HWND g_hSyncToggleBtn;
 extern HWND g_hFilterRecentBtn;
 extern HWND g_hFilterAllBtn;

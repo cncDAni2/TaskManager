@@ -200,3 +200,34 @@ void DrawFolderCloudIcon(HDC hdc, const RECT& rc, COLORREF color) {
     SelectObject(hdc, hOldBrush);
     DeleteObject(hPen);
 }
+
+void DrawSettingsIcon(HDC hdc, const RECT& rc, COLORREF color) {
+    int cx = rc.left + (rc.right - rc.left) / 2;
+    int cy = rc.top + (rc.bottom - rc.top) / 2;
+    HPEN hPen = CreatePen(PS_SOLID, 2, color);
+    HGDIOBJ hOldPen = SelectObject(hdc, hPen);
+    HGDIOBJ hOldBrush = SelectObject(hdc, GetStockObject(NULL_BRUSH));
+
+    Ellipse(hdc, cx - 6, cy - 6, cx + 7, cy + 7);
+    Ellipse(hdc, cx - 2, cy - 2, cx + 3, cy + 3);
+    MoveToEx(hdc, cx, cy - 10, nullptr);
+    LineTo(hdc, cx, cy - 6);
+    MoveToEx(hdc, cx, cy + 6, nullptr);
+    LineTo(hdc, cx, cy + 10);
+    MoveToEx(hdc, cx - 10, cy, nullptr);
+    LineTo(hdc, cx - 6, cy);
+    MoveToEx(hdc, cx + 6, cy, nullptr);
+    LineTo(hdc, cx + 10, cy);
+    MoveToEx(hdc, cx - 7, cy - 7, nullptr);
+    LineTo(hdc, cx - 4, cy - 4);
+    MoveToEx(hdc, cx + 7, cy - 7, nullptr);
+    LineTo(hdc, cx + 4, cy - 4);
+    MoveToEx(hdc, cx - 7, cy + 7, nullptr);
+    LineTo(hdc, cx - 4, cy + 4);
+    MoveToEx(hdc, cx + 7, cy + 7, nullptr);
+    LineTo(hdc, cx + 4, cy + 4);
+
+    SelectObject(hdc, hOldBrush);
+    SelectObject(hdc, hOldPen);
+    DeleteObject(hPen);
+}

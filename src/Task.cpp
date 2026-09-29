@@ -22,7 +22,7 @@ TaskStore::TaskStore() {
 
 void TaskStore::CheckWorkReset() {
     time_t now = time(nullptr);
-    time_t cutoff = TaskUtils::GetLast915Cutoff(now);
+    time_t cutoff = TaskUtils::GetLastResetCutoff(now, work_reset_hour, work_reset_minute);
     if (last_reset_time == 0) {
         last_reset_time = cutoff;
         SaveLocal();
@@ -195,7 +195,10 @@ void TaskStore::SaveLocal() {
         << "  \"work_seconds\": " << work_seconds_today << ",\n"
         << "  \"last_reset\": " << (unsigned long long)last_reset_time << ",\n";
     WorkHistory::WriteJson(out, work_history, manual_work_history);
-    out << "  \"sync_file_path\": \"" << TaskUtils::EscapeJsonString(TaskUtils::WideToUtf8(syncFilePath)) << "\",\n"
+    out << "  \"dark_mode\": " << (dark_mode ? "true" : "false") << ",\n"
+        << "  \"work_reset_hour\": " << work_reset_hour << ",\n"
+        << "  \"work_reset_minute\": " << work_reset_minute << ",\n"
+        << "  \"sync_file_path\": \"" << TaskUtils::EscapeJsonString(TaskUtils::WideToUtf8(syncFilePath)) << "\",\n"
         << "  \"active_order\": [";
     for (size_t i = 0; i < active_order.size(); ++i) {
         if (i > 0) out << ", ";
@@ -417,6 +420,30 @@ void TaskStore::LoadLocal() {
         size_t valStart = content.find_first_of("0123456789", lrPos + 12);
         if (valStart != std::string::npos) {
             last_reset_time = (time_t)std::stoull(content.substr(valStart));
+        }
+    }
+
+    size_t darkModePos = content.find("\"dark_mode\":");
+    if (darkModePos != std::string::npos) {
+        size_t valueStart = content.find_first_not_of(" \t\r\n", darkModePos + 12);
+        if (valueStart != std::string::npos) {
+            dark_mode = content.compare(valueStart, 4, "true") == 0;
+        }
+    }
+
+    size_t resetHourPos = content.find("\"work_reset_hour\":");
+    if (resetHourPos != std::string::npos) {
+        size_t valueStart = content.find_first_of("0123456789", resetHourPos + 18);
+        if (valueStart != std::string::npos) {
+            work_reset_hour = (std::min)(23, std::stoi(content.substr(valueStart)));
+        }
+    }
+
+    size_t resetMinutePos = content.find("\"work_reset_minute\":");
+    if (resetMinutePos != std::string::npos) {
+        size_t valueStart = content.find_first_of("0123456789", resetMinutePos + 20);
+        if (valueStart != std::string::npos) {
+            work_reset_minute = (std::min)(59, std::stoi(content.substr(valueStart)));
         }
     }
 

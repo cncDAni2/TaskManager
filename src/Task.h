@@ -13,6 +13,9 @@ public:
     int next_sync_id = 1000001;
     int work_seconds_today = 0;
     time_t last_reset_time = 0;
+    int work_reset_hour = 9;
+    int work_reset_minute = 15;
+    bool dark_mode = true;
     WorkHistory::Records work_history;
     WorkHistory::Records manual_work_history;
     std::wstring filePath;

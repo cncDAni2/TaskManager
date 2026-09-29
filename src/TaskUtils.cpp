@@ -62,12 +62,12 @@ time_t GetYesterday930Cutoff(time_t now) {
     return mktime(&lt);
 }
 
-time_t GetLast915Cutoff(time_t now) {
+time_t GetLastResetCutoff(time_t now, int hour, int minute) {
     struct tm lt;
     localtime_s(&lt, &now);
     struct tm cut = lt;
-    cut.tm_hour = 9;
-    cut.tm_min = 15;
+    cut.tm_hour = hour < 0 ? 0 : (hour > 23 ? 23 : hour);
+    cut.tm_min = minute < 0 ? 0 : (minute > 59 ? 59 : minute);
     cut.tm_sec = 0;
     cut.tm_isdst = -1;
     time_t cutTime = mktime(&cut);

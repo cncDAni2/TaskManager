@@ -8,6 +8,7 @@
 #include "PopupNotice.h"
 #include "BarTooltips.h"
 #include "FocusMode.h"
+#include "SettingsDialog.h"
 #include <windowsx.h>
 #include <commctrl.h>
 #include <algorithm>
@@ -81,7 +82,7 @@ void ShowAppWindow() {
     UpdateControlsVisibility();
     RecalculateLayout();
     if (g_hPinBtn) InvalidateRect(g_hPinBtn, nullptr, TRUE);
-    if (g_hSyncFolderBtn) InvalidateRect(g_hSyncFolderBtn, nullptr, TRUE);
+    if (g_hSettingsBtn) InvalidateRect(g_hSettingsBtn, nullptr, TRUE);
     if (g_hSyncToggleBtn) InvalidateRect(g_hSyncToggleBtn, nullptr, TRUE);
     InvalidateRect(g_hWnd, nullptr, TRUE);
 
@@ -143,9 +144,9 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                 345, 10, 125, 28, hWnd, (HMENU)IDC_TOGGLE_VIEW_BTN, hInst, nullptr);
             SendMessageW(g_hToggleViewBtn, WM_SETFONT, (WPARAM)g_hFontSmall, TRUE);
 
-            g_hSyncFolderBtn = CreateWindowW(L"BUTTON", L"",
+            g_hSettingsBtn = CreateWindowW(L"BUTTON", L"",
                 WS_CHILD | WS_VISIBLE | BS_OWNERDRAW | WS_TABSTOP,
-                478, 10, 28, 28, hWnd, (HMENU)IDC_SYNC_FOLDER_BTN, hInst, nullptr);
+                478, 10, 28, 28, hWnd, (HMENU)IDC_SETTINGS_BTN, hInst, nullptr);
 
             g_hPinBtn = CreateWindowW(L"BUTTON", L"",
                 WS_CHILD | WS_VISIBLE | BS_OWNERDRAW | WS_TABSTOP,
@@ -161,13 +162,13 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                 CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT,
                 hWnd, nullptr, hInst, nullptr);
             if (hTooltip) {
-                TOOLINFOW tiSyncFolder{};
-                tiSyncFolder.cbSize = sizeof(TOOLINFOW);
-                tiSyncFolder.uFlags = TTF_SUBCLASS | TTF_IDISHWND;
-                tiSyncFolder.hwnd = hWnd;
-                tiSyncFolder.uId = (UINT_PTR)g_hSyncFolderBtn;
-                tiSyncFolder.lpszText = (LPWSTR)L"Szinkronizációs fájl / mappa választása (OneDrive)";
-                SendMessageW(hTooltip, TTM_ADDTOOL, 0, (LPARAM)&tiSyncFolder);
+                TOOLINFOW tiSettings{};
+                tiSettings.cbSize = sizeof(TOOLINFOW);
+                tiSettings.uFlags = TTF_SUBCLASS | TTF_IDISHWND;
+                tiSettings.hwnd = hWnd;
+                tiSettings.uId = (UINT_PTR)g_hSettingsBtn;
+                tiSettings.lpszText = (LPWSTR)L"Beállítások";
+                SendMessageW(hTooltip, TTM_ADDTOOL, 0, (LPARAM)&tiSettings);
 
                 TOOLINFOW tiPin{};
                 tiPin.cbSize = sizeof(TOOLINFOW);

@@ -10,7 +10,7 @@ For feature overview and usage, see [README.md](README.md).
   - Uses MSVC x64 (`vcvars64.bat`), compiles resources via `rc.exe`, and builds `src\*.cpp` with `/utf-8 /std:c++17 /O2 /MT /W4`.
   - Intermediate object and resource files: `dist\obj\` and `dist\TaskManager.res` (ignored by Git).
   - Output binary: `TaskManager.exe` (kept beside `tasks.json`, which the app locates relative to its executable).
-- **Process locking**: Before rebuilding or testing, ensure any running instance is stopped (`Stop-Process -Name TaskManager -Force -ErrorAction SilentlyContinue`).
+- **Process lifecycle**: Before building or testing, stop any running instance to release `TaskManager.exe` (`Stop-Process -Name TaskManager -Force -ErrorAction SilentlyContinue`). After a successful build, reopen the app with `Start-Process .\TaskManager.exe` from the repository root; `build.bat` does not launch it automatically.
 - **Testing**:
   - Logic tests: compile against [Task.h](Task.h) or `src/Task.h` with MSVC (`cl.exe /nologo /EHsc /std:c++17 test_*.cpp user32.lib secur32.lib`) and clean up test binaries.
   - UI / Process tests: inspect process status and working set using PowerShell `Get-Process -Name TaskManager`.
@@ -18,15 +18,21 @@ For feature overview and usage, see [README.md](README.md).
 ## Architecture & Code Boundaries
 
 The application is modularized under `src/` into focused, single-responsibility files (100–500 lines each):
-- [src/AppTypes.h](src/AppTypes.h): Constants (`IDC_*`, `IDM_*`), enums (`ViewMode`, `CompletedFilter`), `ThemeColors`, `DisplayItem`, `ScrollbarMetrics`.
-- [src/AppState.h](src/AppState.h) / [src/AppState.cpp](src/AppState.cpp): Centralized global state declarations & definitions (`g_store`, `g_viewMode`, `g_pinMode`, etc.).
-- [src/Task.h](src/Task.h) / [src/Task.cpp](src/Task.cpp): `TaskStore` class for local persistence, OneDrive sync loading/saving, and state resets.
-- [src/TaskUtils.h](src/TaskUtils.h) / [src/TaskUtils.cpp](src/TaskUtils.cpp): String encoding helpers (UTF-8/Wide), JSON escape/unescape, date formatting, and user name detection.
-- [src/Drawing.h](src/Drawing.h) / [src/Drawing.cpp](src/Drawing.cpp): Crisp vector icon rendering (pencil, pin, cloud, folder-cloud) and DWM dark mode titlebar styling.
+- [src/AppTypes.h](src/AppTypes.h): UI IDs, task/view/filter types, theme colors, display items, and scrollbar metrics.
+- [src/AppState.h](src/AppState.h) / [src/AppState.cpp](src/AppState.cpp): Centralized globals for the store, views, window modes, focus/session state, and rendering/input state.
+- [src/Task.h](src/Task.h) / [src/Task.cpp](src/Task.cpp): `TaskStore` for local persistence, OneDrive task sync, active-task ordering, work tracking, and settings.
+- [src/TaskUtils.h](src/TaskUtils.h) / [src/TaskUtils.cpp](src/TaskUtils.cpp): UTF-8/wide conversion, JSON escaping, date/time formatting, configurable work-reset cutoffs, and user/path helpers.
+- [src/Drawing.h](src/Drawing.h) / [src/Drawing.cpp](src/Drawing.cpp): GDI icon rendering for task, settings, pin, and focus controls, plus DWM titlebar styling.
+- [src/BarTooltips.h](src/BarTooltips.h) / [src/BarTooltips.cpp](src/BarTooltips.cpp): Dynamic tooltip regions for work-history bars.
+- [src/FocusMode.h](src/FocusMode.h) / [src/FocusMode.cpp](src/FocusMode.cpp): Focus-mode toggling and Windows session lock/unlock notifications.
 - [src/InlineEdit.h](src/InlineEdit.h) / [src/InlineEdit.cpp](src/InlineEdit.cpp): Task inline editing logic, input subclassing, commit/cancel lifecycle.
-- [src/Layout.h](src/Layout.h) / [src/Layout.cpp](src/Layout.cpp): Geometry, mini mode transitions, dynamic height calculation, and custom scrollbar metrics.
-- [src/Paint.h](src/Paint.h) / [src/Paint.cpp](src/Paint.cpp): Double-buffered GDI rendering for main window and compact mini mode.
-- [src/UIEventHandler.h](src/UIEventHandler.h) / [src/UIEventHandler.cpp](src/UIEventHandler.cpp): Event handlers for keyboard navigation, mouse click/move, commands, and tray interactions.
+- [src/Layout.h](src/Layout.h) / [src/Layout.cpp](src/Layout.cpp): Window geometry, mini-mode transitions, control visibility, and custom scrollbar metrics.
+- [src/Paint.h](src/Paint.h) / [src/Paint.cpp](src/Paint.cpp): Double-buffered GDI rendering for full/mini views and measured/manual work bars.
+- [src/PopupNotice.h](src/PopupNotice.h) / [src/PopupNotice.cpp](src/PopupNotice.cpp): Non-activating notices for newly added tasks.
+- [src/SettingsDialog.h](src/SettingsDialog.h) / [src/SettingsDialog.cpp](src/SettingsDialog.cpp): Settings UI for sync-file path, dark mode, and daily work-reset time.
+- [src/UIEventHandler.h](src/UIEventHandler.h) / [src/UIEventHandler.cpp](src/UIEventHandler.cpp): Keyboard/mouse handling, task reordering, commands, and tray interactions.
+- [src/WorkHistory.h](src/WorkHistory.h) / [src/WorkHistory.cpp](src/WorkHistory.cpp): Measured/manual work-history persistence and daily/weekly display aggregation.
+- [src/WorkTimeDialog.h](src/WorkTimeDialog.h) / [src/WorkTimeDialog.cpp](src/WorkTimeDialog.cpp): Date and duration input for manual work-history entries.
 - [src/MainWindow.h](src/MainWindow.h) / [src/MainWindow.cpp](src/MainWindow.cpp): `WndProc` dispatcher, window lifecycle (`ShowAppWindow`, `HideAppWindow`, `ToggleWindow`).
 - [src/Main.cpp](src/Main.cpp): `wWinMain` entry point, single-instance mutex check, and message loop.
 - [resource.h](resource.h), [TaskManager.rc](TaskManager.rc), [app.manifest](app.manifest):
@@ -41,14 +47,16 @@ The application is modularized under `src/` into focused, single-responsibility 
 - **Maximum Performance & Near-Zero Footprint**:
   - Target: zero idle CPU usage, minimum memory working set (~15-18 MB active, trimmed to ~2-3 MB on hide via `SetProcessWorkingSetSize`).
   - Render path: 100% flicker-free double-buffered GDI. Suppress `WM_ERASEBKGND` (`return 1`). Avoid unnecessary `InvalidateRect` calls; use dirty rect invalidation when updating indicators.
-  - Event loop: strictly event-driven with `GetMessage`. Never introduce active polling loops or worker threads for idle states.
+  - Event loop: use `GetMessage`; avoid busy polling and worker threads. The existing one-second `IDT_WORK_TIMER` is for work-time accrual; do not add periodic work unrelated to tracking.
   - Background sync checking: only reload and recalculate layout if the sync file's `ftLastWriteTime` actually changed (`CheckSyncFileChanged`), preventing needless CPU wakeups and UI redraws.
 - **Character Encoding**: Always maintain UTF-8 encoding across files and compilation flags (`/utf-8`, `UNICODE`, `_UNICODE`). Use `std::wstring` and wide-character Win32 API functions (`W` suffixes) throughout the UI. Font creation must use `DEFAULT_CHARSET` to properly render Hungarian accents (`á, é, í, ó, ö, ő, ú, ü, ű`).
 - **Single Instance**: Controlled via named mutex `TaskManager_SingleInstance_Mutex_98741`. Second launch signals existing window via `WM_HOTKEY` and exits immediately.
 - **Two-Tier Data Persistence**:
-  - Local [tasks.json](tasks.json) stores local tasks, `next_id`, `work_seconds`, `last_reset`, and user's chosen `sync_file_path`.
-  - OneDrive shared `tasks.json` stores ONLY synchronized tasks (IDs in the 1,000,000+ range) and creator's display name (`author`).
+  - Local [tasks.json](tasks.json) stores local tasks, `next_id`, active ordering, current and historical work time (including manual entries), reset timestamp, theme, work-reset time, and chosen `sync_file_path`.
+  - OneDrive shared `tasks.json` stores only synchronized tasks (IDs in the 1,000,000+ range), creator (`author`), and assignee; keep local settings and work history out of the shared file.
   - Write operations must use binary/UTF-8 mode and properly escape strings using `TaskUtils::EscapeJsonString`.
+- **Work Timer & Focus Mode**: Focus mode overrides idle/excluded-app pauses, but session lock always stops counting and disables focus mode; unlocking does not re-enable focus mode. Keep `FocusMode` session-notification registration and unregistration paired.
+- **Work Reset vs Completed Filter**: The daily work reset time is configurable in Settings (default 09:15); the completed-task recent filter has its separate yesterday-09:30 cutoff. Do not conflate these date boundaries.
 - **Context Menu & Focus Loss (`WM_ACTIVATE`)**: `TrackPopupMenu` causes the owner window to receive `WM_ACTIVATE` with `WA_INACTIVE`. Always guard focus-loss handling with `g_inContextMenu` to avoid inadvertently hiding the window or collapsing into mini mode while a user browses the context menu.
 - **Custom Task List Scrollbar & Mini Mode**: The task list uses an integrated, sleek 5px custom GDI scrollbar rendered strictly within the list bounds rather than standard Win32 non-client scrollbars (`WS_VSCROLL`), ensuring clean visuals and no interference with mini mode. Always remove the `WS_EX_LAYERED` style upon returning to full mode to avoid rendering artifacts with child controls and standard GDI double buffering.
 - **Escape Key Dual-Path**: In Win32 popup windows with dialog-like message loops, `VK_ESCAPE` can be intercepted both in the `wWinMain` message loop and in `WndProc (WM_KEYDOWN)`. Keep Escape handling logic synchronized in both places (e.g. transitioning to mini mode when pinned vs hiding to tray when unpinned).

@@ -11,7 +11,7 @@ namespace TaskUtils {
     std::wstring FormatTime(time_t t);
     std::wstring FormatDateTime(time_t t);
     time_t GetYesterday930Cutoff(time_t now);
-    time_t GetLast915Cutoff(time_t now);
+    time_t GetLastResetCutoff(time_t now, int hour, int minute);
     std::wstring FormatWorkDuration(int totalSeconds);
     std::string EscapeJsonString(const std::string& s);
     std::string UnescapeJsonString(const std::string& s);
