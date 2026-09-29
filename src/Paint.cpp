@@ -4,6 +4,7 @@
 #include "Layout.h"
 #include "TaskUtils.h"
 #include "BarTooltips.h"
+#include "Marker.h"
 
 namespace {
     int CurrentManualWorkSeconds() {
@@ -185,6 +186,11 @@ void PaintMiniWindow(HWND hWnd, HDC hdc) {
             SetTextColor(hdcMem, isHovered ? (g_darkMode ? RGB(255, 255, 255) : RGB(0, 0, 0)) : th.textPrimary);
             SetBkMode(hdcMem, TRANSPARENT);
             DrawTextW(hdcMem, item.task.text.c_str(), -1, (LPRECT)&item.textRect, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS);
+
+            if (!item.task.is_sync && item.task.marker != TaskMarker::None) {
+                RECT rcMarker = { item.rect.right - 21, item.rect.top + 2, item.rect.right - 3, item.rect.bottom - 2 };
+                DrawTaskMarker(hdcMem, rcMarker, item.task.marker, th.bgCard, th.borderCard);
+            }
 
             if (item.assignRect.right > 0) {
                 bool isAssignedToMe = item.task.assignee == CurrentUserName();
@@ -458,7 +464,8 @@ void PaintMainWindow(HWND hWnd, HDC hdc) {
             }
 
             bool isInlineEditingThis = (g_editingTaskId == item.task.id);
-            int textRight = item.editRect.right > 0 ? (item.editRect.left - 6) : (item.deleteRect.left - 6);
+            int textRight = item.markerRect.right > 0 ? (item.markerRect.left - 6)
+                : (item.editRect.right > 0 ? (item.editRect.left - 6) : (item.deleteRect.left - 6));
             RECT rcText = item.textRect;
             rcText.top -= g_scrollY;
             rcText.bottom -= g_scrollY;
@@ -498,6 +505,16 @@ void PaintMainWindow(HWND hWnd, HDC hdc) {
                     meta += L" • " + item.task.author;
                 }
                 DrawTextW(hdcMem, meta.c_str(), -1, &rcMeta, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
+            }
+
+            if (!item.task.is_sync && item.markerRect.right > 0) {
+                RECT rcMarker = item.markerRect;
+                rcMarker.top -= g_scrollY;
+                rcMarker.bottom -= g_scrollY;
+                bool markerHovered = isHovered && g_hoverButtonType == 5;
+                COLORREF markerBg = markerHovered ? (g_darkMode ? RGB(55, 65, 81) : RGB(238, 242, 255)) : th.bgCard;
+                COLORREF markerBorder = markerHovered ? (g_darkMode ? RGB(96, 165, 250) : RGB(199, 210, 254)) : th.borderCard;
+                DrawTaskMarker(hdcMem, rcMarker, item.task.marker, markerBg, markerBorder);
             }
 
             // Edit button (active view only)

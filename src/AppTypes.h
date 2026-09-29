@@ -55,6 +55,13 @@ enum class CompletedFilter {
     AllByDay
 };
 
+enum class TaskMarker {
+    None = 0,
+    Heart = 1,
+    Crescent = 2,
+    Lightning = 3
+};
+
 struct Task {
     int id = 0;
     std::wstring text;
@@ -64,6 +71,7 @@ struct Task {
     bool is_sync = false;
     std::wstring author;
     std::wstring assignee;
+    TaskMarker marker = TaskMarker::None;
 };
 
 struct DisplayItem {
@@ -76,6 +84,7 @@ struct DisplayItem {
     RECT deleteRect{};
     RECT assignRect{};
     RECT textRect{};
+    RECT markerRect{};
 };
 
 struct ScrollbarMetrics {

@@ -79,6 +79,17 @@ void TaskStore::UpdateText(int id, const std::wstring& newText) {
     }
 }
 
+void TaskStore::CycleMarker(int id) {
+    for (auto& t : tasks) {
+        if (t.id == id && !t.is_sync) {
+            int nextMarker = (static_cast<int>(t.marker) + 1) % 4;
+            t.marker = static_cast<TaskMarker>(nextMarker);
+            SaveLocal();
+            return;
+        }
+    }
+}
+
 void TaskStore::ToggleCompleted(int id) {
     for (auto& t : tasks) {
         if (t.id == id) {
@@ -216,7 +227,8 @@ void TaskStore::SaveLocal() {
         out << "      \"text\": \"" << TaskUtils::EscapeJsonString(TaskUtils::WideToUtf8(t.text)) << "\",\n";
         out << "      \"completed\": " << (t.completed ? "true" : "false") << ",\n";
         out << "      \"created_at\": " << t.created_at << ",\n";
-        out << "      \"completed_at\": " << t.completed_at << "\n";
+        out << "      \"completed_at\": " << t.completed_at << ",\n";
+        out << "      \"marker\": " << static_cast<int>(t.marker) << "\n";
         out << "    }";
     }
     out << "\n  ]\n}\n";
@@ -536,6 +548,15 @@ void TaskStore::LoadLocal() {
                 size_t numStart = objStr.find_first_of("0123456789", p + 15);
                 if (numStart != std::string::npos) {
                     t.completed_at = (time_t)std::stoull(objStr.substr(numStart));
+                }
+            }
+            p = objStr.find("\"marker\":");
+            if (p != std::string::npos) {
+                size_t numStart = objStr.find_first_of("0123456789", p + 9);
+                if (numStart != std::string::npos) {
+                    int markerValue = std::stoi(objStr.substr(numStart));
+                    markerValue = (std::min)(3, (std::max)(0, markerValue));
+                    t.marker = static_cast<TaskMarker>(markerValue);
                 }
             }
 

@@ -498,6 +498,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                     if (item.isHeader) continue;
                     if (PtInRect(&item.checkRect, { mx, my }) ||
                         PtInRect(&item.deleteRect, { mx, my }) ||
+                        (item.markerRect.right > 0 && PtInRect(&item.markerRect, { mx, my })) ||
                         (item.assignRect.right > 0 && PtInRect(&item.assignRect, { mx, my })) ||
                         (item.editRect.right > 0 && PtInRect(&item.editRect, { mx, my }))) {
                         return SendMessageW(hWnd, WM_LBUTTONDOWN, wParam, lParam);

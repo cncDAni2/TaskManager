@@ -244,6 +244,13 @@ bool HandleLButtonDown(HWND hWnd, LPARAM lParam) {
             SetFocus(hWnd);
             InvalidateRect(hWnd, nullptr, TRUE);
             return true;
+        } else if (!item.task.is_sync && item.markerRect.right > 0 && PtInRect(&item.markerRect, { mx, my })) {
+            CommitInlineEdit();
+            g_store.CycleMarker(item.task.id);
+            RecalculateLayout();
+            SetFocus(hWnd);
+            InvalidateRect(hWnd, nullptr, FALSE);
+            return true;
         } else if (item.editRect.right > 0 && PtInRect(&item.editRect, { mx, my })) {
             if (g_editingTaskId == item.task.id ||
                 (g_lastCommittedTaskId == item.task.id && (GetTickCount64() - g_lastCommitTick < 250))) {
@@ -387,6 +394,7 @@ bool HandleMouseMove(HWND hWnd, LPARAM lParam) {
                 newHoverIdx = (int)i;
                 if (item.assignRect.right > 0 && PtInRect(&item.assignRect, { mx, my })) newHoverBtn = 4;
                 else if (PtInRect(&item.checkRect, { mx, my })) newHoverBtn = 1;
+                else if (item.markerRect.right > 0 && PtInRect(&item.markerRect, { mx, my })) newHoverBtn = 5;
                 else if (item.editRect.right > 0 && PtInRect(&item.editRect, { mx, my })) newHoverBtn = 2;
                 else if (item.deleteRect.right > 0 && PtInRect(&item.deleteRect, { mx, my })) newHoverBtn = 3;
                 break;

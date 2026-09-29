@@ -28,6 +28,7 @@ public:
     void CheckWorkReset();
     void Add(const std::wstring& text, bool isSync = false);
     void UpdateText(int id, const std::wstring& newText);
+    void CycleMarker(int id);
     void ToggleCompleted(int id);
     void ToggleAssignment(int id, const std::wstring& userName);
     void Delete(int id);
