@@ -465,7 +465,8 @@ void PaintMainWindow(HWND hWnd, HDC hdc) {
 
             bool isInlineEditingThis = (g_editingTaskId == item.task.id);
             int textRight = item.markerRect.right > 0 ? (item.markerRect.left - 6)
-                : (item.editRect.right > 0 ? (item.editRect.left - 6) : (item.deleteRect.left - 6));
+                : (item.assignRect.right > 0 ? (item.assignRect.left - 6)
+                    : (item.optionsRect.right > 0 ? (item.optionsRect.left - 6) : (item.deleteRect.left - 6)));
             RECT rcText = item.textRect;
             rcText.top -= g_scrollY;
             rcText.bottom -= g_scrollY;
@@ -517,44 +518,23 @@ void PaintMainWindow(HWND hWnd, HDC hdc) {
                 DrawTaskMarker(hdcMem, rcMarker, item.task.marker, markerBg, markerBorder);
             }
 
-            // Edit button (active view only)
-            if (item.editRect.right > 0) {
-                RECT rcEdt = item.editRect;
-                rcEdt.top -= g_scrollY;
-                rcEdt.bottom -= g_scrollY;
-                bool btnHover = (isHovered && g_hoverButtonType == 2);
-
-                if (btnHover) {
-                    HBRUSH hBtnBr = CreateSolidBrush(g_darkMode ? RGB(55, 65, 81) : RGB(238, 242, 255));
-                    HPEN hBtnPen = CreatePen(PS_SOLID, 1, g_darkMode ? RGB(96, 165, 250) : RGB(199, 210, 254));
-                    SelectObject(hdcMem, hBtnBr);
-                    SelectObject(hdcMem, hBtnPen);
-                    RoundRect(hdcMem, rcEdt.left, rcEdt.top, rcEdt.right, rcEdt.bottom, 4, 4);
-                    DeleteObject(hBtnBr);
-                    DeleteObject(hBtnPen);
+            if (item.optionsRect.right > 0) {
+                RECT rcOptions = item.optionsRect;
+                rcOptions.top -= g_scrollY;
+                rcOptions.bottom -= g_scrollY;
+                bool optionsHovered = isHovered && g_hoverButtonType == 6;
+                if (optionsHovered) {
+                    HBRUSH buttonBrush = CreateSolidBrush(g_darkMode ? RGB(55, 65, 81) : RGB(238, 242, 255));
+                    HPEN buttonPen = CreatePen(PS_SOLID, 1, g_darkMode ? RGB(96, 165, 250) : RGB(199, 210, 254));
+                    SelectObject(hdcMem, buttonBrush);
+                    SelectObject(hdcMem, buttonPen);
+                    RoundRect(hdcMem, rcOptions.left, rcOptions.top, rcOptions.right, rcOptions.bottom, 4, 4);
+                    DeleteObject(buttonBrush);
+                    DeleteObject(buttonPen);
                 }
-                COLORREF pencilColor = btnHover ? (g_darkMode ? RGB(147, 197, 253) : RGB(37, 99, 235)) : th.textSecondary;
-                DrawPencilIcon(hdcMem, rcEdt, pencilColor);
+                COLORREF iconColor = optionsHovered ? (g_darkMode ? RGB(147, 197, 253) : RGB(37, 99, 235)) : th.textSecondary;
+                DrawMoreIcon(hdcMem, rcOptions, iconColor);
             }
-
-            // Delete button (✕)
-            RECT rcDel = item.deleteRect;
-            rcDel.top -= g_scrollY;
-            rcDel.bottom -= g_scrollY;
-            bool delHover = (isHovered && g_hoverButtonType == 3);
-
-            if (delHover) {
-                HBRUSH hDelBr = CreateSolidBrush(g_darkMode ? RGB(127, 29, 29) : RGB(254, 242, 242));
-                HPEN hDelPen = CreatePen(PS_SOLID, 1, g_darkMode ? RGB(239, 68, 68) : RGB(254, 202, 202));
-                SelectObject(hdcMem, hDelBr);
-                SelectObject(hdcMem, hDelPen);
-                RoundRect(hdcMem, rcDel.left, rcDel.top, rcDel.right, rcDel.bottom, 4, 4);
-                DeleteObject(hDelBr);
-                DeleteObject(hDelPen);
-            }
-            SetTextColor(hdcMem, delHover ? RGB(239, 68, 68) : th.textSecondary);
-            SelectObject(hdcMem, g_hFontHeader);
-            DrawTextW(hdcMem, L"✕", -1, &rcDel, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
 
             if (item.assignRect.right > 0) {
                 RECT rcAssign = item.assignRect;

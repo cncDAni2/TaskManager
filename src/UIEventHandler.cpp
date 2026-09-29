@@ -30,6 +30,91 @@ LRESULT CALLBACK CenterMessageBoxHook(int code, WPARAM wParam, LPARAM lParam) {
     }
     return CallNextHookEx(nullptr, code, wParam, lParam);
 }
+
+void DeleteTaskWithConfirmation(HWND hWnd, int taskId, const std::wstring& initialTaskName) {
+    std::wstring taskName = initialTaskName;
+    if (g_editingTaskId == taskId && g_hInlineEdit) {
+        int textLength = GetWindowTextLengthW(g_hInlineEdit);
+        std::vector<wchar_t> textBuffer(textLength + 1);
+        GetWindowTextW(g_hInlineEdit, textBuffer.data(), textLength + 1);
+        taskName = textBuffer.data();
+    }
+
+    std::wstring confirmText = L"Biztos törli ezt a feladatot?\n" + taskName;
+    bool wasInContextMenu = g_inContextMenu;
+    g_inContextMenu = true;
+    g_messageBoxOwner = hWnd;
+    HHOOK messageBoxHook = SetWindowsHookExW(WH_CBT, CenterMessageBoxHook, nullptr, GetCurrentThreadId());
+    int answer = MessageBoxW(hWnd, confirmText.c_str(), L"Feladat törlése",
+        MB_YESNO | MB_ICONQUESTION | MB_DEFBUTTON2);
+    if (messageBoxHook) UnhookWindowsHookEx(messageBoxHook);
+    g_messageBoxOwner = nullptr;
+    g_inContextMenu = wasInContextMenu;
+    if (answer != IDYES) return;
+
+    CommitInlineEdit();
+    g_store.Delete(taskId);
+    auto it = std::find(g_sessionActiveTaskIds.begin(), g_sessionActiveTaskIds.end(), taskId);
+    if (it != g_sessionActiveTaskIds.end()) g_sessionActiveTaskIds.erase(it);
+    UpdateControlsVisibility();
+    RecalculateLayout();
+    if (g_selectedIndex >= (int)g_displayItems.size()) g_selectedIndex = (int)g_displayItems.size() - 1;
+    SetFocus(hWnd);
+    InvalidateRect(hWnd, nullptr, TRUE);
+}
+
+void ShowTaskOptionsMenu(HWND hWnd, int itemIndex) {
+    if (itemIndex < 0 || itemIndex >= (int)g_displayItems.size()) return;
+    int taskId = g_displayItems[itemIndex].task.id;
+    CommitInlineEdit();
+
+    int resolvedIndex = -1;
+    for (size_t i = 0; i < g_displayItems.size(); ++i) {
+        if (!g_displayItems[i].isHeader && g_displayItems[i].task.id == taskId) {
+            resolvedIndex = (int)i;
+            break;
+        }
+    }
+    if (resolvedIndex < 0) return;
+
+    const Task task = g_displayItems[resolvedIndex].task;
+    const RECT optionsRect = g_displayItems[resolvedIndex].optionsRect;
+    g_selectedIndex = resolvedIndex;
+
+    enum : UINT { MenuDelete = 1, MenuEdit, MenuToggleCompleted };
+    HMENU menu = CreatePopupMenu();
+    if (!menu) return;
+    AppendMenuW(menu, MF_STRING, MenuDelete, L"Törlés");
+    AppendMenuW(menu, MF_STRING, MenuEdit, L"Szerkesztés (Enter)");
+    AppendMenuW(menu, MF_STRING, MenuToggleCompleted,
+        task.completed ? L"Újra megnyitás (Space)" : L"Késznek jelölés (Space)");
+    if (task.completed) EnableMenuItem(menu, MenuEdit, MF_BYCOMMAND | MF_GRAYED);
+
+    POINT menuPoint = { optionsRect.right, optionsRect.top - g_scrollY };
+    ClientToScreen(hWnd, &menuPoint);
+    bool wasInContextMenu = g_inContextMenu;
+    g_inContextMenu = true;
+    SetForegroundWindow(hWnd);
+    UINT command = TrackPopupMenu(menu,
+        TPM_RIGHTALIGN | TPM_TOPALIGN | TPM_RETURNCMD | TPM_NONOTIFY,
+        menuPoint.x, menuPoint.y, 0, hWnd, nullptr);
+    DestroyMenu(menu);
+    g_inContextMenu = wasInContextMenu;
+    SetFocus(hWnd);
+
+    if (command == MenuDelete) {
+        DeleteTaskWithConfirmation(hWnd, task.id, task.text);
+    } else if (command == MenuEdit) {
+        StartInlineEdit(resolvedIndex);
+    } else if (command == MenuToggleCompleted) {
+        CommitInlineEdit();
+        g_store.ToggleCompleted(task.id);
+        UpdateControlsVisibility();
+        RecalculateLayout();
+        if (g_selectedIndex >= (int)g_displayItems.size()) g_selectedIndex = (int)g_displayItems.size() - 1;
+        InvalidateRect(hWnd, nullptr, TRUE);
+    }
+}
 }
 
 bool HandleKeyDown(HWND hWnd, WPARAM wParam) {
@@ -251,6 +336,9 @@ bool HandleLButtonDown(HWND hWnd, LPARAM lParam) {
             SetFocus(hWnd);
             InvalidateRect(hWnd, nullptr, FALSE);
             return true;
+        } else if (item.optionsRect.right > 0 && PtInRect(&item.optionsRect, { mx, my })) {
+            ShowTaskOptionsMenu(hWnd, (int)i);
+            return true;
         } else if (item.editRect.right > 0 && PtInRect(&item.editRect, { mx, my })) {
             if (g_editingTaskId == item.task.id ||
                 (g_lastCommittedTaskId == item.task.id && (GetTickCount64() - g_lastCommitTick < 250))) {
@@ -261,39 +349,7 @@ bool HandleLButtonDown(HWND hWnd, LPARAM lParam) {
             StartInlineEdit((int)i);
             return true;
         } else if (PtInRect(&item.deleteRect, { mx, my })) {
-            int delId = item.task.id;
-            std::wstring taskName = item.task.text;
-            if (g_editingTaskId == delId && g_hInlineEdit) {
-                int textLength = GetWindowTextLengthW(g_hInlineEdit);
-                std::vector<wchar_t> textBuffer(textLength + 1);
-                GetWindowTextW(g_hInlineEdit, textBuffer.data(), textLength + 1);
-                taskName = textBuffer.data();
-            }
-
-            std::wstring confirmText = L"Biztos törli ezt a feladatot?\n" + taskName;
-            bool wasInContextMenu = g_inContextMenu;
-            g_inContextMenu = true;
-            g_messageBoxOwner = hWnd;
-            HHOOK messageBoxHook = SetWindowsHookExW(WH_CBT, CenterMessageBoxHook, nullptr, GetCurrentThreadId());
-            int answer = MessageBoxW(hWnd, confirmText.c_str(), L"Feladat törlése",
-                MB_YESNO | MB_ICONQUESTION | MB_DEFBUTTON2);
-            if (messageBoxHook) UnhookWindowsHookEx(messageBoxHook);
-            g_messageBoxOwner = nullptr;
-            g_inContextMenu = wasInContextMenu;
-            if (answer != IDYES) return true;
-
-            CommitInlineEdit();
-            g_store.Delete(delId);
-
-            auto it = std::find(g_sessionActiveTaskIds.begin(), g_sessionActiveTaskIds.end(), delId);
-            if (it != g_sessionActiveTaskIds.end()) {
-                g_sessionActiveTaskIds.erase(it);
-            }
-
-            UpdateControlsVisibility();
-            RecalculateLayout();
-            SetFocus(hWnd);
-            InvalidateRect(hWnd, nullptr, TRUE);
+            DeleteTaskWithConfirmation(hWnd, item.task.id, item.task.text);
             return true;
         } else if (PtInRect(&item.rect, { mx, my })) {
             CommitInlineEdit();
@@ -395,6 +451,7 @@ bool HandleMouseMove(HWND hWnd, LPARAM lParam) {
                 if (item.assignRect.right > 0 && PtInRect(&item.assignRect, { mx, my })) newHoverBtn = 4;
                 else if (PtInRect(&item.checkRect, { mx, my })) newHoverBtn = 1;
                 else if (item.markerRect.right > 0 && PtInRect(&item.markerRect, { mx, my })) newHoverBtn = 5;
+                else if (item.optionsRect.right > 0 && PtInRect(&item.optionsRect, { mx, my })) newHoverBtn = 6;
                 else if (item.editRect.right > 0 && PtInRect(&item.editRect, { mx, my })) newHoverBtn = 2;
                 else if (item.deleteRect.right > 0 && PtInRect(&item.deleteRect, { mx, my })) newHoverBtn = 3;
                 break;

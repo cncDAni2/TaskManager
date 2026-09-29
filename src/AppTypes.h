@@ -85,6 +85,7 @@ struct DisplayItem {
     RECT assignRect{};
     RECT textRect{};
     RECT markerRect{};
+    RECT optionsRect{};
 };
 
 struct ScrollbarMetrics {

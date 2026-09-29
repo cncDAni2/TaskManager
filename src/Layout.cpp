@@ -345,23 +345,22 @@ void RecalculateLayout() {
                     DisplayItem item;
                     item.isHeader = false;
                     item.task = t;
-                    item.editRect = { clientWidth - 64, currentY + 10, clientWidth - 40, currentY + 34 };
-                    item.deleteRect = { clientWidth - 36, currentY + 10, clientWidth - 12, currentY + 34 };
+                    item.optionsRect = { clientWidth - 36, currentY + 10, clientWidth - 12, currentY + 34 };
                     if (!t.is_sync) {
-                        item.markerRect = { clientWidth - 96, currentY + 8, clientWidth - 68, currentY + 36 };
+                        item.markerRect = { clientWidth - 68, currentY + 8, clientWidth - 40, currentY + 36 };
                     }
                     if (t.is_sync) {
-                        item.assignRect = { clientWidth - 110, currentY + 10, clientWidth - 68, currentY + 34 };
+                        item.assignRect = { clientWidth - 82, currentY + 10, clientWidth - 40, currentY + 34 };
                     }
                     int textLeft = 18 + 20 + 10 + (t.is_sync ? 19 : 0);
                     int textRight = t.is_sync ? item.assignRect.left - 6
-                        : (item.markerRect.right > 0 ? item.markerRect.left - 6 : item.editRect.left - 6);
+                        : item.markerRect.left - 6;
                     int textHeight = MeasureTaskTextHeight(hdcMeasure, t.text, textRight - textLeft);
                     int rowHeight = std::max(itemHeight, textHeight + 28);
                     item.rect = { 10, currentY, clientWidth - 10, currentY + rowHeight };
                     item.checkRect = { 18, currentY + (rowHeight - 20) / 2, 38, currentY + (rowHeight + 20) / 2 };
-                    item.editRect.top = currentY + (rowHeight - 24) / 2;
-                    item.editRect.bottom = item.editRect.top + 24;
+                    item.optionsRect.top = currentY + (rowHeight - 24) / 2;
+                    item.optionsRect.bottom = item.optionsRect.top + 24;
                     if (item.markerRect.right > 0) {
                         item.markerRect.top = currentY + (rowHeight - 28) / 2;
                         item.markerRect.bottom = item.markerRect.top + 28;
@@ -382,23 +381,22 @@ void RecalculateLayout() {
                 DisplayItem item;
                 item.isHeader = false;
                 item.task = t;
-                item.editRect = { clientWidth - 64, currentY + 10, clientWidth - 40, currentY + 34 };
-                item.deleteRect = { clientWidth - 36, currentY + 10, clientWidth - 12, currentY + 34 };
+                item.optionsRect = { clientWidth - 36, currentY + 10, clientWidth - 12, currentY + 34 };
                 if (!t.is_sync) {
-                    item.markerRect = { clientWidth - 96, currentY + 8, clientWidth - 68, currentY + 36 };
+                    item.markerRect = { clientWidth - 68, currentY + 8, clientWidth - 40, currentY + 36 };
                 }
                 if (t.is_sync) {
-                    item.assignRect = { clientWidth - 110, currentY + 10, clientWidth - 68, currentY + 34 };
+                    item.assignRect = { clientWidth - 82, currentY + 10, clientWidth - 40, currentY + 34 };
                 }
                 int textLeft = 18 + 20 + 10 + (t.is_sync ? 19 : 0);
                 int textRight = t.is_sync ? item.assignRect.left - 6
-                    : (item.markerRect.right > 0 ? item.markerRect.left - 6 : item.editRect.left - 6);
+                    : item.markerRect.left - 6;
                 int textHeight = MeasureTaskTextHeight(hdcMeasure, t.text, textRight - textLeft);
                 int rowHeight = std::max(itemHeight, textHeight + 28);
                 item.rect = { 10, currentY, clientWidth - 10, currentY + rowHeight };
                 item.checkRect = { 18, currentY + (rowHeight - 20) / 2, 38, currentY + (rowHeight + 20) / 2 };
-                item.editRect.top = currentY + (rowHeight - 24) / 2;
-                item.editRect.bottom = item.editRect.top + 24;
+                item.optionsRect.top = currentY + (rowHeight - 24) / 2;
+                item.optionsRect.bottom = item.optionsRect.top + 24;
                 if (item.markerRect.right > 0) {
                     item.markerRect.top = currentY + (rowHeight - 28) / 2;
                     item.markerRect.bottom = item.markerRect.top + 28;
@@ -418,19 +416,18 @@ void RecalculateLayout() {
                 DisplayItem item;
                 item.isHeader = false;
                 item.task = t;
-                item.editRect = { 0, 0, 0, 0 };
-                item.deleteRect = { clientWidth - 36, currentY + 10, clientWidth - 12, currentY + 34 };
+                item.optionsRect = { clientWidth - 36, currentY + 10, clientWidth - 12, currentY + 34 };
                 if (t.is_sync) {
                     item.assignRect = { clientWidth - 82, currentY + 10, clientWidth - 40, currentY + 34 };
                 }
                 int textLeft = 18 + 20 + 10 + (t.is_sync ? 19 : 0);
-                int textRight = t.is_sync ? item.assignRect.left - 6 : item.deleteRect.left - 6;
+                int textRight = t.is_sync ? item.assignRect.left - 6 : item.optionsRect.left - 6;
                 int textHeight = MeasureTaskTextHeight(hdcMeasure, t.text, textRight - textLeft);
                 int rowHeight = std::max(itemHeight, textHeight + 28);
                 item.rect = { 10, currentY, clientWidth - 10, currentY + rowHeight };
                 item.checkRect = { 18, currentY + (rowHeight - 20) / 2, 38, currentY + (rowHeight + 20) / 2 };
-                item.deleteRect.top = currentY + (rowHeight - 24) / 2;
-                item.deleteRect.bottom = item.deleteRect.top + 24;
+                item.optionsRect.top = currentY + (rowHeight - 24) / 2;
+                item.optionsRect.bottom = item.optionsRect.top + 24;
                 item.textRect = { textLeft, currentY + 5, textRight, currentY + 5 + textHeight };
 
                 g_displayItems.push_back(item);
@@ -461,19 +458,18 @@ void RecalculateLayout() {
                 DisplayItem item;
                 item.isHeader = false;
                 item.task = t;
-                item.editRect = { 0, 0, 0, 0 };
-                item.deleteRect = { clientWidth - 36, currentY + 10, clientWidth - 12, currentY + 34 };
+                item.optionsRect = { clientWidth - 36, currentY + 10, clientWidth - 12, currentY + 34 };
                 if (t.is_sync) {
                     item.assignRect = { clientWidth - 82, currentY + 10, clientWidth - 40, currentY + 34 };
                 }
                 int textLeft = 18 + 20 + 10 + (t.is_sync ? 19 : 0);
-                int textRight = t.is_sync ? item.assignRect.left - 6 : item.deleteRect.left - 6;
+                int textRight = t.is_sync ? item.assignRect.left - 6 : item.optionsRect.left - 6;
                 int textHeight = MeasureTaskTextHeight(hdcMeasure, t.text, textRight - textLeft);
                 int rowHeight = std::max(itemHeight, textHeight + 28);
                 item.rect = { 10, currentY, clientWidth - 10, currentY + rowHeight };
                 item.checkRect = { 18, currentY + (rowHeight - 20) / 2, 38, currentY + (rowHeight + 20) / 2 };
-                item.deleteRect.top = currentY + (rowHeight - 24) / 2;
-                item.deleteRect.bottom = item.deleteRect.top + 24;
+                item.optionsRect.top = currentY + (rowHeight - 24) / 2;
+                item.optionsRect.bottom = item.optionsRect.top + 24;
                 item.textRect = { textLeft, currentY + 5, textRight, currentY + 5 + textHeight };
 
                 g_displayItems.push_back(item);

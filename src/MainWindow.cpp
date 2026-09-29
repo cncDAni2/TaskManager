@@ -497,6 +497,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                     const auto& item = g_displayItems[i];
                     if (item.isHeader) continue;
                     if (PtInRect(&item.checkRect, { mx, my }) ||
+                        (item.optionsRect.right > 0 && PtInRect(&item.optionsRect, { mx, my })) ||
                         PtInRect(&item.deleteRect, { mx, my }) ||
                         (item.markerRect.right > 0 && PtInRect(&item.markerRect, { mx, my })) ||
                         (item.assignRect.right > 0 && PtInRect(&item.assignRect, { mx, my })) ||

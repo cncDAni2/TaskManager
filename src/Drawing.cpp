@@ -85,6 +85,22 @@ void DrawPencilIcon(HDC hdc, const RECT& rc, COLORREF color) {
     DeleteObject(hPen);
 }
 
+void DrawMoreIcon(HDC hdc, const RECT& rc, COLORREF color) {
+    int cx = rc.left + (rc.right - rc.left) / 2;
+    int cy = rc.top + (rc.bottom - rc.top) / 2;
+    HBRUSH brush = CreateSolidBrush(color);
+    HPEN pen = CreatePen(PS_SOLID, 1, color);
+    HGDIOBJ oldBrush = SelectObject(hdc, brush);
+    HGDIOBJ oldPen = SelectObject(hdc, pen);
+    for (int offset : { -5, 0, 5 }) {
+        Ellipse(hdc, cx - 2, cy + offset - 2, cx + 2, cy + offset + 2);
+    }
+    SelectObject(hdc, oldBrush);
+    SelectObject(hdc, oldPen);
+    DeleteObject(brush);
+    DeleteObject(pen);
+}
+
 void DrawFocusIcon(HDC hdc, const RECT& rc, COLORREF color) {
     int cx = rc.left + (rc.right - rc.left) / 2;
     int cy = rc.top + (rc.bottom - rc.top) / 2;
