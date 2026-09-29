@@ -34,6 +34,7 @@ extern HFONT g_hFontHeader;
 extern TaskStore g_store;
 extern ViewMode g_viewMode;
 extern CompletedFilter g_completedFilter;
+extern ThemeMode g_themeMode;
 extern bool g_darkMode;
 extern bool g_syncToggle;
 

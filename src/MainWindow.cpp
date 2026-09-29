@@ -122,11 +122,11 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             g_hFontHeader = CreateFontW(15, 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE, DEFAULT_CHARSET,
                 OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE, L"Segoe UI");
 
-            ThemeColors th = g_darkMode ? GetDarkTheme() : GetLightTheme();
+            ThemeColors th = GetThemeColors(g_themeMode);
             g_hEditBrush = CreateSolidBrush(th.bgEdit);
 
             g_hTimeHistoryBtn = CreateWindowW(L"BUTTON", L"Idők",
-                WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON | WS_TABSTOP,
+                WS_CHILD | WS_VISIBLE | BS_OWNERDRAW | WS_TABSTOP,
                 286, 10, 54, 28, hWnd, (HMENU)IDC_TIME_HISTORY_BTN, hInst, nullptr);
             SendMessageW(g_hTimeHistoryBtn, WM_SETFONT, (WPARAM)g_hFontSmall, TRUE);
 
@@ -135,12 +135,12 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                 252, 10, 28, 28, hWnd, (HMENU)IDC_FOCUS_MODE_BTN, hInst, nullptr);
 
             g_hManualWorkBtn = CreateWindowW(L"BUTTON", L"Manuális",
-                WS_CHILD | BS_PUSHBUTTON | WS_TABSTOP,
+                WS_CHILD | BS_OWNERDRAW | WS_TABSTOP,
                 394, 10, 80, 28, hWnd, (HMENU)IDC_MANUAL_WORK_BTN, hInst, nullptr);
             SendMessageW(g_hManualWorkBtn, WM_SETFONT, (WPARAM)g_hFontSmall, TRUE);
 
             g_hToggleViewBtn = CreateWindowW(L"BUTTON", L"Elkészült (0)",
-                WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON | WS_TABSTOP,
+                WS_CHILD | WS_VISIBLE | BS_OWNERDRAW | WS_TABSTOP,
                 345, 10, 125, 28, hWnd, (HMENU)IDC_TOGGLE_VIEW_BTN, hInst, nullptr);
             SendMessageW(g_hToggleViewBtn, WM_SETFONT, (WPARAM)g_hFontSmall, TRUE);
 
@@ -153,7 +153,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                 512, 10, 28, 28, hWnd, (HMENU)IDC_PIN_BTN, hInst, nullptr);
 
             g_hCloseBtn = CreateWindowW(L"BUTTON", L"✕",
-                WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON | WS_TABSTOP,
+                WS_CHILD | WS_VISIBLE | BS_OWNERDRAW | WS_TABSTOP,
                 545, 10, 28, 28, hWnd, (HMENU)IDC_CLOSE_BTN, hInst, nullptr);
             SendMessageW(g_hCloseBtn, WM_SETFONT, (WPARAM)g_hFontNormal, TRUE);
 
@@ -211,7 +211,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             SetWindowSubclass(g_hEdit, EditSubclassProc, 0, 0);
 
             g_hAddBtn = CreateWindowW(L"BUTTON", L"+ Hozzáad",
-                WS_CHILD | WS_VISIBLE | BS_DEFPUSHBUTTON | WS_TABSTOP,
+                WS_CHILD | WS_VISIBLE | BS_OWNERDRAW | WS_TABSTOP,
                 444, 56, 92, 28, hWnd, (HMENU)IDC_ADD_TASK_BTN, hInst, nullptr);
             SendMessageW(g_hAddBtn, WM_SETFONT, (WPARAM)g_hFontNormal, TRUE);
 
@@ -230,12 +230,12 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             }
 
             g_hFilterRecentBtn = CreateWindowW(L"BUTTON", L"Előző nap 9:30 óta",
-                WS_CHILD | BS_PUSHBUTTON | WS_TABSTOP,
+                WS_CHILD | BS_OWNERDRAW | WS_TABSTOP,
                 12, 54, 270, 26, hWnd, (HMENU)IDC_FILTER_RECENT, hInst, nullptr);
             SendMessageW(g_hFilterRecentBtn, WM_SETFONT, (WPARAM)g_hFontSmall, TRUE);
 
             g_hFilterAllBtn = CreateWindowW(L"BUTTON", L"MIND (napi bontás)",
-                WS_CHILD | BS_PUSHBUTTON | WS_TABSTOP,
+                WS_CHILD | BS_OWNERDRAW | WS_TABSTOP,
                 290, 54, 280, 26, hWnd, (HMENU)IDC_FILTER_ALL, hInst, nullptr);
             SendMessageW(g_hFilterAllBtn, WM_SETFONT, (WPARAM)g_hFontSmall, TRUE);
 
@@ -550,7 +550,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 
         case WM_CTLCOLOREDIT: {
             HDC hdcEdit = (HDC)wParam;
-            ThemeColors th = g_darkMode ? GetDarkTheme() : GetLightTheme();
+            ThemeColors th = GetThemeColors(g_themeMode);
             SetTextColor(hdcEdit, th.textEdit);
             SetBkColor(hdcEdit, th.bgEdit);
             return (LRESULT)g_hEditBrush;

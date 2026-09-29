@@ -15,7 +15,7 @@ public:
     time_t last_reset_time = 0;
     int work_reset_hour = 9;
     int work_reset_minute = 15;
-    bool dark_mode = true;
+    ThemeMode theme_mode = ThemeMode::Dark;
     WorkHistory::Records work_history;
     WorkHistory::Records manual_work_history;
     std::wstring filePath;

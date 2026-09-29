@@ -272,7 +272,8 @@ void EnterMiniMode() {
     if (!(exStyle & WS_EX_LAYERED)) {
         SetWindowLongPtrW(g_hWnd, GWL_EXSTYLE, exStyle | WS_EX_LAYERED);
     }
-    SetLayeredWindowAttributes(g_hWnd, 0, (BYTE)(255 * 0.80), LWA_ALPHA);
+    BYTE miniOpacity = (BYTE)(255 * 0.80);
+    SetLayeredWindowAttributes(g_hWnd, 0, miniOpacity, LWA_ALPHA);
 
     RecalculateMiniLayout();
 }

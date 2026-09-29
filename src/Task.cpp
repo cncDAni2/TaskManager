@@ -206,7 +206,10 @@ void TaskStore::SaveLocal() {
         << "  \"work_seconds\": " << work_seconds_today << ",\n"
         << "  \"last_reset\": " << (unsigned long long)last_reset_time << ",\n";
     WorkHistory::WriteJson(out, work_history, manual_work_history);
-    out << "  \"dark_mode\": " << (dark_mode ? "true" : "false") << ",\n"
+    const char* themeName = theme_mode == ThemeMode::Pink ? "pink"
+        : (theme_mode == ThemeMode::Light ? "light" : "dark");
+    out << "  \"dark_mode\": " << (theme_mode == ThemeMode::Dark ? "true" : "false") << ",\n"
+        << "  \"theme_mode\": \"" << themeName << "\",\n"
         << "  \"work_reset_hour\": " << work_reset_hour << ",\n"
         << "  \"work_reset_minute\": " << work_reset_minute << ",\n"
         << "  \"sync_file_path\": \"" << TaskUtils::EscapeJsonString(TaskUtils::WideToUtf8(syncFilePath)) << "\",\n"
@@ -435,11 +438,35 @@ void TaskStore::LoadLocal() {
         }
     }
 
-    size_t darkModePos = content.find("\"dark_mode\":");
-    if (darkModePos != std::string::npos) {
-        size_t valueStart = content.find_first_not_of(" \t\r\n", darkModePos + 12);
-        if (valueStart != std::string::npos) {
-            dark_mode = content.compare(valueStart, 4, "true") == 0;
+    bool themeLoaded = false;
+    size_t themeModePos = content.find("\"theme_mode\":");
+    if (themeModePos != std::string::npos) {
+        size_t valueStart = content.find_first_not_of(" \t\r\n", themeModePos + 13);
+        if (valueStart != std::string::npos && content[valueStart] == '"') {
+            size_t valueEnd = content.find('"', valueStart + 1);
+            if (valueEnd != std::string::npos) {
+                std::string themeName = content.substr(valueStart + 1, valueEnd - valueStart - 1);
+                if (themeName == "pink") {
+                    theme_mode = ThemeMode::Pink;
+                    themeLoaded = true;
+                } else if (themeName == "light") {
+                    theme_mode = ThemeMode::Light;
+                    themeLoaded = true;
+                } else if (themeName == "dark") {
+                    theme_mode = ThemeMode::Dark;
+                    themeLoaded = true;
+                }
+            }
+        }
+    }
+    if (!themeLoaded) {
+        size_t darkModePos = content.find("\"dark_mode\":");
+        if (darkModePos != std::string::npos) {
+            size_t valueStart = content.find_first_not_of(" \t\r\n", darkModePos + 12);
+            if (valueStart != std::string::npos) {
+                theme_mode = content.compare(valueStart, 4, "true") == 0
+                    ? ThemeMode::Dark : ThemeMode::Light;
+            }
         }
     }
 

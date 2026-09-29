@@ -9,6 +9,7 @@
 #include "FocusMode.h"
 #include <windowsx.h>
 #include <algorithm>
+#include <cwctype>
 
 namespace {
 HWND g_messageBoxOwner = nullptr;
@@ -553,7 +554,30 @@ bool HandleLButtonUp(HWND hWnd, LPARAM) {
 }
 
 bool HandleCommand(HWND hWnd, int id) {
-    if (id == IDC_CLOSE_BTN) {
+    if (id == IDC_ADD_TASK_BTN) {
+        if (!g_hEdit || g_viewMode != ViewMode::ActiveTasks) return true;
+        int textLength = GetWindowTextLengthW(g_hEdit);
+        std::vector<wchar_t> textBuffer(textLength + 1);
+        GetWindowTextW(g_hEdit, textBuffer.data(), textLength + 1);
+        std::wstring taskText = textBuffer.data();
+        while (!taskText.empty() && std::iswspace(taskText.front())) taskText.erase(taskText.begin());
+        while (!taskText.empty() && std::iswspace(taskText.back())) taskText.pop_back();
+        if (taskText.empty()) {
+            SetFocus(g_hEdit);
+            return true;
+        }
+
+        g_store.Add(taskText, g_syncToggle);
+        g_sessionActiveTaskIds.insert(g_sessionActiveTaskIds.begin(), g_store.tasks.back().id);
+        SetWindowTextW(g_hEdit, L"");
+        g_scrollY = 0;
+        g_selectedIndex = -1;
+        UpdateControlsVisibility();
+        RecalculateLayout();
+        SetFocus(g_hEdit);
+        InvalidateRect(hWnd, nullptr, TRUE);
+        return true;
+    } else if (id == IDC_CLOSE_BTN) {
         g_pinMode = false;
         g_miniPositionValid = false;
         if (g_hPinBtn) InvalidateRect(g_hPinBtn, nullptr, TRUE);
@@ -637,18 +661,6 @@ bool HandleCommand(HWND hWnd, int id) {
         bool current = IsAutoRunEnabled();
         SetAutoRun(!current);
         return true;
-    } else if (id == IDM_TRAY_THEME) {
-        g_darkMode = !g_darkMode;
-        g_store.dark_mode = g_darkMode;
-        g_store.SaveLocal();
-        ThemeColors th = g_darkMode ? GetDarkTheme() : GetLightTheme();
-        if (g_hEditBrush) DeleteObject(g_hEditBrush);
-        g_hEditBrush = CreateSolidBrush(th.bgEdit);
-        ApplyDarkModeTitleBar(hWnd, g_darkMode);
-        if (g_hPinBtn) InvalidateRect(g_hPinBtn, nullptr, TRUE);
-        if (g_hFocusModeBtn) InvalidateRect(g_hFocusModeBtn, nullptr, TRUE);
-        InvalidateRect(hWnd, nullptr, TRUE);
-        return true;
     } else if (id == IDM_TRAY_EXIT) {
         DestroyWindow(hWnd);
         return true;
@@ -658,17 +670,53 @@ bool HandleCommand(HWND hWnd, int id) {
 
 bool HandleDrawItem(HWND /*hWnd*/, DRAWITEMSTRUCT* pDIS) {
     if (!pDIS) return false;
-    ThemeColors th = g_darkMode ? GetDarkTheme() : GetLightTheme();
+    ThemeColors th = GetThemeColors(g_themeMode);
     bool isSelected = (pDIS->itemState & ODS_SELECTED) != 0;
+    bool isPink = g_themeMode == ThemeMode::Pink;
+    COLORREF pinkButtonBg = RGB(183, 0, 99);
+
+    bool isTextButton = pDIS->CtlID == IDC_TIME_HISTORY_BTN || pDIS->CtlID == IDC_MANUAL_WORK_BTN ||
+        pDIS->CtlID == IDC_TOGGLE_VIEW_BTN || pDIS->CtlID == IDC_CLOSE_BTN ||
+        pDIS->CtlID == IDC_ADD_TASK_BTN || pDIS->CtlID == IDC_FILTER_RECENT ||
+        pDIS->CtlID == IDC_FILTER_ALL;
+    if (isTextButton) {
+        bool isDark = g_themeMode == ThemeMode::Dark;
+        COLORREF buttonBg = isPink ? pinkButtonBg
+            : (isDark ? RGB(60, 60, 60) : (isSelected ? th.bgCardHover : th.bgHeader));
+        COLORREF buttonText = isPink || isDark ? RGB(255, 255, 255) : th.textPrimary;
+        COLORREF buttonBorder = isPink ? (isSelected ? th.bgHeader : th.borderCard)
+            : (isDark ? RGB(82, 82, 82) : (isSelected ? th.borderCardHover : th.borderSep));
+        HBRUSH brush = CreateSolidBrush(buttonBg);
+        HPEN pen = CreatePen(PS_SOLID, 1, buttonBorder);
+        HGDIOBJ oldBrush = SelectObject(pDIS->hDC, brush);
+        HGDIOBJ oldPen = SelectObject(pDIS->hDC, pen);
+        RoundRect(pDIS->hDC, pDIS->rcItem.left, pDIS->rcItem.top,
+            pDIS->rcItem.right, pDIS->rcItem.bottom, 6, 6);
+        SelectObject(pDIS->hDC, oldBrush);
+        SelectObject(pDIS->hDC, oldPen);
+        DeleteObject(brush);
+        DeleteObject(pen);
+
+        wchar_t label[128]{};
+        GetWindowTextW(pDIS->hwndItem, label, _countof(label));
+        SetBkMode(pDIS->hDC, TRANSPARENT);
+        SetTextColor(pDIS->hDC, buttonText);
+        HFONT font = (HFONT)SendMessageW(pDIS->hwndItem, WM_GETFONT, 0, 0);
+        HGDIOBJ oldFont = font ? SelectObject(pDIS->hDC, font) : nullptr;
+        RECT textRect = pDIS->rcItem;
+        InflateRect(&textRect, -4, -2);
+        DrawTextW(pDIS->hDC, label, -1, &textRect,
+            DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS);
+        if (oldFont) SelectObject(pDIS->hDC, oldFont);
+        return true;
+    }
 
     if (pDIS->CtlID == IDC_FOCUS_MODE_BTN) {
-        COLORREF bgBtn = g_focusMode
-            ? (g_darkMode ? RGB(37, 99, 235) : RGB(59, 130, 246))
-            : (isSelected ? (g_darkMode ? RGB(55, 65, 81) : RGB(226, 232, 240)) : th.bgHeader);
-        COLORREF borderBtn = g_focusMode
-            ? (g_darkMode ? RGB(96, 165, 250) : RGB(37, 99, 235))
+        COLORREF bgBtn = g_focusMode ? RGB(30, 58, 138)
+            : (isPink ? pinkButtonBg : (isSelected ? th.bgCardHover : th.bgHeader));
+        COLORREF borderBtn = g_focusMode ? RGB(30, 64, 175)
             : (isSelected ? th.borderCardHover : th.borderSep);
-        COLORREF iconColor = g_focusMode ? RGB(255, 255, 255)
+        COLORREF iconColor = isPink || g_focusMode ? RGB(255, 255, 255)
             : (isSelected ? th.textPrimary : th.textSecondary);
         HBRUSH hBr = CreateSolidBrush(bgBtn);
         HPEN hPen = CreatePen(PS_SOLID, 1, borderBtn);
@@ -689,17 +737,17 @@ bool HandleDrawItem(HWND /*hWnd*/, DRAWITEMSTRUCT* pDIS) {
         COLORREF pinColor;
 
         if (isPinned) {
-            bgBtn = g_darkMode ? RGB(37, 99, 235) : RGB(59, 130, 246);
-            borderBtn = g_darkMode ? RGB(96, 165, 250) : RGB(37, 99, 235);
+            bgBtn = RGB(30, 58, 138);
+            borderBtn = RGB(30, 64, 175);
             pinColor = RGB(255, 255, 255);
         } else if (isSelected) {
-            bgBtn = g_darkMode ? RGB(55, 65, 81) : RGB(226, 232, 240);
+            bgBtn = isPink ? pinkButtonBg : th.bgCardHover;
             borderBtn = th.borderCardHover;
-            pinColor = th.textPrimary;
+            pinColor = isPink ? RGB(255, 255, 255) : th.textPrimary;
         } else {
-            bgBtn = th.bgHeader;
+            bgBtn = isPink ? pinkButtonBg : th.bgHeader;
             borderBtn = th.borderSep;
-            pinColor = th.textSecondary;
+            pinColor = isPink ? RGB(255, 255, 255) : th.textSecondary;
         }
 
         HBRUSH hBr = CreateSolidBrush(bgBtn);
@@ -717,9 +765,9 @@ bool HandleDrawItem(HWND /*hWnd*/, DRAWITEMSTRUCT* pDIS) {
         DrawPinIcon(pDIS->hDC, rcPin, pinColor, isPinned);
         return true;
     } else if (pDIS->CtlID == IDC_SETTINGS_BTN) {
-        COLORREF bgBtn = isSelected ? (g_darkMode ? RGB(55, 65, 81) : RGB(226, 232, 240)) : th.bgHeader;
-        COLORREF borderBtn = isSelected ? th.borderCardHover : th.borderSep;
-        COLORREF iconColor = isSelected ? th.textPrimary : th.textSecondary;
+        COLORREF bgBtn = isSelected ? RGB(226, 232, 240) : RGB(248, 250, 252);
+        COLORREF borderBtn = RGB(203, 213, 225);
+        COLORREF iconColor = RGB(71, 85, 105);
 
         HBRUSH hBr = CreateSolidBrush(bgBtn);
         HPEN hPen = CreatePen(PS_SOLID, 1, borderBtn);
@@ -741,11 +789,15 @@ bool HandleDrawItem(HWND /*hWnd*/, DRAWITEMSTRUCT* pDIS) {
         COLORREF cloudColor;
 
         if (g_syncToggle) {
-            bgBtn = g_darkMode ? RGB(37, 99, 235) : RGB(59, 130, 246);
-            borderBtn = g_darkMode ? RGB(96, 165, 250) : RGB(37, 99, 235);
+            bgBtn = RGB(30, 58, 138);
+            borderBtn = RGB(30, 64, 175);
+            cloudColor = RGB(255, 255, 255);
+        } else if (isPink) {
+            bgBtn = pinkButtonBg;
+            borderBtn = th.borderCard;
             cloudColor = RGB(255, 255, 255);
         } else if (isSelected) {
-            bgBtn = g_darkMode ? RGB(55, 65, 81) : RGB(226, 232, 240);
+            bgBtn = th.bgCardHover;
             borderBtn = th.borderCardHover;
             cloudColor = th.textPrimary;
         } else {
@@ -791,11 +843,8 @@ bool HandleAppTray(HWND hWnd, LPARAM lParam) {
         UINT uCheck = IsAutoRunEnabled() ? MF_CHECKED : MF_UNCHECKED;
         InsertMenuW(hMenu, 4, MF_BYPOSITION | MF_STRING | uCheck, IDM_TRAY_AUTORUN, L"Indítás a Windows-zal");
 
-        std::wstring themeStr = g_darkMode ? L"Világos téma" : L"Sötét téma";
-        InsertMenuW(hMenu, 5, MF_BYPOSITION | MF_STRING, IDM_TRAY_THEME, themeStr.c_str());
-
-        InsertMenuW(hMenu, 6, MF_BYPOSITION | MF_SEPARATOR, 0, nullptr);
-        InsertMenuW(hMenu, 7, MF_BYPOSITION | MF_STRING, IDM_TRAY_EXIT, L"Kilépés");
+        InsertMenuW(hMenu, 5, MF_BYPOSITION | MF_SEPARATOR, 0, nullptr);
+        InsertMenuW(hMenu, 6, MF_BYPOSITION | MF_STRING, IDM_TRAY_EXIT, L"Kilépés");
 
         SetForegroundWindow(hWnd);
         TrackPopupMenu(hMenu, TPM_RIGHTALIGN | TPM_BOTTOMALIGN, pt.x, pt.y, 0, hWnd, nullptr);

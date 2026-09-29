@@ -65,17 +65,18 @@ void PaintMiniWindow(HWND hWnd, HDC hdc) {
     int clientW = rcClient.right - rcClient.left;
     int clientH = rcClient.bottom - rcClient.top;
 
-    ThemeColors th = g_darkMode ? GetDarkTheme() : GetLightTheme();
+    ThemeColors th = GetThemeColors(g_themeMode);
+    const COLORREF miniBg = g_themeMode == ThemeMode::Pink ? RGB(255, 20, 147) : th.bgWindow;
 
     HDC hdcMem = CreateCompatibleDC(hdc);
     HBITMAP hBmp = CreateCompatibleBitmap(hdc, clientW, clientH);
     HGDIOBJ hOldBmp = SelectObject(hdcMem, hBmp);
 
-    HBRUSH hBrushBg = CreateSolidBrush(th.bgWindow);
+    HBRUSH hBrushBg = CreateSolidBrush(miniBg);
     FillRect(hdcMem, &rcClient, hBrushBg);
     DeleteObject(hBrushBg);
 
-    HPEN hPenBorder = CreatePen(PS_SOLID, 1, g_darkMode ? RGB(63, 63, 70) : RGB(203, 213, 225));
+    HPEN hPenBorder = CreatePen(PS_SOLID, 1, th.borderCard);
     HGDIOBJ hOldPen = SelectObject(hdcMem, hPenBorder);
     HGDIOBJ hOldBrush = SelectObject(hdcMem, GetStockObject(NULL_BRUSH));
     Rectangle(hdcMem, 0, 0, clientW, clientH);
@@ -84,7 +85,8 @@ void PaintMiniWindow(HWND hWnd, HDC hdc) {
     DeleteObject(hPenBorder);
 
     RECT rcDragHandle = GetMiniDragHandleRect(clientW);
-    HBRUSH hBrushGripDots = CreateSolidBrush(g_darkMode ? RGB(212, 212, 216) : RGB(71, 85, 105));
+    HBRUSH hBrushGripDots = CreateSolidBrush(g_themeMode == ThemeMode::Pink
+        ? RGB(0, 0, 0) : (g_darkMode ? RGB(212, 212, 216) : RGB(71, 85, 105)));
     HGDIOBJ hOldDotsBrush = SelectObject(hdcMem, hBrushGripDots);
     HGDIOBJ hOldDotsPen = SelectObject(hdcMem, GetStockObject(NULL_PEN));
     int gripCenterX = rcDragHandle.left + (rcDragHandle.right - rcDragHandle.left) / 2;
@@ -101,9 +103,11 @@ void PaintMiniWindow(HWND hWnd, HDC hdc) {
     DeleteObject(hBrushGripDots);
 
     RECT rcFocusButton = GetMiniFocusButtonRect(clientW);
-    COLORREF focusBg = g_focusMode ? RGB(37, 99, 235) : th.bgCard;
-    COLORREF focusBorder = g_focusMode ? RGB(96, 165, 250) : th.borderSep;
-    COLORREF focusIcon = g_focusMode ? RGB(255, 255, 255) : th.textSecondary;
+    COLORREF focusBg = g_focusMode ? RGB(30, 58, 138)
+        : (g_themeMode == ThemeMode::Pink ? miniBg : th.bgCard);
+    COLORREF focusBorder = g_focusMode ? RGB(30, 64, 175) : th.borderSep;
+    COLORREF focusIcon = g_focusMode ? RGB(255, 255, 255)
+        : (g_themeMode == ThemeMode::Pink ? RGB(0, 0, 0) : th.textSecondary);
     HBRUSH hFocusBrush = CreateSolidBrush(focusBg);
     HPEN hFocusPen = CreatePen(PS_SOLID, 1, focusBorder);
     HGDIOBJ hOldFocusBrush = SelectObject(hdcMem, hFocusBrush);
@@ -130,12 +134,15 @@ void PaintMiniWindow(HWND hWnd, HDC hdc) {
             bool isBeingDragged = (g_taskDragging && (int)i == g_dragSourceIndex);
             bool isAssignedToOther = IsAssignedToOtherUser(item.task);
 
-            COLORREF cardBg = isBeingDragged ? (g_darkMode ? RGB(30, 41, 59) : RGB(224, 231, 255))
-                            : (isAssignedToOther ? (g_darkMode ? RGB(30, 58, 90) : RGB(219, 234, 254))
-                            : (isHovered ? th.bgCardHover : th.bgCard));
-            COLORREF cardBorder = isBeingDragged ? RGB(59, 130, 246)
-                                : (isAssignedToOther ? (g_darkMode ? RGB(59, 130, 246) : RGB(147, 197, 253))
-                                : (isHovered ? th.borderCardHover : th.borderCard));
+            COLORREF cardBg = g_themeMode == ThemeMode::Pink ? miniBg
+                : (isBeingDragged ? th.bgCardSelected
+                    : (isAssignedToOther ? (g_darkMode ? RGB(30, 58, 90) : RGB(219, 234, 254))
+                        : (isHovered ? th.bgCardHover : th.bgCard)));
+            COLORREF cardBorder = g_themeMode == ThemeMode::Pink
+                ? (isBeingDragged ? th.borderCardSelected : (isHovered ? th.borderCardHover : th.borderCard))
+                : (isBeingDragged ? th.borderCardSelected
+                    : (isAssignedToOther ? (g_darkMode ? RGB(59, 130, 246) : RGB(147, 197, 253))
+                        : (isHovered ? th.borderCardHover : th.borderCard)));
 
             HBRUSH hCardBrush = CreateSolidBrush(cardBg);
             HPEN hCardPen = CreatePen(PS_SOLID, isBeingDragged ? 2 : 1, cardBorder);
@@ -166,7 +173,7 @@ void PaintMiniWindow(HWND hWnd, HDC hdc) {
                 Polyline(hdcMem, tickPts, 3);
                 DeleteObject(hTickPen);
             } else {
-                HBRUSH hChkBrush = CreateSolidBrush(chkHovered ? (g_darkMode ? RGB(55, 65, 81) : RGB(241, 245, 249)) : th.bgCard);
+                HBRUSH hChkBrush = CreateSolidBrush(chkHovered ? (g_darkMode ? RGB(55, 65, 81) : th.bgCardHover) : th.bgCard);
                 HPEN hChkPen = CreatePen(PS_SOLID, chkHovered ? 2 : 1, chkHovered ? th.checkActiveHover : th.checkActiveBorder);
                 SelectObject(hdcMem, hChkBrush);
                 SelectObject(hdcMem, hChkPen);
@@ -178,18 +185,19 @@ void PaintMiniWindow(HWND hWnd, HDC hdc) {
             if (item.task.is_sync) {
                 int cy = (r.top + r.bottom) / 2;
                 RECT rcCloud = { item.checkRect.right + 6, cy - 6, item.checkRect.right + 6 + 14, cy + 6 };
-                COLORREF cloudCol = g_darkMode ? RGB(96, 165, 250) : RGB(37, 99, 235);
+                COLORREF cloudCol = th.borderCardSelected;
                 DrawCloudIcon(hdcMem, rcCloud, cloudCol, true);
             }
 
             SelectObject(hdcMem, g_hFontNormal);
-            SetTextColor(hdcMem, isHovered ? (g_darkMode ? RGB(255, 255, 255) : RGB(0, 0, 0)) : th.textPrimary);
+            SetTextColor(hdcMem, g_themeMode == ThemeMode::Pink ? RGB(0, 0, 0) : th.textPrimary);
             SetBkMode(hdcMem, TRANSPARENT);
             DrawTextW(hdcMem, item.task.text.c_str(), -1, (LPRECT)&item.textRect, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS);
 
             if (!item.task.is_sync && item.task.marker != TaskMarker::None) {
                 RECT rcMarker = { item.rect.right - 21, item.rect.top + 2, item.rect.right - 3, item.rect.bottom - 2 };
-                DrawTaskMarker(hdcMem, rcMarker, item.task.marker, th.bgCard, th.borderCard);
+                DrawTaskMarker(hdcMem, rcMarker, item.task.marker,
+                    g_themeMode == ThemeMode::Pink ? miniBg : th.bgCard, th.borderCard);
             }
 
             if (item.assignRect.right > 0) {
@@ -226,7 +234,7 @@ void PaintMiniWindow(HWND hWnd, HDC hdc) {
     }
 
     RECT rcTrackBg = { 0, clientH - 3, clientW, clientH };
-    COLORREF bgTrack = g_darkMode ? RGB(39, 39, 42) : RGB(226, 232, 240);
+    COLORREF bgTrack = g_themeMode == ThemeMode::Pink ? RGB(217, 0, 108) : th.borderSep;
     HBRUSH hBrTrackBg = CreateSolidBrush(bgTrack);
     FillRect(hdcMem, &rcTrackBg, hBrTrackBg);
     DeleteObject(hBrTrackBg);
@@ -255,7 +263,7 @@ void PaintMainWindow(HWND hWnd, HDC hdc) {
     int clientW = rcClient.right - rcClient.left;
     int clientH = rcClient.bottom - rcClient.top;
 
-    ThemeColors th = g_darkMode ? GetDarkTheme() : GetLightTheme();
+    ThemeColors th = GetThemeColors(g_themeMode);
 
     HDC hdcMem = CreateCompatibleDC(hdc);
     HBITMAP hBmp = CreateCompatibleBitmap(hdc, clientW, clientH);
@@ -263,7 +271,7 @@ void PaintMainWindow(HWND hWnd, HDC hdc) {
 
     const bool isHistory = g_viewMode == ViewMode::WorkHistory;
     std::vector<BarTooltips::Region> barToolRegions;
-    const COLORREF historyBg = RGB(8, 25, 54);
+    const COLORREF historyBg = g_themeMode == ThemeMode::Pink ? th.bgHeader : RGB(8, 25, 54);
     HBRUSH hBrushBg = CreateSolidBrush(isHistory ? historyBg : th.bgWindow);
     FillRect(hdcMem, &rcClient, hBrushBg);
     DeleteObject(hBrushBg);
@@ -321,7 +329,7 @@ void PaintMainWindow(HWND hWnd, HDC hdc) {
         }
 
         SelectObject(hdcMem, g_hFontSmall);
-        SetTextColor(hdcMem, RGB(153, 183, 219));
+        SetTextColor(hdcMem, g_themeMode == ThemeMode::Pink ? th.bgCardHover : RGB(153, 183, 219));
         RECT rcDayHeader = { 16, topOffset + 2 - g_scrollY, 64, topOffset + 22 - g_scrollY };
         RECT rcTimeHeader = { 68, topOffset + 2 - g_scrollY, 140, topOffset + 22 - g_scrollY };
         DrawTextW(hdcMem, L"Nap", -1, &rcDayHeader, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
@@ -348,7 +356,7 @@ void PaintMainWindow(HWND hWnd, HDC hdc) {
             RECT rcBar = entry.isWeeklySummary
                 ? RECT{ 145, rowTop + 5, clientW - 20, rowTop + 12 }
                 : RECT{ 145, rowTop + 7, clientW - 20, rowTop + 10 };
-            HBRUSH hTrack = CreateSolidBrush(RGB(16, 43, 78));
+            HBRUSH hTrack = CreateSolidBrush(g_themeMode == ThemeMode::Pink ? th.bgCardSelected : RGB(16, 43, 78));
             FillRect(hdcMem, &rcBar, hTrack);
             DeleteObject(hTrack);
             int barWidth = entry.isWeeklySummary
@@ -414,12 +422,14 @@ void PaintMainWindow(HWND hWnd, HDC hdc) {
             bool isBeingDragged = (g_taskDragging && (int)i == g_dragSourceIndex);
             bool isAssignedToOther = IsAssignedToOtherUser(item.task);
 
-            COLORREF cardBg = isBeingDragged ? (g_darkMode ? RGB(30, 41, 59) : RGB(224, 231, 255))
-                            : (isAssignedToOther ? (g_darkMode ? RGB(30, 58, 90) : RGB(219, 234, 254))
-                            : (isSelected ? th.bgCardSelected : (isHovered ? th.bgCardHover : th.bgCard)));
-            COLORREF cardBorder = isBeingDragged ? RGB(59, 130, 246)
+            COLORREF cardBg = g_themeMode == ThemeMode::Pink ? RGB(183, 0, 99)
+                : (isBeingDragged ? th.bgCardSelected
+                    : (isAssignedToOther ? (g_darkMode ? RGB(30, 58, 90) : RGB(219, 234, 254))
+                        : (isSelected ? th.bgCardSelected : (isHovered ? th.bgCardHover : th.bgCard))));
+            COLORREF cardBorder = isBeingDragged ? th.borderCardSelected
+                                : (isSelected && g_themeMode == ThemeMode::Pink ? RGB(108, 0, 54)
                                 : (isAssignedToOther ? (g_darkMode ? RGB(59, 130, 246) : RGB(147, 197, 253))
-                                : (isSelected ? th.borderCardSelected : (isHovered ? th.borderCardHover : th.borderCard)));
+                                : (isSelected ? th.borderCardSelected : (isHovered ? th.borderCardHover : th.borderCard))));
 
             HBRUSH hCardBrush = CreateSolidBrush(cardBg);
             HPEN hCardPen = CreatePen(PS_SOLID, (isSelected || isBeingDragged) ? 2 : 1, cardBorder);
@@ -454,7 +464,7 @@ void PaintMainWindow(HWND hWnd, HDC hdc) {
                 Polyline(hdcMem, tickPts, 3);
                 DeleteObject(hTickPen);
             } else {
-                HBRUSH hChkBrush = CreateSolidBrush(chkHovered ? (g_darkMode ? RGB(55, 65, 81) : RGB(241, 245, 249)) : th.bgCard);
+                HBRUSH hChkBrush = CreateSolidBrush(chkHovered ? (g_darkMode ? RGB(55, 65, 81) : th.bgCardHover) : th.bgCard);
                 HPEN hChkPen = CreatePen(PS_SOLID, chkHovered ? 2 : 1, chkHovered ? th.checkActiveHover : th.checkActiveBorder);
                 SelectObject(hdcMem, hChkBrush);
                 SelectObject(hdcMem, hChkPen);
@@ -480,22 +490,25 @@ void PaintMainWindow(HWND hWnd, HDC hdc) {
                 int cloudLeft = rcChk.right + 10;
                 int cy = rcText.top + (rcText.bottom - rcText.top) / 2;
                 RECT rcCloud = { cloudLeft, cy - 6, cloudLeft + 14, cy + 6 };
-                COLORREF cloudCol = item.task.completed ? th.textCompleted : (g_darkMode ? RGB(96, 165, 250) : RGB(37, 99, 235));
+                COLORREF cloudCol = item.task.completed ? th.textCompleted : th.borderCardSelected;
                 DrawCloudIcon(hdcMem, rcCloud, cloudCol, true);
             }
 
             if (!isInlineEditingThis) {
                 if (item.task.completed) {
                     SelectObject(hdcMem, g_hFontNormalStrike);
-                    SetTextColor(hdcMem, th.textCompleted);
+                    SetTextColor(hdcMem, g_themeMode == ThemeMode::Pink
+                        ? RGB(255, 211, 235) : th.textCompleted);
                 } else {
                     SelectObject(hdcMem, g_hFontNormal);
-                    SetTextColor(hdcMem, th.textPrimary);
+                    SetTextColor(hdcMem, g_themeMode == ThemeMode::Pink
+                        ? RGB(255, 255, 255) : th.textPrimary);
                 }
                 DrawTextW(hdcMem, item.task.text.c_str(), -1, &rcText, DT_LEFT | DT_TOP | DT_WORDBREAK | DT_NOPREFIX);
 
                 SelectObject(hdcMem, g_hFontSmall);
-                SetTextColor(hdcMem, th.textSecondary);
+                SetTextColor(hdcMem, g_themeMode == ThemeMode::Pink
+                    ? RGB(255, 230, 242) : th.textSecondary);
                 std::wstring meta;
                 if (item.task.completed) {
                     meta = L"Kész: " + TaskUtils::FormatDateTime(item.task.completed_at);
@@ -513,8 +526,10 @@ void PaintMainWindow(HWND hWnd, HDC hdc) {
                 rcMarker.top -= g_scrollY;
                 rcMarker.bottom -= g_scrollY;
                 bool markerHovered = isHovered && g_hoverButtonType == 5;
-                COLORREF markerBg = markerHovered ? (g_darkMode ? RGB(55, 65, 81) : RGB(238, 242, 255)) : th.bgCard;
-                COLORREF markerBorder = markerHovered ? (g_darkMode ? RGB(96, 165, 250) : RGB(199, 210, 254)) : th.borderCard;
+                COLORREF markerBg = g_themeMode == ThemeMode::Pink ? RGB(183, 0, 99)
+                    : (markerHovered ? th.bgCardSelected : th.bgCard);
+                COLORREF markerBorder = g_themeMode == ThemeMode::Pink ? RGB(153, 0, 82)
+                    : (markerHovered ? th.borderCardHover : th.borderCard);
                 DrawTaskMarker(hdcMem, rcMarker, item.task.marker, markerBg, markerBorder);
             }
 
@@ -524,15 +539,15 @@ void PaintMainWindow(HWND hWnd, HDC hdc) {
                 rcOptions.bottom -= g_scrollY;
                 bool optionsHovered = isHovered && g_hoverButtonType == 6;
                 if (optionsHovered) {
-                    HBRUSH buttonBrush = CreateSolidBrush(g_darkMode ? RGB(55, 65, 81) : RGB(238, 242, 255));
-                    HPEN buttonPen = CreatePen(PS_SOLID, 1, g_darkMode ? RGB(96, 165, 250) : RGB(199, 210, 254));
+                    HBRUSH buttonBrush = CreateSolidBrush(th.bgCardSelected);
+                    HPEN buttonPen = CreatePen(PS_SOLID, 1, th.borderCardHover);
                     SelectObject(hdcMem, buttonBrush);
                     SelectObject(hdcMem, buttonPen);
                     RoundRect(hdcMem, rcOptions.left, rcOptions.top, rcOptions.right, rcOptions.bottom, 4, 4);
                     DeleteObject(buttonBrush);
                     DeleteObject(buttonPen);
                 }
-                COLORREF iconColor = optionsHovered ? (g_darkMode ? RGB(147, 197, 253) : RGB(37, 99, 235)) : th.textSecondary;
+                COLORREF iconColor = optionsHovered ? th.borderCardSelected : th.textSecondary;
                 DrawMoreIcon(hdcMem, rcOptions, iconColor);
             }
 
@@ -564,7 +579,7 @@ void PaintMainWindow(HWND hWnd, HDC hdc) {
                 lineY = g_displayItems.back().rect.bottom - g_scrollY + 3;
             }
             if (lineY >= topOffset && lineY <= listBottom) {
-                HPEN hPenLine = CreatePen(PS_SOLID, 2, RGB(59, 130, 246));
+                HPEN hPenLine = CreatePen(PS_SOLID, 2, th.borderCardSelected);
                 HGDIOBJ hOldPen = SelectObject(hdcMem, hPenLine);
                 MoveToEx(hdcMem, 10, lineY, nullptr);
                 LineTo(hdcMem, clientW - 14, lineY);
@@ -615,7 +630,8 @@ void PaintMainWindow(HWND hWnd, HDC hdc) {
 
     // 4. Draw Bottom Work Time Progress Bar
     RECT rcBottom = { 0, clientH - BOTTOM_BAR_HEIGHT, clientW, clientH };
-    COLORREF bgBottom = isHistory ? RGB(8, 25, 54) : (g_darkMode ? RGB(18, 18, 22) : RGB(241, 245, 249));
+    COLORREF bgBottom = isHistory ? (g_themeMode == ThemeMode::Pink ? th.bgHeader : RGB(8, 25, 54))
+        : (g_darkMode ? RGB(18, 18, 22) : th.bgSubBar);
     HBRUSH hBrBottom = CreateSolidBrush(bgBottom);
     FillRect(hdcMem, &rcBottom, hBrBottom);
     DeleteObject(hBrBottom);
@@ -627,8 +643,10 @@ void PaintMainWindow(HWND hWnd, HDC hdc) {
     DeleteObject(hPenBotBorder);
 
     RECT rcTrack = { 10, rcBottom.top + 3, clientW - 10, rcBottom.bottom - 3 };
-    COLORREF borderTrack = isHistory ? RGB(104, 139, 181) : (g_darkMode ? RGB(255, 255, 255) : RGB(100, 116, 139));
-    COLORREF bgTrack = isHistory ? RGB(16, 43, 78) : (g_darkMode ? RGB(28, 28, 34) : RGB(226, 232, 240));
+    COLORREF borderTrack = isHistory ? (g_themeMode == ThemeMode::Pink ? th.bgCardHover : RGB(104, 139, 181))
+        : (g_darkMode ? RGB(255, 255, 255) : th.textSecondary);
+    COLORREF bgTrack = isHistory ? (g_themeMode == ThemeMode::Pink ? th.bgCardSelected : RGB(16, 43, 78))
+        : (g_darkMode ? RGB(28, 28, 34) : th.borderSep);
 
     HBRUSH hBrTrack = CreateSolidBrush(bgTrack);
     HPEN hPenTrack = CreatePen(PS_SOLID, 1, borderTrack);
@@ -643,9 +661,7 @@ void PaintMainWindow(HWND hWnd, HDC hdc) {
     int totalWorkSec = workSec + manualSec;
     const int targetWorkSec = 8 * 3600;
     RECT rcFill = { rcTrack.left + 1, rcTrack.top + 1, rcTrack.right - 1, rcTrack.bottom - 1 };
-    COLORREF measuredColor = g_isWorkActive
-        ? (g_darkMode ? RGB(37, 99, 235) : RGB(147, 197, 253))
-        : (g_darkMode ? RGB(71, 85, 105) : RGB(203, 213, 225));
+    COLORREF measuredColor = g_isWorkActive ? RGB(37, 99, 235) : RGB(71, 85, 105);
     DrawBarSegments(hdcMem, rcFill, workSec, manualSec, targetWorkSec, measuredColor, RGB(245, 158, 11));
     barToolRegions.push_back({ rcTrack, BuildWorkTooltip(workSec, manualSec) });
 
@@ -668,7 +684,7 @@ void PaintMainWindow(HWND hWnd, HDC hdc) {
 
     SelectObject(hdcMem, g_hFontSmall);
     SetBkMode(hdcMem, TRANSPARENT);
-    SetTextColor(hdcMem, isHistory ? RGB(235, 242, 252) : (g_darkMode ? RGB(255, 255, 255) : RGB(15, 23, 42)));
+    SetTextColor(hdcMem, isHistory ? RGB(235, 242, 252) : th.textPrimary);
 
     std::wstring workStr = TaskUtils::FormatWorkDuration(totalWorkSec);
     double pct = ((double)totalWorkSec / (double)targetWorkSec) * 100.0;

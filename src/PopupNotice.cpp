@@ -18,7 +18,7 @@ LRESULT CALLBACK NoticeWndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam
         case WM_PAINT: {
             PAINTSTRUCT ps{};
             HDC hdc = BeginPaint(hWnd, &ps);
-            ThemeColors theme = g_darkMode ? GetDarkTheme() : GetLightTheme();
+            ThemeColors theme = GetThemeColors(g_themeMode);
             RECT client{};
             GetClientRect(hWnd, &client);
             HBRUSH background = CreateSolidBrush(theme.bgWindow);

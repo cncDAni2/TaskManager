@@ -32,7 +32,6 @@
 #define IDM_TRAY_COMPLETED  3002
 #define IDM_TRAY_PIN        3003
 #define IDM_TRAY_AUTORUN    3004
-#define IDM_TRAY_THEME      3005
 #define IDM_TRAY_EXIT       3006
 
 // Hotkey IDs
@@ -48,6 +47,12 @@ enum class ViewMode {
     ActiveTasks,
     CompletedTasks,
     WorkHistory
+};
+
+enum class ThemeMode {
+    Dark,
+    Light,
+    Pink
 };
 
 enum class CompletedFilter {
@@ -175,4 +180,38 @@ inline ThemeColors GetLightTheme() {
     c.headerSectionBg = RGB(241, 245, 249);
     c.headerSectionText = RGB(71, 85, 105);
     return c;
+}
+
+inline ThemeColors GetPinkTheme() {
+    ThemeColors c;
+    c.bgWindow = RGB(255, 123, 189);
+    c.bgHeader = RGB(255, 70, 162);
+    c.bgSubBar = RGB(255, 105, 180);
+    c.bgCard = RGB(255, 247, 251);
+    c.bgCardHover = RGB(255, 176, 215);
+    c.bgCardSelected = RGB(255, 159, 207);
+    c.borderCard = RGB(217, 0, 108);
+    c.borderCardHover = RGB(181, 0, 90);
+    c.borderCardSelected = RGB(144, 0, 72);
+    c.borderSep = RGB(255, 141, 198);
+    c.textTitle = RGB(255, 255, 255);
+    c.textPrimary = RGB(79, 0, 72);
+    c.textCompleted = RGB(159, 96, 134);
+    c.textSecondary = RGB(108, 0, 54);
+    c.textEmpty = RGB(108, 0, 54);
+    c.bgEdit = RGB(255, 248, 252);
+    c.textEdit = RGB(79, 0, 72);
+    c.checkActiveBorder = RGB(217, 0, 108);
+    c.checkActiveHover = RGB(181, 0, 90);
+    c.checkDoneBg = RGB(255, 70, 162);
+    c.checkDoneHover = RGB(217, 0, 108);
+    c.headerSectionBg = RGB(255, 141, 198);
+    c.headerSectionText = RGB(79, 0, 72);
+    return c;
+}
+
+inline ThemeColors GetThemeColors(ThemeMode mode) {
+    if (mode == ThemeMode::Dark) return GetDarkTheme();
+    if (mode == ThemeMode::Pink) return GetPinkTheme();
+    return GetLightTheme();
 }

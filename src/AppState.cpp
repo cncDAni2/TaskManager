@@ -30,6 +30,7 @@ HFONT g_hFontHeader = nullptr;
 TaskStore g_store;
 ViewMode g_viewMode = ViewMode::ActiveTasks;
 CompletedFilter g_completedFilter = CompletedFilter::SinceYesterday930;
+ThemeMode g_themeMode = ThemeMode::Dark;
 bool g_darkMode = true;
 bool g_syncToggle = false;
 

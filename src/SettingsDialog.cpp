@@ -10,25 +10,42 @@
 namespace {
     constexpr int IDC_SETTINGS_PATH = 5101;
     constexpr int IDC_SETTINGS_BROWSE = 5102;
-    constexpr int IDC_SETTINGS_DARK_MODE = 5103;
+    constexpr int IDC_SETTINGS_THEME = 5103;
     constexpr int IDC_SETTINGS_RESET_TIME = 5104;
     constexpr int IDC_SETTINGS_OK = 5105;
+    constexpr COLORREF SETTINGS_DIALOG_BG = RGB(245, 245, 245);
+    constexpr COLORREF SETTINGS_DIALOG_TEXT = RGB(0, 0, 0);
     constexpr wchar_t DIALOG_CLASS[] = L"TaskManager_Settings_Dialog_Class";
 
     struct DialogState {
         HWND owner = nullptr;
         HWND pathText = nullptr;
-        HWND darkModeCheck = nullptr;
+        HWND themeCombo = nullptr;
         HWND resetTime = nullptr;
         HBRUSH backgroundBrush = nullptr;
         std::wstring syncFilePath;
-        bool darkMode = true;
         int resetHour = 9;
         int resetMinute = 15;
     };
 
     void SetControlFont(HWND control, HFONT font) {
         if (control && font) SendMessageW(control, WM_SETFONT, (WPARAM)font, TRUE);
+    }
+
+    void ApplySelectedTheme(HWND dialog, DialogState* state, ThemeMode mode) {
+        g_themeMode = mode;
+        g_darkMode = mode == ThemeMode::Dark;
+        g_store.theme_mode = mode;
+        g_store.SaveLocal();
+
+        ThemeColors theme = GetThemeColors(mode);
+        if (g_hEditBrush) DeleteObject(g_hEditBrush);
+        g_hEditBrush = CreateSolidBrush(theme.bgEdit);
+        ApplyDarkModeTitleBar(state->owner, g_darkMode);
+        ApplyDarkModeTitleBar(dialog, false);
+        UINT redrawFlags = RDW_INVALIDATE | RDW_ERASE | RDW_ALLCHILDREN | RDW_UPDATENOW | RDW_FRAME;
+        RedrawWindow(state->owner, nullptr, nullptr, redrawFlags);
+        RedrawWindow(dialog, nullptr, nullptr, redrawFlags);
     }
 
     void BrowseSyncFile(HWND owner, DialogState* state) {
@@ -88,16 +105,19 @@ namespace {
                 402, 43, 80, 30, hWnd, (HMENU)(INT_PTR)IDC_SETTINGS_BROWSE, instance, nullptr);
             SetControlFont(GetDlgItem(hWnd, IDC_SETTINGS_BROWSE), g_hFontSmall);
 
-            HWND darkModeLabel = CreateWindowW(L"STATIC", L"Sötét mód",
+            HWND themeLabel = CreateWindowW(L"STATIC", L"Téma",
                 WS_CHILD | WS_VISIBLE | SS_LEFT, 18, 119, 144, 28, hWnd, nullptr, instance, nullptr);
-            SetControlFont(darkModeLabel, g_hFontNormal);
+            SetControlFont(themeLabel, g_hFontNormal);
             CreateWindowW(L"STATIC", L"", WS_CHILD | WS_VISIBLE | SS_ETCHEDVERT,
                 170, 105, 2, 54, hWnd, nullptr, instance, nullptr);
-            state->darkModeCheck = CreateWindowW(L"BUTTON", L"",
-                WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_AUTOCHECKBOX,
-                184, 118, 24, 26, hWnd, (HMENU)(INT_PTR)IDC_SETTINGS_DARK_MODE, instance, nullptr);
-            SendMessageW(state->darkModeCheck, BM_SETCHECK,
-                state->darkMode ? BST_CHECKED : BST_UNCHECKED, 0);
+            state->themeCombo = CreateWindowW(L"COMBOBOX", L"",
+                WS_CHILD | WS_VISIBLE | WS_TABSTOP | CBS_DROPDOWNLIST | WS_VSCROLL,
+                184, 114, 206, 150, hWnd, (HMENU)(INT_PTR)IDC_SETTINGS_THEME, instance, nullptr);
+            SendMessageW(state->themeCombo, CB_ADDSTRING, 0, (LPARAM)L"Sötét");
+            SendMessageW(state->themeCombo, CB_ADDSTRING, 0, (LPARAM)L"Világos");
+            SendMessageW(state->themeCombo, CB_ADDSTRING, 0, (LPARAM)L"Pink");
+            SendMessageW(state->themeCombo, CB_SETCURSEL, static_cast<WPARAM>(g_store.theme_mode), 0);
+            SetControlFont(state->themeCombo, g_hFontNormal);
 
             HWND resetLabel = CreateWindowW(L"STATIC", L"Munkaidő kezdete",
                 WS_CHILD | WS_VISIBLE | SS_LEFT, 18, 178, 144, 28, hWnd, nullptr, instance, nullptr);
@@ -119,7 +139,7 @@ namespace {
                 WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_DEFPUSHBUTTON,
                 392, 238, 90, 30, hWnd, (HMENU)(INT_PTR)IDC_SETTINGS_OK, instance, nullptr);
             SetControlFont(okButton, g_hFontNormal);
-            SetFocus(state->darkModeCheck);
+            SetFocus(state->themeCombo);
             return 0;
         }
         case WM_ERASEBKGND: {
@@ -129,10 +149,12 @@ namespace {
             return 1;
         }
         case WM_CTLCOLORSTATIC:
-        case WM_CTLCOLORBTN: {
+        case WM_CTLCOLORBTN:
+        case WM_CTLCOLORLISTBOX:
+        case WM_CTLCOLOREDIT: {
             HDC dc = (HDC)wParam;
-            SetTextColor(dc, RGB(0, 0, 0));
-            SetBkColor(dc, RGB(245, 245, 245));
+            SetTextColor(dc, SETTINGS_DIALOG_TEXT);
+            SetBkColor(dc, SETTINGS_DIALOG_BG);
             SetBkMode(dc, OPAQUE);
             return (LRESULT)state->backgroundBrush;
         }
@@ -141,19 +163,11 @@ namespace {
                 BrowseSyncFile(hWnd, state);
                 return 0;
             }
-            if (LOWORD(wParam) == IDC_SETTINGS_DARK_MODE && HIWORD(wParam) == BN_CLICKED) {
-                state->darkMode = SendMessageW(state->darkModeCheck, BM_GETCHECK, 0, 0) == BST_CHECKED;
-                g_store.dark_mode = state->darkMode;
-                g_darkMode = state->darkMode;
-                g_store.SaveLocal();
-                ThemeColors theme = g_darkMode ? GetDarkTheme() : GetLightTheme();
-                if (g_hEditBrush) DeleteObject(g_hEditBrush);
-                g_hEditBrush = CreateSolidBrush(theme.bgEdit);
-                ApplyDarkModeTitleBar(state->owner, g_darkMode);
-                if (g_hPinBtn) InvalidateRect(g_hPinBtn, nullptr, TRUE);
-                if (g_hFocusModeBtn) InvalidateRect(g_hFocusModeBtn, nullptr, TRUE);
-                if (g_hSettingsBtn) InvalidateRect(g_hSettingsBtn, nullptr, TRUE);
-                InvalidateRect(state->owner, nullptr, TRUE);
+            if (LOWORD(wParam) == IDC_SETTINGS_THEME && HIWORD(wParam) == CBN_SELCHANGE) {
+                int selection = static_cast<int>(SendMessageW(state->themeCombo, CB_GETCURSEL, 0, 0));
+                if (selection >= 0 && selection <= static_cast<int>(ThemeMode::Pink)) {
+                    ApplySelectedTheme(hWnd, state, static_cast<ThemeMode>(selection));
+                }
                 return 0;
             }
             if (LOWORD(wParam) == IDCANCEL) {
@@ -195,11 +209,10 @@ void ShowSettingsDialog(HWND owner) {
 
     DialogState state;
     state.syncFilePath = g_store.syncFilePath;
-    state.darkMode = g_store.dark_mode;
     state.resetHour = g_store.work_reset_hour;
     state.resetMinute = g_store.work_reset_minute;
     state.owner = owner;
-    state.backgroundBrush = CreateSolidBrush(RGB(245, 245, 245));
+    state.backgroundBrush = CreateSolidBrush(SETTINGS_DIALOG_BG);
 
     g_inContextMenu = true;
     EnableWindow(owner, FALSE);
