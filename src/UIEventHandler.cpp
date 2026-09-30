@@ -589,10 +589,11 @@ bool HandleCommand(HWND hWnd, int id) {
         InvalidateRect(hWnd, nullptr, TRUE);
         return true;
     } else if (id == IDC_CLOSE_BTN) {
-        g_pinMode = false;
-        g_miniPositionValid = false;
-        if (g_hPinBtn) InvalidateRect(g_hPinBtn, nullptr, TRUE);
-        HideAppWindow();
+        if (g_pinMode) {
+            EnterMiniMode();
+        } else {
+            HideAppWindow();
+        }
         return true;
     } else if (id == IDC_PIN_BTN) {
         g_pinMode = !g_pinMode;

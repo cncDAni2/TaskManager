@@ -139,7 +139,7 @@ void PaintMiniWindow(HWND hWnd, HDC hdc) {
                     : (isAssignedToOther ? (g_darkMode ? RGB(30, 58, 90) : RGB(219, 234, 254))
                         : (isHovered ? th.bgCardHover : th.bgCard)));
             COLORREF cardBorder = g_themeMode == ThemeMode::Pink
-                ? (isBeingDragged ? th.borderCardSelected : (isHovered ? th.borderCardHover : th.borderCard))
+                ? (isBeingDragged ? th.borderCardSelected : (isHovered ? RGB(0x48, 0, 0x24) : th.borderCard))
                 : (isBeingDragged ? th.borderCardSelected
                     : (isAssignedToOther ? (g_darkMode ? RGB(59, 130, 246) : RGB(147, 197, 253))
                         : (isHovered ? th.borderCardHover : th.borderCard)));
