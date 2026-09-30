@@ -12,8 +12,6 @@ HWND g_hCloseBtn = nullptr;
 HWND g_hPinBtn = nullptr;
 HWND g_hSettingsBtn = nullptr;
 HWND g_hSyncToggleBtn = nullptr;
-HWND g_hFilterRecentBtn = nullptr;
-HWND g_hFilterAllBtn = nullptr;
 HWND g_hInlineEdit = nullptr;
 HBRUSH g_hEditBrush = nullptr;
 NOTIFYICONDATAW g_nid{};
@@ -29,7 +27,6 @@ HFONT g_hFontHeader = nullptr;
 // Data Store and View Configuration
 TaskStore g_store;
 ViewMode g_viewMode = ViewMode::ActiveTasks;
-CompletedFilter g_completedFilter = CompletedFilter::SinceYesterday930;
 ThemeMode g_themeMode = ThemeMode::Dark;
 bool g_darkMode = true;
 bool g_syncToggle = false;

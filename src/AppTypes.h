@@ -17,8 +17,6 @@
 #define IDC_ADD_TASK_BTN    2002
 #define IDC_TOGGLE_VIEW_BTN 2003
 #define IDC_CLOSE_BTN       2004
-#define IDC_FILTER_RECENT   2005
-#define IDC_FILTER_ALL      2006
 #define IDC_INLINE_EDIT     2007
 #define IDC_PIN_BTN         2008
 #define IDC_SYNC_TOGGLE_BTN 2009
@@ -53,11 +51,6 @@ enum class ThemeMode {
     Dark,
     Light,
     Pink
-};
-
-enum class CompletedFilter {
-    SinceYesterday930,
-    AllByDay
 };
 
 enum class TaskMarker {

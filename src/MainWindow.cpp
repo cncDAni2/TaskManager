@@ -229,16 +229,6 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                 SendMessageW(hTooltip, TTM_ADDTOOL, 0, (LPARAM)&tiSyncToggle);
             }
 
-            g_hFilterRecentBtn = CreateWindowW(L"BUTTON", L"Előző nap 9:30 óta",
-                WS_CHILD | BS_OWNERDRAW | WS_TABSTOP,
-                12, 54, 270, 26, hWnd, (HMENU)IDC_FILTER_RECENT, hInst, nullptr);
-            SendMessageW(g_hFilterRecentBtn, WM_SETFONT, (WPARAM)g_hFontSmall, TRUE);
-
-            g_hFilterAllBtn = CreateWindowW(L"BUTTON", L"MIND (napi bontás)",
-                WS_CHILD | BS_OWNERDRAW | WS_TABSTOP,
-                290, 54, 280, 26, hWnd, (HMENU)IDC_FILTER_ALL, hInst, nullptr);
-            SendMessageW(g_hFilterAllBtn, WM_SETFONT, (WPARAM)g_hFontSmall, TRUE);
-
             RegisterHotKey(hWnd, ID_HOTKEY_TOGGLE, MOD_CONTROL, VK_F1);
             RegisterHotKey(hWnd, ID_HOTKEY_UNPIN, MOD_CONTROL, VK_F2);
             FocusMode::RegisterSessionNotifications(hWnd);
@@ -448,7 +438,8 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             g_scrollY -= (delta / WHEEL_DELTA) * 36;
             RECT rcClient;
             GetClientRect(hWnd, &rcClient);
-            int topOffset = (g_viewMode == ViewMode::ActiveTasks) ? 94 : 88;
+            int topOffset = g_viewMode == ViewMode::ActiveTasks ? 94
+                : (g_viewMode == ViewMode::WorkHistory ? 48 : 54);
             int viewableHeight = rcClient.bottom - topOffset - BOTTOM_BAR_HEIGHT;
             int maxScroll = std::max(0, g_totalContentHeight - viewableHeight);
 

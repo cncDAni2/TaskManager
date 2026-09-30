@@ -7,6 +7,9 @@
 #include "Marker.h"
 
 namespace {
+    constexpr int DAILY_WORK_TARGET_SECONDS = 6 * 3600 + 50 * 60;
+    constexpr int WEEKLY_WORK_TARGET_SECONDS = 34 * 3600 + 10 * 60;
+
     int CurrentManualWorkSeconds() {
         time_t currentDay = g_store.last_reset_time != 0 ? g_store.last_reset_time : time(nullptr);
         auto it = g_store.manual_work_history.find(WorkHistory::DateKey(currentDay));
@@ -240,7 +243,7 @@ void PaintMiniWindow(HWND hWnd, HDC hdc) {
     DeleteObject(hBrTrackBg);
 
     int workSec = g_store.work_seconds_today;
-    const int targetWorkSec = 8 * 3600;
+    const int targetWorkSec = DAILY_WORK_TARGET_SECONDS;
     int manualSec = CurrentManualWorkSeconds();
     RECT rcMiniBar = { 0, clientH - 3, clientW, clientH };
     DrawBarSegments(hdcMem, rcMiniBar, workSec, manualSec, targetWorkSec,
@@ -302,21 +305,10 @@ void PaintMainWindow(HWND hWnd, HDC hdc) {
         MoveToEx(hdcMem, 0, 93, nullptr);
         LineTo(hdcMem, clientW, 93);
         DeleteObject(hPenSep);
-    } else if (g_viewMode == ViewMode::CompletedTasks) {
-        RECT rcFilterBg = { 0, 48, clientW, 88 };
-        HBRUSH hBrushFilter = CreateSolidBrush(th.bgSubBar);
-        FillRect(hdcMem, &rcFilterBg, hBrushFilter);
-        DeleteObject(hBrushFilter);
-
-        HPEN hPenSep = CreatePen(PS_SOLID, 1, th.borderSep);
-        SelectObject(hdcMem, hPenSep);
-        MoveToEx(hdcMem, 0, 87, nullptr);
-        LineTo(hdcMem, clientW, 87);
-        DeleteObject(hPenSep);
     }
 
     // 3. Draw items with clipping to list area
-    int topOffset = g_viewMode == ViewMode::ActiveTasks ? 94 : (isHistory ? 48 : 88);
+    int topOffset = g_viewMode == ViewMode::ActiveTasks ? 94 : (isHistory ? 48 : 54);
     int listBottom = clientH - BOTTOM_BAR_HEIGHT;
     HRGN hRgnClip = CreateRectRgn(0, topOffset, clientW, listBottom);
     SelectClipRgn(hdcMem, hRgnClip);
@@ -360,12 +352,12 @@ void PaintMainWindow(HWND hWnd, HDC hdc) {
             FillRect(hdcMem, &rcBar, hTrack);
             DeleteObject(hTrack);
             int barWidth = entry.isWeeklySummary
-                ? (int)((long long)(rcBar.right - rcBar.left) * std::min(entry.seconds, 40 * 60 * 60) / (40 * 60 * 60))
+                ? (int)((long long)(rcBar.right - rcBar.left) * std::min(entry.seconds, WEEKLY_WORK_TARGET_SECONDS) / WEEKLY_WORK_TARGET_SECONDS)
                 : (int)((long long)(rcBar.right - rcBar.left) * std::max(0, entry.seconds) / maxSeconds);
             if (barWidth > 0) {
                 RECT rcFill = rcBar;
                 int manualWidth = entry.isWeeklySummary
-                    ? (int)((long long)(rcBar.right - rcBar.left) * std::min(entry.manualSeconds, 40 * 60 * 60) / (40 * 60 * 60))
+                    ? (int)((long long)(rcBar.right - rcBar.left) * std::min(entry.manualSeconds, WEEKLY_WORK_TARGET_SECONDS) / WEEKLY_WORK_TARGET_SECONDS)
                     : (int)((long long)(rcBar.right - rcBar.left) * std::max(0, entry.manualSeconds) / maxSeconds);
                 manualWidth = std::min(manualWidth, barWidth);
                 int measuredWidth = barWidth - manualWidth;
@@ -380,6 +372,29 @@ void PaintMainWindow(HWND hWnd, HDC hdc) {
                     FillRect(hdcMem, &rcFill, hManual);
                     DeleteObject(hManual);
                 }
+            }
+            if (entry.isWeeklySummary) {
+                int percentage = static_cast<int>(
+                    (static_cast<long long>(std::max(0, entry.seconds)) * 100 + WEEKLY_WORK_TARGET_SECONDS / 2) /
+                    WEEKLY_WORK_TARGET_SECONDS);
+                std::wstring percentageText = std::to_wstring(percentage) + L"%";
+                HGDIOBJ oldFont = SelectObject(hdcMem, g_hFontSmall);
+                COLORREF oldTextColor = SetTextColor(hdcMem, RGB(0, 0, 0));
+                int oldBackgroundMode = SetBkMode(hdcMem, TRANSPARENT);
+                SIZE textSize{};
+                GetTextExtentPoint32W(hdcMem, percentageText.c_str(), static_cast<int>(percentageText.size()), &textSize);
+
+                int textX = rcBar.left + ((rcBar.right - rcBar.left) - textSize.cx) / 2;
+                int textY = rcBar.top + ((rcBar.bottom - rcBar.top) - textSize.cy) / 2;
+                RECT labelBackground = { textX - 2, textY - 2, textX + textSize.cx + 2, textY + textSize.cy + 2 };
+                HBRUSH labelBrush = CreateSolidBrush(RGB(255, 255, 255));
+                FillRect(hdcMem, &labelBackground, labelBrush);
+                DeleteObject(labelBrush);
+                TextOutW(hdcMem, textX, textY, percentageText.c_str(), static_cast<int>(percentageText.size()));
+
+                SetBkMode(hdcMem, oldBackgroundMode);
+                SetTextColor(hdcMem, oldTextColor);
+                SelectObject(hdcMem, oldFont);
             }
             RECT rcRowTooltip = { 0, std::max(rowTop, topOffset), clientW, std::min(rowTop + 18, listBottom) };
             if (rcRowTooltip.top < rcRowTooltip.bottom) {
@@ -659,7 +674,7 @@ void PaintMainWindow(HWND hWnd, HDC hdc) {
     int workSec = g_store.work_seconds_today;
     int manualSec = CurrentManualWorkSeconds();
     int totalWorkSec = workSec + manualSec;
-    const int targetWorkSec = 8 * 3600;
+    const int targetWorkSec = DAILY_WORK_TARGET_SECONDS;
     RECT rcFill = { rcTrack.left + 1, rcTrack.top + 1, rcTrack.right - 1, rcTrack.bottom - 1 };
     COLORREF measuredColor = g_isWorkActive ? RGB(37, 99, 235) : RGB(71, 85, 105);
     DrawBarSegments(hdcMem, rcFill, workSec, manualSec, targetWorkSec, measuredColor, RGB(245, 158, 11));

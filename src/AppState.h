@@ -16,8 +16,6 @@ extern HWND g_hCloseBtn;
 extern HWND g_hPinBtn;
 extern HWND g_hSettingsBtn;
 extern HWND g_hSyncToggleBtn;
-extern HWND g_hFilterRecentBtn;
-extern HWND g_hFilterAllBtn;
 extern HWND g_hInlineEdit;
 extern HBRUSH g_hEditBrush;
 extern NOTIFYICONDATAW g_nid;
@@ -33,7 +31,6 @@ extern HFONT g_hFontHeader;
 // Data Store and View Configuration
 extern TaskStore g_store;
 extern ViewMode g_viewMode;
-extern CompletedFilter g_completedFilter;
 extern ThemeMode g_themeMode;
 extern bool g_darkMode;
 extern bool g_syncToggle;

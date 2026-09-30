@@ -14,7 +14,7 @@ void EnsureVisible(int itemIndex) {
     if (itemIndex < 0 || itemIndex >= (int)g_displayItems.size()) return;
     RECT rcClient;
     GetClientRect(g_hWnd, &rcClient);
-    int topOffset = g_viewMode == ViewMode::ActiveTasks ? 94 : (g_viewMode == ViewMode::WorkHistory ? 48 : 88);
+    int topOffset = g_viewMode == ViewMode::ActiveTasks ? 94 : (g_viewMode == ViewMode::WorkHistory ? 48 : 54);
     int listBottom = rcClient.bottom - BOTTOM_BAR_HEIGHT;
     int viewableHeight = listBottom - topOffset;
 
@@ -40,7 +40,7 @@ ScrollbarMetrics GetScrollbarMetrics() {
     int clientW = rcClient.right - rcClient.left;
     int clientH = rcClient.bottom - rcClient.top;
 
-    int topOffset = g_viewMode == ViewMode::ActiveTasks ? 94 : (g_viewMode == ViewMode::WorkHistory ? 48 : 88);
+    int topOffset = g_viewMode == ViewMode::ActiveTasks ? 94 : (g_viewMode == ViewMode::WorkHistory ? 48 : 54);
     int listBottom = clientH - BOTTOM_BAR_HEIGHT;
     int viewableHeight = listBottom - topOffset;
 
@@ -107,8 +107,6 @@ void UpdateControlsVisibility() {
         ShowWindow(g_hManualWorkBtn, SW_HIDE);
         ShowWindow(g_hCloseBtn, SW_HIDE);
         ShowWindow(g_hPinBtn, SW_HIDE);
-        ShowWindow(g_hFilterRecentBtn, SW_HIDE);
-        ShowWindow(g_hFilterAllBtn, SW_HIDE);
         return;
     }
 
@@ -127,9 +125,6 @@ void UpdateControlsVisibility() {
     ShowWindow(g_hEdit, isActive ? SW_SHOW : SW_HIDE);
     ShowWindow(g_hAddBtn, isActive ? SW_SHOW : SW_HIDE);
     ShowWindow(g_hSyncToggleBtn, isActive ? SW_SHOW : SW_HIDE);
-    ShowWindow(g_hFilterRecentBtn, (!isActive && !isHistory) ? SW_SHOW : SW_HIDE);
-    ShowWindow(g_hFilterAllBtn, (!isActive && !isHistory) ? SW_SHOW : SW_HIDE);
-
     if (isHistory) {
         SetWindowTextW(g_hToggleViewBtn, L"← Feladatok");
         SetWindowTextW(g_hTimeHistoryBtn, L"● Idők");
@@ -141,14 +136,6 @@ void UpdateControlsVisibility() {
     } else {
         SetWindowTextW(g_hTimeHistoryBtn, L"Idők");
         SetWindowTextW(g_hToggleViewBtn, L"← Aktívak");
-
-        if (g_completedFilter == CompletedFilter::SinceYesterday930) {
-            SetWindowTextW(g_hFilterRecentBtn, L"● Előző nap 9:30 óta");
-            SetWindowTextW(g_hFilterAllBtn, L"MIND (napi bontás)");
-        } else {
-            SetWindowTextW(g_hFilterRecentBtn, L"Előző nap 9:30 óta");
-            SetWindowTextW(g_hFilterAllBtn, L"● MIND (napi bontás)");
-        }
     }
 }
 
@@ -319,7 +306,7 @@ void RecalculateLayout() {
     GetClientRect(g_hWnd, &rcClient);
     int clientWidth = rcClient.right - rcClient.left;
 
-    int topOffset = g_viewMode == ViewMode::ActiveTasks ? 94 : (g_viewMode == ViewMode::WorkHistory ? 48 : 88);
+    int topOffset = g_viewMode == ViewMode::ActiveTasks ? 94 : (g_viewMode == ViewMode::WorkHistory ? 48 : 54);
 
     if (g_viewMode == ViewMode::WorkHistory) {
         auto entries = g_store.GetWorkHistory();
@@ -411,71 +398,46 @@ void RecalculateLayout() {
             }
         }
     } else {
-        if (g_completedFilter == CompletedFilter::SinceYesterday930) {
-            auto compTasks = g_store.GetRecentCompletedTasks();
-            for (const auto& t : compTasks) {
-                DisplayItem item;
-                item.isHeader = false;
-                item.task = t;
-                item.optionsRect = { clientWidth - 36, currentY + 10, clientWidth - 12, currentY + 34 };
-                if (t.is_sync) {
-                    item.assignRect = { clientWidth - 82, currentY + 10, clientWidth - 40, currentY + 34 };
-                }
-                int textLeft = 18 + 20 + 10 + (t.is_sync ? 19 : 0);
-                int textRight = t.is_sync ? item.assignRect.left - 6 : item.optionsRect.left - 6;
-                int textHeight = MeasureTaskTextHeight(hdcMeasure, t.text, textRight - textLeft);
-                int rowHeight = std::max(itemHeight, textHeight + 28);
-                item.rect = { 10, currentY, clientWidth - 10, currentY + rowHeight };
-                item.checkRect = { 18, currentY + (rowHeight - 20) / 2, 38, currentY + (rowHeight + 20) / 2 };
-                item.optionsRect.top = currentY + (rowHeight - 24) / 2;
-                item.optionsRect.bottom = item.optionsRect.top + 24;
-                item.textRect = { textLeft, currentY + 5, textRight, currentY + 5 + textHeight };
+        auto compTasks = g_store.GetAllCompletedTasks();
+        std::wstring lastDateStr = L"";
+        time_t now = time(nullptr);
+        std::wstring todayStr = TaskUtils::FormatDate(now);
+        std::wstring yestStr = TaskUtils::FormatDate(now - 86400);
 
-                g_displayItems.push_back(item);
-                currentY += rowHeight + 6;
+        for (const auto& t : compTasks) {
+            std::wstring dateStr = TaskUtils::FormatDate(t.completed_at);
+            if (dateStr != lastDateStr) {
+                lastDateStr = dateStr;
+                DisplayItem headerItem;
+                headerItem.isHeader = true;
+                std::wstring label = dateStr;
+                if (dateStr == todayStr) label += L" (Ma)";
+                else if (dateStr == yestStr) label += L" (Tegnap)";
+                headerItem.headerText = label;
+                headerItem.rect = { 10, currentY, clientWidth - 10, currentY + headerHeight };
+                g_displayItems.push_back(headerItem);
+                currentY += headerHeight + 4;
             }
-        } else {
-            auto compTasks = g_store.GetAllCompletedTasks();
-            std::wstring lastDateStr = L"";
-            time_t now = time(nullptr);
-            std::wstring todayStr = TaskUtils::FormatDate(now);
-            std::wstring yestStr = TaskUtils::FormatDate(now - 86400);
 
-            for (const auto& t : compTasks) {
-                std::wstring dateStr = TaskUtils::FormatDate(t.completed_at);
-                if (dateStr != lastDateStr) {
-                    lastDateStr = dateStr;
-                    DisplayItem headerItem;
-                    headerItem.isHeader = true;
-                    std::wstring label = dateStr;
-                    if (dateStr == todayStr) label += L" (Ma)";
-                    else if (dateStr == yestStr) label += L" (Tegnap)";
-                    headerItem.headerText = label;
-                    headerItem.rect = { 10, currentY, clientWidth - 10, currentY + headerHeight };
-                    g_displayItems.push_back(headerItem);
-                    currentY += headerHeight + 4;
-                }
-
-                DisplayItem item;
-                item.isHeader = false;
-                item.task = t;
-                item.optionsRect = { clientWidth - 36, currentY + 10, clientWidth - 12, currentY + 34 };
-                if (t.is_sync) {
-                    item.assignRect = { clientWidth - 82, currentY + 10, clientWidth - 40, currentY + 34 };
-                }
-                int textLeft = 18 + 20 + 10 + (t.is_sync ? 19 : 0);
-                int textRight = t.is_sync ? item.assignRect.left - 6 : item.optionsRect.left - 6;
-                int textHeight = MeasureTaskTextHeight(hdcMeasure, t.text, textRight - textLeft);
-                int rowHeight = std::max(itemHeight, textHeight + 28);
-                item.rect = { 10, currentY, clientWidth - 10, currentY + rowHeight };
-                item.checkRect = { 18, currentY + (rowHeight - 20) / 2, 38, currentY + (rowHeight + 20) / 2 };
-                item.optionsRect.top = currentY + (rowHeight - 24) / 2;
-                item.optionsRect.bottom = item.optionsRect.top + 24;
-                item.textRect = { textLeft, currentY + 5, textRight, currentY + 5 + textHeight };
-
-                g_displayItems.push_back(item);
-                currentY += rowHeight + 6;
+            DisplayItem item;
+            item.isHeader = false;
+            item.task = t;
+            item.optionsRect = { clientWidth - 36, currentY + 10, clientWidth - 12, currentY + 34 };
+            if (t.is_sync) {
+                item.assignRect = { clientWidth - 82, currentY + 10, clientWidth - 40, currentY + 34 };
             }
+            int textLeft = 18 + 20 + 10 + (t.is_sync ? 19 : 0);
+            int textRight = t.is_sync ? item.assignRect.left - 6 : item.optionsRect.left - 6;
+            int textHeight = MeasureTaskTextHeight(hdcMeasure, t.text, textRight - textLeft);
+            int rowHeight = std::max(itemHeight, textHeight + 28);
+            item.rect = { 10, currentY, clientWidth - 10, currentY + rowHeight };
+            item.checkRect = { 18, currentY + (rowHeight - 20) / 2, 38, currentY + (rowHeight + 20) / 2 };
+            item.optionsRect.top = currentY + (rowHeight - 24) / 2;
+            item.optionsRect.bottom = item.optionsRect.top + 24;
+            item.textRect = { textLeft, currentY + 5, textRight, currentY + 5 + textHeight };
+
+            g_displayItems.push_back(item);
+            currentY += rowHeight + 6;
         }
     }
 

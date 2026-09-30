@@ -291,14 +291,14 @@ bool HandleLButtonDown(HWND hWnd, LPARAM lParam) {
             InvalidateRect(hWnd, nullptr, FALSE);
             return true;
         } else if (clickRawY < sm.rcThumb.top) {
-            int topOffset = g_viewMode == ViewMode::ActiveTasks ? 94 : (g_viewMode == ViewMode::WorkHistory ? 48 : 88);
+            int topOffset = g_viewMode == ViewMode::ActiveTasks ? 94 : (g_viewMode == ViewMode::WorkHistory ? 48 : 54);
             int viewableHeight = rcClient.bottom - topOffset - BOTTOM_BAR_HEIGHT;
             g_scrollY = std::max(0, g_scrollY - viewableHeight);
             UpdateInlineEditPos();
             InvalidateRect(hWnd, nullptr, TRUE);
             return true;
         } else {
-            int topOffset = g_viewMode == ViewMode::ActiveTasks ? 94 : (g_viewMode == ViewMode::WorkHistory ? 48 : 88);
+            int topOffset = g_viewMode == ViewMode::ActiveTasks ? 94 : (g_viewMode == ViewMode::WorkHistory ? 48 : 54);
             int viewableHeight = rcClient.bottom - topOffset - BOTTOM_BAR_HEIGHT;
             g_scrollY = std::min(sm.maxScroll, g_scrollY + viewableHeight);
             UpdateInlineEditPos();
@@ -554,18 +554,7 @@ bool HandleLButtonUp(HWND hWnd, LPARAM) {
 }
 
 bool HandleCommand(HWND hWnd, int id) {
-    if (id == IDC_FILTER_RECENT || id == IDC_FILTER_ALL) {
-        if (g_viewMode != ViewMode::CompletedTasks) return true;
-        g_completedFilter = id == IDC_FILTER_ALL
-            ? CompletedFilter::AllByDay
-            : CompletedFilter::SinceYesterday930;
-        g_scrollY = 0;
-        g_selectedIndex = -1;
-        UpdateControlsVisibility();
-        RecalculateLayout();
-        InvalidateRect(hWnd, nullptr, TRUE);
-        return true;
-    } else if (id == IDC_ADD_TASK_BTN) {
+    if (id == IDC_ADD_TASK_BTN) {
         if (!g_hEdit || g_viewMode != ViewMode::ActiveTasks) return true;
         int textLength = GetWindowTextLengthW(g_hEdit);
         std::vector<wchar_t> textBuffer(textLength + 1);
@@ -633,7 +622,6 @@ bool HandleCommand(HWND hWnd, int id) {
         CommitInlineEdit();
         if (g_viewMode == ViewMode::ActiveTasks) {
             g_viewMode = ViewMode::CompletedTasks;
-            g_completedFilter = CompletedFilter::SinceYesterday930;
         } else {
             g_viewMode = ViewMode::ActiveTasks;
         }
@@ -658,7 +646,6 @@ bool HandleCommand(HWND hWnd, int id) {
             ExitMiniMode(false);
         }
         g_viewMode = ViewMode::CompletedTasks;
-        g_completedFilter = CompletedFilter::SinceYesterday930;
         ShowAppWindow();
         return true;
     } else if (id == IDM_TRAY_PIN) {
@@ -689,8 +676,7 @@ bool HandleDrawItem(HWND /*hWnd*/, DRAWITEMSTRUCT* pDIS) {
 
     bool isTextButton = pDIS->CtlID == IDC_TIME_HISTORY_BTN || pDIS->CtlID == IDC_MANUAL_WORK_BTN ||
         pDIS->CtlID == IDC_TOGGLE_VIEW_BTN || pDIS->CtlID == IDC_CLOSE_BTN ||
-        pDIS->CtlID == IDC_ADD_TASK_BTN || pDIS->CtlID == IDC_FILTER_RECENT ||
-        pDIS->CtlID == IDC_FILTER_ALL;
+        pDIS->CtlID == IDC_ADD_TASK_BTN;
     if (isTextButton) {
         bool isDark = g_themeMode == ThemeMode::Dark;
         COLORREF buttonBg = isPink ? pinkButtonBg
