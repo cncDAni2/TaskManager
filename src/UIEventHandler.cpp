@@ -554,7 +554,18 @@ bool HandleLButtonUp(HWND hWnd, LPARAM) {
 }
 
 bool HandleCommand(HWND hWnd, int id) {
-    if (id == IDC_ADD_TASK_BTN) {
+    if (id == IDC_FILTER_RECENT || id == IDC_FILTER_ALL) {
+        if (g_viewMode != ViewMode::CompletedTasks) return true;
+        g_completedFilter = id == IDC_FILTER_ALL
+            ? CompletedFilter::AllByDay
+            : CompletedFilter::SinceYesterday930;
+        g_scrollY = 0;
+        g_selectedIndex = -1;
+        UpdateControlsVisibility();
+        RecalculateLayout();
+        InvalidateRect(hWnd, nullptr, TRUE);
+        return true;
+    } else if (id == IDC_ADD_TASK_BTN) {
         if (!g_hEdit || g_viewMode != ViewMode::ActiveTasks) return true;
         int textLength = GetWindowTextLengthW(g_hEdit);
         std::vector<wchar_t> textBuffer(textLength + 1);
