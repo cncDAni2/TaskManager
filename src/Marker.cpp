@@ -1,4 +1,5 @@
 #include "Marker.h"
+#include "AppState.h"
 #include <algorithm>
 #include <cmath>
 
@@ -18,6 +19,7 @@ static void DrawFilledMarkerShape(HDC hdc, const RECT& rect, const POINT* normal
 }
 
 void DrawTaskMarker(HDC hdc, const RECT& rect, TaskMarker marker, COLORREF emptyBackground, COLORREF emptyBorder) {
+    const ThemeMode selectedTheme = g_themeMode;
     int width = rect.right - rect.left;
     int height = rect.bottom - rect.top;
     int inset = (std::max)(1, (std::min)(width, height) / 8);
@@ -26,13 +28,21 @@ void DrawTaskMarker(HDC hdc, const RECT& rect, TaskMarker marker, COLORREF empty
     COLORREF fillColor = emptyBackground;
     COLORREF borderColor = emptyBorder;
     if (marker == TaskMarker::Heart) {
-        fillColor = RGB(225, 29, 72);
+        if (selectedTheme == ThemeMode::Pink) {
+            fillColor = RGB(79, 0, 72);
+        } else {
+            fillColor = RGB(225, 29, 72);
+        }
         borderColor = fillColor;
     } else if (marker == TaskMarker::Crescent) {
         fillColor = RGB(37, 99, 235);
         borderColor = fillColor;
     } else if (marker == TaskMarker::Lightning) {
-        fillColor = RGB(217, 119, 6);
+        if (selectedTheme == ThemeMode::Light) {
+            fillColor = RGB(126, 126, 0);
+        } else {
+            fillColor = RGB(255, 255, 0);
+        }
         borderColor = fillColor;
     }
 
