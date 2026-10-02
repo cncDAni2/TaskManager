@@ -14,6 +14,17 @@
 namespace {
 HWND g_messageBoxOwner = nullptr;
 
+void ToggleTaskAssignment(HWND hWnd, int taskId) {
+    std::wstring conflictingAssignee = g_store.ToggleAssignment(taskId, TaskUtils::GetCleanUserName());
+    if (conflictingAssignee.empty()) return;
+
+    std::wstring message = conflictingAssignee + L" már levette ezt a feladatot.";
+    bool wasInContextMenu = g_inContextMenu;
+    g_inContextMenu = true;
+    MessageBoxW(hWnd, message.c_str(), L"Feladat már foglalt", MB_OK | MB_ICONINFORMATION);
+    g_inContextMenu = wasInContextMenu;
+}
+
 LRESULT CALLBACK CenterMessageBoxHook(int code, WPARAM wParam, LPARAM lParam) {
     if (code == HCBT_ACTIVATE) {
         HWND hDialog = (HWND)wParam;
@@ -242,7 +253,7 @@ bool HandleLButtonDown(HWND hWnd, LPARAM lParam) {
         for (size_t i = 0; i < g_displayItems.size(); ++i) {
             const auto& item = g_displayItems[i];
             if (item.assignRect.right > 0 && PtInRect(&item.assignRect, { mx, my })) {
-                g_store.ToggleAssignment(item.task.id, TaskUtils::GetCleanUserName());
+                ToggleTaskAssignment(hWnd, item.task.id);
                 RecalculateMiniLayout();
                 InvalidateRect(hWnd, nullptr, FALSE);
                 return true;
@@ -316,7 +327,7 @@ bool HandleLButtonDown(HWND hWnd, LPARAM lParam) {
         if (item.assignRect.right > 0 && PtInRect(&item.assignRect, { mx, my })) {
             int taskId = item.task.id;
             CommitInlineEdit();
-            g_store.ToggleAssignment(taskId, TaskUtils::GetCleanUserName());
+            ToggleTaskAssignment(hWnd, taskId);
             RecalculateLayout();
             SetFocus(hWnd);
             InvalidateRect(hWnd, nullptr, FALSE);
@@ -568,6 +579,8 @@ bool HandleCommand(HWND hWnd, int id) {
         }
 
         g_store.Add(taskText, g_syncToggle);
+        g_syncToggle = false;
+        if (g_hSyncToggleBtn) InvalidateRect(g_hSyncToggleBtn, nullptr, TRUE);
         g_sessionActiveTaskIds.insert(g_sessionActiveTaskIds.begin(), g_store.tasks.back().id);
         SetWindowTextW(g_hEdit, L"");
         g_scrollY = 0;

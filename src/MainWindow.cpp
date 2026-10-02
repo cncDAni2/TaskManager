@@ -9,23 +9,45 @@
 #include "BarTooltips.h"
 #include "FocusMode.h"
 #include "SettingsDialog.h"
+#include "TaskUtils.h"
 #include <windowsx.h>
 #include <commctrl.h>
 #include <algorithm>
+#include <map>
 #include <set>
 
 namespace {
 void ReloadSyncAndNotify() {
     std::set<int> knownSyncIds;
+    std::map<int, std::wstring> previousAssignees;
     for (const auto& task : g_store.tasks) {
-        if (task.is_sync) knownSyncIds.insert(task.id);
+        if (task.is_sync) {
+            knownSyncIds.insert(task.id);
+            previousAssignees.emplace(task.id, task.assignee);
+        }
     }
 
     g_store.LoadSync();
+    const std::wstring currentUser = TaskUtils::GetCleanUserName();
+    std::wstring conflictMessage;
     for (const auto& task : g_store.tasks) {
         if (task.is_sync && knownSyncIds.find(task.id) == knownSyncIds.end()) {
             ShowNewTaskNotice(task.text);
         }
+        if (!task.is_sync || task.assignee.empty() || task.assignee == currentUser) continue;
+        auto previous = previousAssignees.find(task.id);
+        if (previous != previousAssignees.end() && previous->second == currentUser) {
+            if (!conflictMessage.empty()) conflictMessage += L"\n";
+            conflictMessage += task.assignee + L" már levette ezt a feladatot.";
+        }
+    }
+
+    if (!conflictMessage.empty()) {
+        bool wasInContextMenu = g_inContextMenu;
+        g_inContextMenu = true;
+        MessageBoxW(g_hWnd, conflictMessage.c_str(), L"A feladat felelőse megváltozott",
+            MB_OK | MB_ICONINFORMATION);
+        g_inContextMenu = wasInContextMenu;
     }
 }
 }

@@ -74,7 +74,8 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR, int) {
 
     MSG msg;
     while (GetMessageW(&msg, nullptr, 0, 0)) {
-        if (msg.message == WM_KEYDOWN && msg.wParam == VK_ESCAPE) {
+        if (msg.message == WM_KEYDOWN && msg.wParam == VK_ESCAPE &&
+            (!g_hInlineEdit || msg.hwnd != g_hInlineEdit)) {
             if (g_pinMode && !g_isMiniMode) {
                 EnterMiniMode();
             } else if (!g_pinMode) {

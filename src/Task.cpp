@@ -111,14 +111,18 @@ void TaskStore::ToggleCompleted(int id) {
     }
 }
 
-void TaskStore::ToggleAssignment(int id, const std::wstring& userName) {
+std::wstring TaskStore::ToggleAssignment(int id, const std::wstring& userName) {
+    if (CheckSyncFileChanged()) LoadSync();
+
     for (auto& t : tasks) {
         if (t.id == id && t.is_sync) {
+            if (!t.assignee.empty() && t.assignee != userName) return t.assignee;
             t.assignee = (t.assignee == userName) ? L"" : userName;
             SaveSync();
-            return;
+            return L"";
         }
     }
+    return L"";
 }
 
 void TaskStore::Delete(int id) {

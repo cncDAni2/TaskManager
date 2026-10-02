@@ -30,7 +30,7 @@ public:
     void UpdateText(int id, const std::wstring& newText);
     void CycleMarker(int id);
     void ToggleCompleted(int id);
-    void ToggleAssignment(int id, const std::wstring& userName);
+    std::wstring ToggleAssignment(int id, const std::wstring& userName);
     void Delete(int id);
 
     std::vector<Task> GetActiveTasks() const;

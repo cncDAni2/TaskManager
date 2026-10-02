@@ -4,9 +4,35 @@
 #include "MainWindow.h"
 #include <commctrl.h>
 #include <cctype>
+#include <cwctype>
+
+namespace {
+void DeletePreviousWord(HWND hEdit) {
+    DWORD selectionStart = 0;
+    DWORD selectionEnd = 0;
+    SendMessageW(hEdit, EM_GETSEL, (WPARAM)&selectionStart, (LPARAM)&selectionEnd);
+
+    if (selectionStart == selectionEnd) {
+        int textLength = GetWindowTextLengthW(hEdit);
+        std::vector<wchar_t> text(textLength + 1);
+        GetWindowTextW(hEdit, text.data(), textLength + 1);
+
+        while (selectionStart > 0 && iswspace(text[selectionStart - 1])) --selectionStart;
+        while (selectionStart > 0 && !iswspace(text[selectionStart - 1])) --selectionStart;
+    }
+
+    if (selectionStart != selectionEnd) {
+        SendMessageW(hEdit, EM_SETSEL, selectionStart, selectionEnd);
+        SendMessageW(hEdit, EM_REPLACESEL, TRUE, (LPARAM)L"");
+    }
+}
+}
 
 LRESULT CALLBACK EditSubclassProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam, UINT_PTR /*uIdSubclass*/, DWORD_PTR /*dwRefData*/) {
-    if (uMsg == WM_KEYDOWN) {
+    if (uMsg == WM_CHAR && wParam == 0x7F) {
+        DeletePreviousWord(hWnd);
+        return 0;
+    } else if (uMsg == WM_KEYDOWN) {
         if (wParam == VK_RETURN) {
             SendMessageW(g_hWnd, WM_COMMAND, MAKEWPARAM(IDC_ADD_TASK_BTN, BN_CLICKED), 0);
             return 0;
@@ -39,7 +65,10 @@ LRESULT CALLBACK EditSubclassProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lP
 }
 
 LRESULT CALLBACK InlineEditSubclassProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam, UINT_PTR /*uIdSubclass*/, DWORD_PTR /*dwRefData*/) {
-    if (uMsg == WM_KEYDOWN) {
+    if (uMsg == WM_CHAR && wParam == 0x7F) {
+        DeletePreviousWord(hWnd);
+        return 0;
+    } else if (uMsg == WM_KEYDOWN) {
         if (wParam == VK_RETURN) {
             CommitInlineEdit();
             return 0;
