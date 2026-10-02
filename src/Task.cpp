@@ -11,9 +11,9 @@ TaskStore::TaskStore() {
     wchar_t* lastSlash = wcsrchr(exePath, L'\\');
     if (lastSlash) {
         *(lastSlash + 1) = L'\0';
-        filePath = std::wstring(exePath) + L"tasks.json";
+        filePath = std::wstring(exePath) + L"tasks-local.json";
     } else {
-        filePath = L"tasks.json";
+        filePath = L"tasks-local.json";
     }
     syncFilePath = TaskUtils::GetDefaultSyncFilePath();
     Load();

@@ -9,7 +9,7 @@ For feature overview and usage, see [README.md](README.md).
 - **Build**: Run [build.bat](build.bat) via terminal (`cmd.exe /c "cd /d C:\work\TaskManager && build.bat"`).
   - Uses MSVC x64 (`vcvars64.bat`), compiles resources via `rc.exe`, and builds `src\*.cpp` with `/utf-8 /std:c++17 /O2 /MT /W4`.
   - Intermediate object and resource files: `dist\obj\` and `dist\TaskManager.res` (ignored by Git).
-  - Output binary: `TaskManager.exe` (kept beside `tasks.json`, which the app locates relative to its executable).
+  - Output binary: `TaskManager.exe` (kept beside `tasks-local.json`, which the app locates relative to its executable).
 - **Versioning**:
   - The Settings dialog version is `APP_VERSION` in [src/SettingsDialog.cpp](src/SettingsDialog.cpp). Update it automatically for requests that change application code; do not bump it for questions or documentation-only changes.
   - Keep the major version unchanged. For a bug fix or small change, increment the patch by 1 (for example, `v1.6.4` to `v1.6.5`). For a new feature or larger change, increment the minor by 1 and reset the patch to 0 (for example, `v1.6.4` to `v1.7.0`).
@@ -56,7 +56,7 @@ The application is modularized under `src/` into focused, single-responsibility 
 - **Character Encoding**: Always maintain UTF-8 encoding across files and compilation flags (`/utf-8`, `UNICODE`, `_UNICODE`). Use `std::wstring` and wide-character Win32 API functions (`W` suffixes) throughout the UI. Font creation must use `DEFAULT_CHARSET` to properly render Hungarian accents (`á, é, í, ó, ö, ő, ú, ü, ű`).
 - **Single Instance**: Controlled via named mutex `TaskManager_SingleInstance_Mutex_98741`. Second launch signals existing window via `WM_HOTKEY` and exits immediately.
 - **Two-Tier Data Persistence**:
-  - Local [tasks.json](tasks.json) stores local tasks, `next_id`, active ordering, current and historical work time (including manual entries), reset timestamp, theme, work-reset time, and chosen `sync_file_path`.
+  - Local `tasks-local.json` stores local tasks, `next_id`, active ordering, current and historical work time (including manual entries), reset timestamp, theme, work-reset time, and chosen `sync_file_path`.
   - OneDrive shared `tasks.json` stores only synchronized tasks (IDs in the 1,000,000+ range), creator (`author`), and assignee; keep local settings and work history out of the shared file.
   - Write operations must use binary/UTF-8 mode and properly escape strings using `TaskUtils::EscapeJsonString`.
 - **Work Timer & Focus Mode**: Focus mode overrides idle/excluded-app pauses, but session lock always stops counting and disables focus mode; unlocking does not re-enable focus mode. Keep `FocusMode` session-notification registration and unregistration paired.

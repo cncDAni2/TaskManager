@@ -38,7 +38,7 @@ Egy minimális erőforrásigényű (közel 0% CPU, ~2-4 MB RAM aktív állapotba
    - **Elkészültnek jelölés**: a bal oldali jelölőnégyzetre `[ ]` kattintva a feladat zöld pipát kap és átkerül az elkészült feladatok közé a pontos elkészülési időbélyeggel.
 
 4. **Perzisztens adattárolás & Felhő-szinkronizáció**:
-   - **Helyi feladatok**: az alkalmazás mellett lévő `tasks.json` fájlba mentődnek (munkaidővel és beállításokkal).
+   - **Helyi feladatok**: az alkalmazás mellett lévő `tasks-local.json` fájlba mentődnek (munkaidővel és beállításokkal).
    - **Szinkronizált feladatok**: kizárólag feladatokat és a hozzáadó nevét tartalmazó megosztott JSON fájlba mentődnek (alapértelmezés: `C:\Users\<user>\OneDrive - Siemens AG\TaskManager\tasks.json`).
    - **Fájlválasztó**: a fejlécben a bezárás (`✕`) mellett lévő mappa-felhő ikonra kattintva a szabványos Windows fájlkiválasztóval bármikor megváltoztatható a szinkronizációs fájl helye.
    - **Megjelenítés**: a szinkronizált feladatok előtt kis felhő (`☁`) ikon látható a fő listában, a PIN (mini) ablakban és az előzményeknél is, a meta sorban pedig megjelenik a rögzítő neve (pl. `Burunkai, Dániel`).
