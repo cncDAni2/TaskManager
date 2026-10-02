@@ -779,7 +779,7 @@ bool HandleDrawItem(HWND /*hWnd*/, DRAWITEMSTRUCT* pDIS) {
 
         RECT rcIcon = pDIS->rcItem;
         if (isSelected) OffsetRect(&rcIcon, 1, 1);
-        DrawSettingsIcon(pDIS->hDC, rcIcon, iconColor);
+        DrawSettingsIcon(pDIS->hDC, rcIcon, iconColor, bgBtn);
         return true;
     } else if (pDIS->CtlID == IDC_SYNC_TOGGLE_BTN) {
         COLORREF bgBtn;

@@ -13,7 +13,7 @@ namespace {
     constexpr int IDC_SETTINGS_THEME = 5103;
     constexpr int IDC_SETTINGS_RESET_TIME = 5104;
     constexpr int IDC_SETTINGS_OK = 5105;
-    constexpr wchar_t APP_VERSION[] = L"v1.6.5";
+    constexpr wchar_t APP_VERSION[] = L"v1.7.0";
     constexpr COLORREF SETTINGS_DIALOG_BG = RGB(245, 245, 245);
     constexpr COLORREF SETTINGS_DIALOG_TEXT = RGB(0, 0, 0);
     constexpr wchar_t DIALOG_CLASS[] = L"TaskManager_Settings_Dialog_Class";
@@ -21,6 +21,7 @@ namespace {
     struct DialogState {
         HWND owner = nullptr;
         HWND pathText = nullptr;
+        HWND syncTooltip = nullptr;
         HWND themeCombo = nullptr;
         HWND resetTime = nullptr;
         HBRUSH backgroundBrush = nullptr;
@@ -31,6 +32,16 @@ namespace {
 
     void SetControlFont(HWND control, HFONT font) {
         if (control && font) SendMessageW(control, WM_SETFONT, (WPARAM)font, TRUE);
+    }
+
+    void AddSyncTooltip(HWND tooltip, HWND dialog, HWND control, const wchar_t* text) {
+        TOOLINFOW tool{};
+        tool.cbSize = sizeof(tool);
+        tool.uFlags = TTF_SUBCLASS | TTF_IDISHWND;
+        tool.hwnd = dialog;
+        tool.uId = reinterpret_cast<UINT_PTR>(control);
+        tool.lpszText = const_cast<LPWSTR>(text);
+        SendMessageW(tooltip, TTM_ADDTOOLW, 0, (LPARAM)&tool);
     }
 
     void ApplySelectedTheme(HWND dialog, DialogState* state, ThemeMode mode) {
@@ -92,10 +103,10 @@ namespace {
         switch (message) {
         case WM_CREATE: {
             HINSTANCE instance = GetModuleHandleW(nullptr);
-            HWND syncLabel = CreateWindowW(L"STATIC", L"Szinkronizációs file",
-                WS_CHILD | WS_VISIBLE | SS_LEFT, 18, 40, 144, 42, hWnd, nullptr, instance, nullptr);
+            HWND syncLabel = CreateWindowW(L"STATIC", L"Szinkronizációs file ℹ️",
+                WS_CHILD | WS_VISIBLE | SS_LEFT, 18, 40, 152, 42, hWnd, nullptr, instance, nullptr);
             SetControlFont(syncLabel, g_hFontNormal);
-            CreateWindowW(L"STATIC", L"", WS_CHILD | WS_VISIBLE | SS_ETCHEDVERT,
+            HWND syncDivider = CreateWindowW(L"STATIC", L"", WS_CHILD | WS_VISIBLE | SS_ETCHEDVERT,
                 170, 30, 2, 60, hWnd, nullptr, instance, nullptr);
             state->pathText = CreateWindowW(L"STATIC", state->syncFilePath.c_str(),
                 WS_CHILD | WS_VISIBLE | SS_LEFT | SS_NOPREFIX,
@@ -105,6 +116,31 @@ namespace {
             CreateWindowW(L"BUTTON", L"Tallózás", WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_PUSHBUTTON,
                 402, 43, 80, 30, hWnd, (HMENU)(INT_PTR)IDC_SETTINGS_BROWSE, instance, nullptr);
             SetControlFont(GetDlgItem(hWnd, IDC_SETTINGS_BROWSE), g_hFontSmall);
+
+            static constexpr wchar_t syncHelp[] =
+                L"OneDrive-megosztáshoz először ossz meg egy mappát a másik személlyel.\n"
+                L"A másik fél a \u201eParancsikon hozzáadása Saját fájlokhoz\u201d gombbal szinkronizálja a mappát a gépére.\n"
+                L"Ezután a C:\\Users\\<felhasználónév>\\OneDrive - Siemens AG\\ mappában megjelenik a megosztó személyének nevét viselő mappa. "
+                L"A megosztott fájl vagy mappa azon belül található; ezt tallózd be itt.";
+            state->syncTooltip = CreateWindowExW(WS_EX_TOPMOST, TOOLTIPS_CLASSW, nullptr,
+                WS_POPUP | TTS_ALWAYSTIP | TTS_NOPREFIX,
+                CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT,
+                hWnd, nullptr, instance, nullptr);
+            if (state->syncTooltip) {
+                SendMessageW(state->syncTooltip, TTM_SETMAXTIPWIDTH, 0, 360);
+                TOOLINFOW rowTool{};
+                rowTool.cbSize = sizeof(rowTool);
+                rowTool.uFlags = TTF_SUBCLASS;
+                rowTool.hwnd = hWnd;
+                rowTool.uId = IDC_SETTINGS_PATH;
+                rowTool.rect = RECT{ 10, 30, 490, 100 };
+                rowTool.lpszText = const_cast<LPWSTR>(syncHelp);
+                SendMessageW(state->syncTooltip, TTM_ADDTOOLW, 0, (LPARAM)&rowTool);
+                AddSyncTooltip(state->syncTooltip, hWnd, syncLabel, syncHelp);
+                AddSyncTooltip(state->syncTooltip, hWnd, syncDivider, syncHelp);
+                AddSyncTooltip(state->syncTooltip, hWnd, state->pathText, syncHelp);
+                AddSyncTooltip(state->syncTooltip, hWnd, GetDlgItem(hWnd, IDC_SETTINGS_BROWSE), syncHelp);
+            }
 
             HWND themeLabel = CreateWindowW(L"STATIC", L"Téma",
                 WS_CHILD | WS_VISIBLE | SS_LEFT, 18, 119, 144, 28, hWnd, nullptr, instance, nullptr);
@@ -198,6 +234,12 @@ namespace {
             break;
         case WM_CLOSE:
             DestroyWindow(hWnd);
+            return 0;
+        case WM_DESTROY:
+            if (state->syncTooltip && IsWindow(state->syncTooltip)) {
+                DestroyWindow(state->syncTooltip);
+                state->syncTooltip = nullptr;
+            }
             return 0;
         }
         return DefWindowProcW(hWnd, message, wParam, lParam);

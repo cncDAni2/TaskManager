@@ -1,5 +1,6 @@
 #include "Drawing.h"
 #include <dwmapi.h>
+#include <cmath>
 
 #ifndef DWMWA_USE_IMMERSIVE_DARK_MODE
 #define DWMWA_USE_IMMERSIVE_DARK_MODE 20
@@ -188,61 +189,45 @@ void DrawCloudIcon(HDC hdc, const RECT& rc, COLORREF color, bool filled) {
     if (filled) DeleteObject(hBrush);
 }
 
-void DrawFolderCloudIcon(HDC hdc, const RECT& rc, COLORREF color) {
+void DrawSettingsIcon(HDC hdc, const RECT& rc, COLORREF color, COLORREF backgroundColor) {
     int cx = rc.left + (rc.right - rc.left) / 2;
     int cy = rc.top + (rc.bottom - rc.top) / 2;
+    constexpr int toothCount = 8;
+    constexpr double pi = 3.14159;
+    constexpr double angleOffsets[] = { -22.5, -14.0, -14.0, 14.0, 14.0, 22.5 };
+    const int width = rc.right - rc.left;
+    const int height = rc.bottom - rc.top;
+    const int diameter = width < height ? width : height;
+    const double outerRadius = diameter / 2.0 - 3.0;
+    const double rootRadius = outerRadius * 0.72;
+    const double radii[] = { rootRadius, rootRadius, outerRadius, outerRadius, rootRadius, rootRadius };
+    POINT points[toothCount * 6]{};
+
+    for (int tooth = 0; tooth < toothCount; ++tooth) {
+        const double centerAngle = (-90.0 + tooth * 360.0 / toothCount) * pi / 180.0;
+        for (int vertex = 0; vertex < 6; ++vertex) {
+            const double angle = centerAngle + angleOffsets[vertex] * pi / 180.0;
+            points[tooth * 6 + vertex] = {
+                static_cast<LONG>(cx + std::lround(std::cos(angle) * radii[vertex])),
+                static_cast<LONG>(cy + std::lround(std::sin(angle) * radii[vertex]))
+            };
+        }
+    }
 
     HPEN hPen = CreatePen(PS_SOLID, 1, color);
+    HBRUSH hBrush = CreateSolidBrush(color);
     HGDIOBJ hOldPen = SelectObject(hdc, hPen);
-    HGDIOBJ hOldBrush = SelectObject(hdc, GetStockObject(NULL_BRUSH));
+    HGDIOBJ hOldBrush = SelectObject(hdc, hBrush);
+    Polygon(hdc, points, _countof(points));
 
-    // Folder tab
-    POINT tabPts[4] = {
-        { cx - 8, cy - 2 },
-        { cx - 8, cy - 6 },
-        { cx - 3, cy - 6 },
-        { cx - 1, cy - 2 }
-    };
-    Polyline(hdc, tabPts, 4);
+    HBRUSH hHoleBrush = CreateSolidBrush(backgroundColor);
+    HGDIOBJ hGearBrush = SelectObject(hdc, hHoleBrush);
+    const int holeRadius = static_cast<int>(std::lround(rootRadius * 0.45));
+    Ellipse(hdc, cx - holeRadius, cy - holeRadius, cx + holeRadius + 1, cy + holeRadius + 1);
 
-    // Folder body
-    RoundRect(hdc, cx - 8, cy - 2, cx + 7, cy + 8, 2, 2);
-
-    // Small cloud on folder
-    RECT rcCloud = { cx - 3, cy, cx + 7, cy + 7 };
-    DrawCloudIcon(hdc, rcCloud, color, true);
-
-    SelectObject(hdc, hOldPen);
+    SelectObject(hdc, hGearBrush);
     SelectObject(hdc, hOldBrush);
-    DeleteObject(hPen);
-}
-
-void DrawSettingsIcon(HDC hdc, const RECT& rc, COLORREF color) {
-    int cx = rc.left + (rc.right - rc.left) / 2;
-    int cy = rc.top + (rc.bottom - rc.top) / 2;
-    HPEN hPen = CreatePen(PS_SOLID, 2, color);
-    HGDIOBJ hOldPen = SelectObject(hdc, hPen);
-    HGDIOBJ hOldBrush = SelectObject(hdc, GetStockObject(NULL_BRUSH));
-
-    Ellipse(hdc, cx - 6, cy - 6, cx + 7, cy + 7);
-    Ellipse(hdc, cx - 2, cy - 2, cx + 3, cy + 3);
-    MoveToEx(hdc, cx, cy - 10, nullptr);
-    LineTo(hdc, cx, cy - 6);
-    MoveToEx(hdc, cx, cy + 6, nullptr);
-    LineTo(hdc, cx, cy + 10);
-    MoveToEx(hdc, cx - 10, cy, nullptr);
-    LineTo(hdc, cx - 6, cy);
-    MoveToEx(hdc, cx + 6, cy, nullptr);
-    LineTo(hdc, cx + 10, cy);
-    MoveToEx(hdc, cx - 7, cy - 7, nullptr);
-    LineTo(hdc, cx - 4, cy - 4);
-    MoveToEx(hdc, cx + 7, cy - 7, nullptr);
-    LineTo(hdc, cx + 4, cy - 4);
-    MoveToEx(hdc, cx - 7, cy + 7, nullptr);
-    LineTo(hdc, cx - 4, cy + 4);
-    MoveToEx(hdc, cx + 7, cy + 7, nullptr);
-    LineTo(hdc, cx + 4, cy + 4);
-
+    SelectObject(hdc, hOldPen);
     SelectObject(hdc, hOldBrush);
     SelectObject(hdc, hOldPen);
     DeleteObject(hPen);
