@@ -247,7 +247,8 @@ void PaintMiniWindow(HWND hWnd, HDC hdc) {
     }
 
     RECT rcTrackBg = { 0, clientH - 3, clientW, clientH };
-    COLORREF bgTrack = g_themeMode == ThemeMode::Pink ? RGB(217, 0, 108) : th.borderSep;
+    COLORREF bgTrack = g_workMeasurementStopped ? RGB(75, 85, 99)
+        : (g_themeMode == ThemeMode::Pink ? RGB(217, 0, 108) : th.borderSep);
     HBRUSH hBrTrackBg = CreateSolidBrush(bgTrack);
     FillRect(hdcMem, &rcTrackBg, hBrTrackBg);
     DeleteObject(hBrTrackBg);
@@ -256,8 +257,10 @@ void PaintMiniWindow(HWND hWnd, HDC hdc) {
     const int targetWorkSec = DAILY_WORK_TARGET_SECONDS;
     int manualSec = CurrentManualWorkSeconds();
     RECT rcMiniBar = { 0, clientH - 3, clientW, clientH };
+    COLORREF miniBarFill = g_workMeasurementStopped ? RGB(156, 163, 175)
+        : (g_isWorkActive ? RGB(34, 197, 94) : RGB(239, 68, 68));
     DrawBarSegments(hdcMem, rcMiniBar, workSec, manualSec, targetWorkSec,
-        g_isWorkActive ? RGB(34, 197, 94) : RGB(239, 68, 68), RGB(245, 158, 11));
+        miniBarFill, g_workMeasurementStopped ? miniBarFill : RGB(245, 158, 11));
     std::vector<BarTooltips::Region> barToolRegions = {
         { rcMiniBar, BuildWorkTooltip(workSec, manualSec) }
     };
@@ -319,7 +322,7 @@ void PaintMainWindow(HWND hWnd, HDC hdc) {
 
     // 3. Draw items with clipping to list area
     int topOffset = g_viewMode == ViewMode::ActiveTasks ? 94 : (isHistory ? 48 : 54);
-    int listBottom = clientH - BOTTOM_BAR_HEIGHT;
+    int listBottom = GetListBottom(clientH);
     HRGN hRgnClip = CreateRectRgn(0, topOffset, clientW, listBottom);
     SelectClipRgn(hdcMem, hRgnClip);
 
@@ -358,7 +361,9 @@ void PaintMainWindow(HWND hWnd, HDC hdc) {
             RECT rcBar = entry.isWeeklySummary
                 ? RECT{ 145, rowTop + 5, clientW - 20, rowTop + 12 }
                 : RECT{ 145, rowTop + 7, clientW - 20, rowTop + 10 };
-            HBRUSH hTrack = CreateSolidBrush(g_themeMode == ThemeMode::Pink ? th.bgCardSelected : RGB(16, 43, 78));
+            const bool grayCurrentDay = g_workMeasurementStopped && entry.isCurrentDay;
+            HBRUSH hTrack = CreateSolidBrush(grayCurrentDay ? RGB(75, 85, 99)
+                : (g_themeMode == ThemeMode::Pink ? th.bgCardSelected : RGB(16, 43, 78)));
             FillRect(hdcMem, &rcBar, hTrack);
             DeleteObject(hTrack);
             int barWidth = entry.isWeeklySummary
@@ -372,13 +377,15 @@ void PaintMainWindow(HWND hWnd, HDC hdc) {
                 manualWidth = std::min(manualWidth, barWidth);
                 int measuredWidth = barWidth - manualWidth;
                 rcFill.right = rcFill.left + measuredWidth;
-                HBRUSH hFill = CreateSolidBrush(entry.isWeeklySummary ? RGB(255, 205, 64) : RGB(55, 145, 232));
+                HBRUSH hFill = CreateSolidBrush(grayCurrentDay ? RGB(156, 163, 175)
+                    : (entry.isWeeklySummary ? RGB(255, 205, 64) : RGB(55, 145, 232)));
                 if (measuredWidth > 0) FillRect(hdcMem, &rcFill, hFill);
                 DeleteObject(hFill);
                 if (manualWidth > 0) {
                     rcFill.left += measuredWidth;
                     rcFill.right = rcFill.left + manualWidth;
-                    HBRUSH hManual = CreateSolidBrush(entry.isWeeklySummary ? RGB(244, 122, 52) : RGB(245, 158, 11));
+                    HBRUSH hManual = CreateSolidBrush(grayCurrentDay ? RGB(156, 163, 175)
+                        : (entry.isWeeklySummary ? RGB(244, 122, 52) : RGB(245, 158, 11)));
                     FillRect(hdcMem, &rcFill, hManual);
                     DeleteObject(hManual);
                 }
@@ -680,10 +687,12 @@ void PaintMainWindow(HWND hWnd, HDC hdc) {
     DeleteObject(hPenBotBorder);
 
     RECT rcTrack = { 10, rcBottom.top + 3, clientW - 10, rcBottom.bottom - 3 };
-    COLORREF borderTrack = isHistory ? (g_themeMode == ThemeMode::Pink ? th.bgCardHover : RGB(104, 139, 181))
-        : (g_darkMode ? RGB(255, 255, 255) : th.textSecondary);
-    COLORREF bgTrack = isHistory ? (g_themeMode == ThemeMode::Pink ? th.bgCardSelected : RGB(16, 43, 78))
-        : (g_darkMode ? RGB(28, 28, 34) : th.borderSep);
+    COLORREF borderTrack = g_workMeasurementStopped ? RGB(107, 114, 128)
+        : (isHistory ? (g_themeMode == ThemeMode::Pink ? th.bgCardHover : RGB(104, 139, 181))
+            : (g_darkMode ? RGB(255, 255, 255) : th.textSecondary));
+    COLORREF bgTrack = g_workMeasurementStopped ? RGB(75, 85, 99)
+        : (isHistory ? (g_themeMode == ThemeMode::Pink ? th.bgCardSelected : RGB(16, 43, 78))
+            : (g_darkMode ? RGB(28, 28, 34) : th.borderSep));
 
     HBRUSH hBrTrack = CreateSolidBrush(bgTrack);
     HPEN hPenTrack = CreatePen(PS_SOLID, 1, borderTrack);
@@ -698,14 +707,18 @@ void PaintMainWindow(HWND hWnd, HDC hdc) {
     int totalWorkSec = workSec + manualSec;
     const int targetWorkSec = DAILY_WORK_TARGET_SECONDS;
     RECT rcFill = { rcTrack.left + 1, rcTrack.top + 1, rcTrack.right - 1, rcTrack.bottom - 1 };
-    COLORREF measuredColor = g_isWorkActive ? RGB(59, 130, 246) : RGB(71, 85, 105);
-    DrawBarSegments(hdcMem, rcFill, workSec, manualSec, targetWorkSec, measuredColor, RGB(245, 158, 11));
+    COLORREF measuredColor = g_workMeasurementStopped ? RGB(156, 163, 175)
+        : (g_isWorkActive ? RGB(59, 130, 246) : RGB(71, 85, 105));
+    COLORREF manualColor = g_workMeasurementStopped ? measuredColor : RGB(245, 158, 11);
+    DrawBarSegments(hdcMem, rcFill, workSec, manualSec, targetWorkSec, measuredColor, manualColor);
     barToolRegions.push_back({ rcTrack, BuildWorkTooltip(workSec, manualSec) });
 
     int dotY = rcTrack.top + (rcTrack.bottom - rcTrack.top) / 2;
     int dotX = rcTrack.left + 10;
     COLORREF dotCol = RGB(156, 163, 175);
-    if (g_isWorkActive) {
+    if (g_workMeasurementStopped) {
+        dotCol = RGB(156, 163, 175);
+    } else if (g_isWorkActive) {
         dotCol = RGB(34, 197, 94);
     } else if (g_isExcludedApp) {
         dotCol = RGB(249, 115, 22);
@@ -726,7 +739,9 @@ void PaintMainWindow(HWND hWnd, HDC hdc) {
     std::wstring workStr = TaskUtils::FormatWorkDuration(totalWorkSec);
     double pct = ((double)totalWorkSec / (double)targetWorkSec) * 100.0;
     wchar_t labelBuf[128];
-    if (g_isWorkActive) {
+    if (g_workMeasurementStopped) {
+        wcscpy_s(labelBuf, _countof(labelBuf), L"Idő mérése szünetel");
+    } else if (g_isWorkActive) {
         swprintf_s(labelBuf, L"Munkaidő: %s (%.0f%%)", workStr.c_str(), pct);
     } else if (g_isExcludedApp) {
         swprintf_s(labelBuf, L"Munkaidő: %s (Szüneteltetve: %s megnyitva)", workStr.c_str(), g_excludedAppName.c_str());

@@ -166,9 +166,10 @@ namespace WorkHistory {
                         week.totalSeconds, std::numeric_limits<int>::max()));
                     int manualSeconds = static_cast<int>(std::min<long long>(
                         week.manualSeconds, std::numeric_limits<int>::max()));
-                    entries.push_back({ std::to_wstring(week.weekNumber) + L". hét", totalSeconds, manualSeconds, true });
+                    entries.push_back({ std::to_wstring(week.weekNumber) + L". hét", totalSeconds, manualSeconds, true, false });
                 }
-                entries.push_back({ week.days[i].label, week.days[i].seconds, week.days[i].manualSeconds, false });
+                entries.push_back({ week.days[i].label, week.days[i].seconds, week.days[i].manualSeconds,
+                    false, week.days[i].date == DateKey(currentDay) });
             }
         }
         return entries;

@@ -15,6 +15,7 @@ namespace WorkHistory {
         int seconds;
         int manualSeconds;
         bool isWeeklySummary;
+        bool isCurrentDay = false;
     };
 
     std::string DateKey(time_t timestamp);

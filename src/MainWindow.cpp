@@ -152,6 +152,11 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                 286, 10, 54, 28, hWnd, (HMENU)IDC_TIME_HISTORY_BTN, hInst, nullptr);
             SendMessageW(g_hTimeHistoryBtn, WM_SETFONT, (WPARAM)g_hFontSmall, TRUE);
 
+            g_hWorkMeasureBtn = CreateWindowW(L"BUTTON", L"Mérés leállítása",
+                WS_CHILD | BS_OWNERDRAW | WS_TABSTOP,
+                128, 10, 152, 28, hWnd, (HMENU)IDC_STOP_WORK_BTN, hInst, nullptr);
+            SendMessageW(g_hWorkMeasureBtn, WM_SETFONT, (WPARAM)g_hFontSmall, TRUE);
+
             g_hFocusModeBtn = CreateWindowW(L"BUTTON", L"",
                 WS_CHILD | WS_VISIBLE | BS_OWNERDRAW | WS_TABSTOP,
                 252, 10, 28, 28, hWnd, (HMENU)IDC_FOCUS_MODE_BTN, hInst, nullptr);
@@ -223,6 +228,14 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                 tiManualWork.uId = (UINT_PTR)g_hManualWorkBtn;
                 tiManualWork.lpszText = (LPWSTR)L"Manuális munkaidő szerkesztése";
                 SendMessageW(hTooltip, TTM_ADDTOOL, 0, (LPARAM)&tiManualWork);
+
+                TOOLINFOW tiStopWork{};
+                tiStopWork.cbSize = sizeof(TOOLINFOW);
+                tiStopWork.uFlags = TTF_SUBCLASS | TTF_IDISHWND;
+                tiStopWork.hwnd = hWnd;
+                tiStopWork.uId = (UINT_PTR)g_hWorkMeasureBtn;
+                tiStopWork.lpszText = (LPWSTR)L"Engedélyezve a program nem méri az idődet újraindításig vagy visszakapcsolásig";
+                SendMessageW(hTooltip, TTM_ADDTOOL, 0, (LPARAM)&tiStopWork);
             }
 
             g_hEdit = CreateWindowExW(WS_EX_CLIENTEDGE, L"EDIT", L"",
@@ -347,7 +360,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                     }
                 }
 
-                bool countWork = !g_isSessionLocked &&
+                bool countWork = !g_workMeasurementStopped && !g_isSessionLocked &&
                     (g_focusMode || (!g_isIdlePaused && !g_isExcludedApp));
                 g_isWorkActive = countWork;
 
@@ -464,7 +477,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             GetClientRect(hWnd, &rcClient);
             int topOffset = g_viewMode == ViewMode::ActiveTasks ? 94
                 : (g_viewMode == ViewMode::WorkHistory ? 48 : 54);
-            int viewableHeight = rcClient.bottom - topOffset - BOTTOM_BAR_HEIGHT;
+            int viewableHeight = GetListBottom(rcClient.bottom) - topOffset;
             int maxScroll = std::max(0, g_totalContentHeight - viewableHeight);
 
             if (g_scrollY < 0) g_scrollY = 0;

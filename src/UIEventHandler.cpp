@@ -291,14 +291,14 @@ bool HandleLButtonDown(HWND hWnd, LPARAM lParam) {
             return true;
         } else if (clickRawY < sm.rcThumb.top) {
             int topOffset = g_viewMode == ViewMode::ActiveTasks ? 94 : (g_viewMode == ViewMode::WorkHistory ? 48 : 54);
-            int viewableHeight = rcClient.bottom - topOffset - BOTTOM_BAR_HEIGHT;
+            int viewableHeight = GetListBottom(rcClient.bottom) - topOffset;
             g_scrollY = std::max(0, g_scrollY - viewableHeight);
             UpdateInlineEditPos();
             InvalidateRect(hWnd, nullptr, TRUE);
             return true;
         } else {
             int topOffset = g_viewMode == ViewMode::ActiveTasks ? 94 : (g_viewMode == ViewMode::WorkHistory ? 48 : 54);
-            int viewableHeight = rcClient.bottom - topOffset - BOTTOM_BAR_HEIGHT;
+            int viewableHeight = GetListBottom(rcClient.bottom) - topOffset;
             g_scrollY = std::min(sm.maxScroll, g_scrollY + viewableHeight);
             UpdateInlineEditPos();
             InvalidateRect(hWnd, nullptr, TRUE);
@@ -611,6 +611,16 @@ bool HandleCommand(HWND hWnd, int id) {
         RecalculateLayout();
         InvalidateRect(hWnd, nullptr, TRUE);
         return true;
+    } else if (id == IDC_STOP_WORK_BTN) {
+        g_workMeasurementStopped = !g_workMeasurementStopped;
+        g_isWorkActive = false;
+        SetWindowTextW(g_hWorkMeasureBtn,
+            g_workMeasurementStopped ? L"Mérés indítása" : L"Mérés leállítása");
+        g_store.Save();
+        g_secondsSinceLastSave = 0;
+        InvalidateRect(g_hWorkMeasureBtn, nullptr, TRUE);
+        InvalidateRect(hWnd, nullptr, FALSE);
+        return true;
     } else if (id == IDC_MANUAL_WORK_BTN) {
         std::string date;
         int seconds = 0;
@@ -677,15 +687,20 @@ bool HandleDrawItem(HWND /*hWnd*/, DRAWITEMSTRUCT* pDIS) {
     COLORREF pinkButtonBg = RGB(183, 0, 99);
 
     bool isTextButton = pDIS->CtlID == IDC_TIME_HISTORY_BTN || pDIS->CtlID == IDC_MANUAL_WORK_BTN ||
+        pDIS->CtlID == IDC_STOP_WORK_BTN ||
         pDIS->CtlID == IDC_TOGGLE_VIEW_BTN || pDIS->CtlID == IDC_CLOSE_BTN ||
         pDIS->CtlID == IDC_ADD_TASK_BTN;
     if (isTextButton) {
         bool isDark = g_themeMode == ThemeMode::Dark;
-        COLORREF buttonBg = isPink ? pinkButtonBg
-            : (isDark ? RGB(60, 60, 60) : (isSelected ? th.bgCardHover : th.bgHeader));
-        COLORREF buttonText = isPink || isDark ? RGB(255, 255, 255) : th.textPrimary;
-        COLORREF buttonBorder = isPink ? (isSelected ? th.bgHeader : th.borderCard)
-            : (isDark ? RGB(82, 82, 82) : (isSelected ? th.borderCardHover : th.borderSep));
+        bool isMeasurementStopped = pDIS->CtlID == IDC_STOP_WORK_BTN && g_workMeasurementStopped;
+        COLORREF buttonBg = isMeasurementStopped ? RGB(220, 38, 38)
+            : (isPink ? pinkButtonBg
+                : (isDark ? RGB(60, 60, 60) : (isSelected ? th.bgCardHover : th.bgHeader)));
+        COLORREF buttonText = isMeasurementStopped ? RGB(0, 0, 0)
+            : (isPink || isDark ? RGB(255, 255, 255) : th.textPrimary);
+        COLORREF buttonBorder = isMeasurementStopped ? RGB(255, 255, 255)
+            : (isPink ? (isSelected ? th.bgHeader : th.borderCard)
+                : (isDark ? RGB(82, 82, 82) : (isSelected ? th.borderCardHover : th.borderSep)));
         HBRUSH brush = CreateSolidBrush(buttonBg);
         HPEN pen = CreatePen(PS_SOLID, 1, buttonBorder);
         HGDIOBJ oldBrush = SelectObject(pDIS->hDC, brush);

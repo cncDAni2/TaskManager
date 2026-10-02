@@ -24,6 +24,7 @@
 #define IDC_TIME_HISTORY_BTN 2011
 #define IDC_MANUAL_WORK_BTN  2012
 #define IDC_FOCUS_MODE_BTN  2013
+#define IDC_STOP_WORK_BTN   2014
 
 // System Tray and Menu IDs
 #define IDM_TRAY_OPEN       3001
@@ -40,6 +41,7 @@
 #define WM_APP_TRAY         (WM_APP + 100)
 #define IDT_WORK_TIMER      4001
 #define BOTTOM_BAR_HEIGHT   28
+#define WORK_MEASURE_FOOTER_HEIGHT 40
 
 enum class ViewMode {
     ActiveTasks,

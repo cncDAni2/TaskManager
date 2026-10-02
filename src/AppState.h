@@ -12,6 +12,7 @@ extern HWND g_hToggleViewBtn;
 extern HWND g_hTimeHistoryBtn;
 extern HWND g_hFocusModeBtn;
 extern HWND g_hManualWorkBtn;
+extern HWND g_hWorkMeasureBtn;
 extern HWND g_hCloseBtn;
 extern HWND g_hPinBtn;
 extern HWND g_hSettingsBtn;
@@ -77,6 +78,7 @@ extern ULONGLONG g_lastCommitTick;
 
 // Work Tracking State
 extern bool g_isWorkActive;
+extern bool g_workMeasurementStopped;
 extern bool g_focusMode;
 extern bool g_isSessionLocked;
 extern bool g_isIdlePaused;

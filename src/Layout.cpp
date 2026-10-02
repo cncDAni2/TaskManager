@@ -10,12 +10,17 @@ static int MeasureTaskTextHeight(HDC hdc, const std::wstring& text, int width) {
     return std::max(20, (int)(rc.bottom - rc.top));
 }
 
+int GetListBottom(int clientHeight) {
+    int footerHeight = g_viewMode == ViewMode::WorkHistory ? WORK_MEASURE_FOOTER_HEIGHT : 0;
+    return clientHeight - BOTTOM_BAR_HEIGHT - footerHeight;
+}
+
 void EnsureVisible(int itemIndex) {
     if (itemIndex < 0 || itemIndex >= (int)g_displayItems.size()) return;
     RECT rcClient;
     GetClientRect(g_hWnd, &rcClient);
     int topOffset = g_viewMode == ViewMode::ActiveTasks ? 94 : (g_viewMode == ViewMode::WorkHistory ? 48 : 54);
-    int listBottom = rcClient.bottom - BOTTOM_BAR_HEIGHT;
+    int listBottom = GetListBottom(rcClient.bottom);
     int viewableHeight = listBottom - topOffset;
 
     const auto& item = g_displayItems[itemIndex];
@@ -41,7 +46,7 @@ ScrollbarMetrics GetScrollbarMetrics() {
     int clientH = rcClient.bottom - rcClient.top;
 
     int topOffset = g_viewMode == ViewMode::ActiveTasks ? 94 : (g_viewMode == ViewMode::WorkHistory ? 48 : 54);
-    int listBottom = clientH - BOTTOM_BAR_HEIGHT;
+    int listBottom = GetListBottom(clientH);
     int viewableHeight = listBottom - topOffset;
 
     m.maxScroll = std::max(0, g_totalContentHeight - viewableHeight);
@@ -103,6 +108,7 @@ void UpdateControlsVisibility() {
         ShowWindow(g_hSettingsBtn, SW_HIDE);
         ShowWindow(g_hToggleViewBtn, SW_HIDE);
         ShowWindow(g_hTimeHistoryBtn, SW_HIDE);
+        ShowWindow(g_hWorkMeasureBtn, SW_HIDE);
         ShowWindow(g_hFocusModeBtn, SW_HIDE);
         ShowWindow(g_hManualWorkBtn, SW_HIDE);
         ShowWindow(g_hCloseBtn, SW_HIDE);
@@ -119,6 +125,18 @@ void UpdateControlsVisibility() {
     bool isActive = (g_viewMode == ViewMode::ActiveTasks);
     bool isHistory = (g_viewMode == ViewMode::WorkHistory);
     ShowWindow(g_hTimeHistoryBtn, isHistory ? SW_HIDE : SW_SHOW);
+    if (isHistory) {
+        RECT rcClient{};
+        GetClientRect(g_hWnd, &rcClient);
+        constexpr int buttonWidth = 132;
+        constexpr int buttonHeight = 26;
+        int buttonX = (rcClient.right - buttonWidth) / 2;
+        int buttonY = GetListBottom(rcClient.bottom) +
+            (WORK_MEASURE_FOOTER_HEIGHT - buttonHeight) / 2;
+        SetWindowPos(g_hWorkMeasureBtn, nullptr, buttonX, buttonY, buttonWidth, buttonHeight,
+            SWP_NOZORDER | SWP_NOACTIVATE);
+    }
+    ShowWindow(g_hWorkMeasureBtn, isHistory ? SW_SHOW : SW_HIDE);
     SetWindowPos(g_hToggleViewBtn, nullptr, isHistory ? 286 : 345, 10,
         isHistory ? 104 : 125, 28, SWP_NOZORDER | SWP_NOACTIVATE);
     ShowWindow(g_hManualWorkBtn, isHistory ? SW_SHOW : SW_HIDE);

@@ -8,6 +8,7 @@ void EnterMiniMode();
 void ExitMiniMode(bool toHidden = false);
 void UpdateControlsVisibility();
 void EnsureVisible(int itemIndex);
+int GetListBottom(int clientHeight);
 ScrollbarMetrics GetScrollbarMetrics();
 RECT GetMiniDragHandleRect(int clientWidth);
 RECT GetMiniFocusButtonRect(int clientWidth);
