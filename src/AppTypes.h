@@ -25,12 +25,19 @@
 #define IDC_MANUAL_WORK_BTN  2012
 #define IDC_FOCUS_MODE_BTN  2013
 #define IDC_STOP_WORK_BTN   2014
+#define IDC_TIMER_BTN       2015
+#define IDC_TIMER_WORK_EDIT 2016
+#define IDC_TIMER_REST_EDIT 2017
+#define IDC_TIMER_REPEATS_EDIT 2018
+#define IDC_TIMER_START_BTN 2019
+#define IDC_TIMER_PAUSE_BTN 2020
 
 // System Tray and Menu IDs
 #define IDM_TRAY_OPEN       3001
 #define IDM_TRAY_COMPLETED  3002
 #define IDM_TRAY_PIN        3003
 #define IDM_TRAY_AUTORUN    3004
+#define IDM_TRAY_TIMER      3005
 #define IDM_TRAY_EXIT       3006
 
 // Hotkey IDs
@@ -40,13 +47,16 @@
 // Custom Messages and Timers
 #define WM_APP_TRAY         (WM_APP + 100)
 #define IDT_WORK_TIMER      4001
+#define IDT_MINI_TIMER_FLASH 4002
 #define BOTTOM_BAR_HEIGHT   28
 #define WORK_MEASURE_FOOTER_HEIGHT 40
+#define TIMER_STATUS_HEIGHT 22
 
 enum class ViewMode {
     ActiveTasks,
     CompletedTasks,
-    WorkHistory
+    WorkHistory,
+    IntervalTimer
 };
 
 enum class ThemeMode {

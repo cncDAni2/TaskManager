@@ -5,6 +5,7 @@
 #include "TaskUtils.h"
 #include "BarTooltips.h"
 #include "Marker.h"
+#include "IntervalTimer.h"
 
 namespace {
     constexpr int DAILY_WORK_TARGET_SECONDS = 6 * 3600 + 50 * 60;
@@ -122,6 +123,16 @@ void PaintMiniWindow(HWND hWnd, HDC hdc) {
     DeleteObject(hFocusPen);
     DeleteObject(hFocusBrush);
     DrawFocusIcon(hdcMem, rcFocusButton, focusIcon);
+
+    if (g_intervalTimer.IsActive()) {
+        const RECT rcTimer = GetMiniTimerTextRect(clientW);
+        SelectObject(hdcMem, g_hFontMiniTimer);
+        SetTextColor(hdcMem, g_themeMode == ThemeMode::Pink ? RGB(0, 0, 0) : th.textSecondary);
+        SetBkMode(hdcMem, TRANSPARENT);
+        const std::wstring remaining = FormatTimerTime(g_intervalTimer.SecondsRemaining());
+        DrawTextW(hdcMem, remaining.c_str(), -1, (LPRECT)&rcTimer,
+            DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
+    }
 
     if (g_displayItems.empty()) {
         SelectObject(hdcMem, g_hFontNormal);
@@ -266,6 +277,17 @@ void PaintMiniWindow(HWND hWnd, HDC hdc) {
     };
     BarTooltips::Update(hWnd, barToolRegions);
 
+    if (g_miniTimerFlashStep > 0 && g_miniTimerFlashStep % 2 == 1) {
+        const COLORREF flashColor = g_miniTimerFlashWorkPhase ? RGB(220, 38, 38) : RGB(37, 99, 235);
+        HBRUSH flashBrush = CreateSolidBrush(flashColor);
+        RECT flashRect = rcClient;
+        for (int thickness = 0; thickness < 4; ++thickness) {
+            FrameRect(hdcMem, &flashRect, flashBrush);
+            InflateRect(&flashRect, -1, -1);
+        }
+        DeleteObject(flashBrush);
+    }
+
     BitBlt(hdc, 0, 0, clientW, clientH, hdcMem, 0, 0, SRCCOPY);
 
     SelectObject(hdcMem, hOldBmp);
@@ -286,6 +308,7 @@ void PaintMainWindow(HWND hWnd, HDC hdc) {
     HGDIOBJ hOldBmp = SelectObject(hdcMem, hBmp);
 
     const bool isHistory = g_viewMode == ViewMode::WorkHistory;
+    const bool isTimer = g_viewMode == ViewMode::IntervalTimer;
     std::vector<BarTooltips::Region> barToolRegions;
     const COLORREF historyBg = g_themeMode == ThemeMode::Pink ? th.bgHeader : RGB(8, 25, 54);
     HBRUSH hBrushBg = CreateSolidBrush(isHistory ? historyBg : th.bgWindow);
@@ -302,7 +325,7 @@ void PaintMainWindow(HWND hWnd, HDC hdc) {
     SetTextColor(hdcMem, isHistory ? RGB(235, 242, 252) : th.textTitle);
     SelectObject(hdcMem, g_hFontTitle);
     std::wstring title = g_viewMode == ViewMode::ActiveTasks ? L"Feladatok"
-        : (isHistory ? L"Munkaidő" : L"Elkészült feladatok");
+        : (isHistory ? L"Munkaidő" : (isTimer ? L"Időzítő" : L"Elkészült feladatok"));
     RECT rcTitle = { 14, 12, 280, 40 };
     DrawTextW(hdcMem, title.c_str(), -1, &rcTitle, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
 
@@ -419,6 +442,48 @@ void PaintMainWindow(HWND hWnd, HDC hdc) {
                     BuildWorkTooltip(entry.seconds - entry.manualSeconds, entry.manualSeconds) });
             }
         }
+    } else if (isTimer) {
+        const RECT panel = GetTimerPanelRect(clientW);
+        HPEN panelPen = CreatePen(PS_SOLID, 1, th.borderCard);
+        HGDIOBJ oldPanelBrush = SelectObject(hdcMem, GetStockObject(NULL_BRUSH));
+        HGDIOBJ oldPanelPen = SelectObject(hdcMem, panelPen);
+        RoundRect(hdcMem, panel.left, panel.top, panel.right, panel.bottom, 8, 8);
+        SelectObject(hdcMem, oldPanelBrush);
+        SelectObject(hdcMem, oldPanelPen);
+        DeleteObject(panelPen);
+
+        SelectObject(hdcMem, g_hFontTimerLabel);
+        SetTextColor(hdcMem, th.textSecondary);
+        const int dividerX = panel.left + 150;
+        const int rowHeight = 32;
+        const int rowGap = 46;
+        const int firstRowY = panel.top + 18;
+        const int inputX = dividerX + 12;
+        const int inputWidth = 82;
+        const wchar_t* fieldLabels[] = { L"Munka", L"Pihenés", L"Ismétlésszám" };
+        const wchar_t* fieldUnits[] = { L"perc", L"perc", L"x" };
+        for (int fieldIndex = 0; fieldIndex < 3; ++fieldIndex) {
+            const int rowY = firstRowY + fieldIndex * rowGap;
+            RECT rcLabel = { panel.left + 16, rowY, dividerX - 12, rowY + rowHeight };
+            RECT rcUnit = { inputX + inputWidth + 6, rowY, panel.right - 14, rowY + rowHeight };
+            DrawTextW(hdcMem, fieldLabels[fieldIndex], -1, &rcLabel,
+                DT_LEFT | DT_VCENTER | DT_SINGLELINE);
+            DrawTextW(hdcMem, fieldUnits[fieldIndex], -1, &rcUnit,
+                DT_LEFT | DT_VCENTER | DT_SINGLELINE);
+        }
+        HPEN dividerPen = CreatePen(PS_SOLID, 1, th.borderSep);
+        HGDIOBJ oldDividerPen = SelectObject(hdcMem, dividerPen);
+        MoveToEx(hdcMem, dividerX, panel.top + 12, nullptr);
+        LineTo(hdcMem, dividerX, panel.top + 148);
+        SelectObject(hdcMem, oldDividerPen);
+        DeleteObject(dividerPen);
+
+        SelectObject(hdcMem, g_hFontSmall);
+        SetTextColor(hdcMem, th.textSecondary);
+        RECT rcTimerExplanation = { 20, 58, clientW - 20, 88 };
+        DrawTextW(hdcMem,
+            L"A munkaidő-mérésre nincs hatással; csak hang- és vizuális jelzést ad.",
+            -1, &rcTimerExplanation, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
     } else if (g_displayItems.empty()) {
         SelectObject(hdcMem, g_hFontNormal);
         SetTextColor(hdcMem, th.textEmpty);
@@ -674,6 +739,61 @@ void PaintMainWindow(HWND hWnd, HDC hdc) {
 
     // 4. Draw Bottom Work Time Progress Bar
     RECT rcBottom = { 0, clientH - BOTTOM_BAR_HEIGHT, clientW, clientH };
+    if (g_intervalTimer.IsActive()) {
+        RECT rcTimerStatus = { 0, rcBottom.top - TIMER_STATUS_HEIGHT, clientW, rcBottom.top };
+        RECT rcTimerTrack = { 10, rcTimerStatus.top + 3, clientW - 10, rcTimerStatus.bottom - 3 };
+        const bool workPhase = g_intervalTimer.IsWorkPhase();
+        const COLORREF phaseColor = workPhase ? RGB(220, 38, 38) : RGB(37, 99, 235);
+        const COLORREF trackColor = workPhase
+            ? (g_themeMode == ThemeMode::Dark ? RGB(72, 28, 32) : RGB(254, 226, 226))
+            : (g_themeMode == ThemeMode::Dark ? RGB(25, 43, 72) : RGB(219, 234, 254));
+        const COLORREF borderColor = workPhase ? RGB(185, 28, 28) : RGB(29, 78, 216);
+        HBRUSH trackBrush = CreateSolidBrush(trackColor);
+        HPEN trackPen = CreatePen(PS_SOLID, 1, borderColor);
+        HGDIOBJ oldTrackBrush = SelectObject(hdcMem, trackBrush);
+        HGDIOBJ oldTrackPen = SelectObject(hdcMem, trackPen);
+        RoundRect(hdcMem, rcTimerTrack.left, rcTimerTrack.top,
+            rcTimerTrack.right, rcTimerTrack.bottom, 5, 5);
+        SelectObject(hdcMem, oldTrackBrush);
+        SelectObject(hdcMem, oldTrackPen);
+        DeleteObject(trackBrush);
+        DeleteObject(trackPen);
+
+        const int phaseDuration = (std::max)(1,
+            static_cast<int>((workPhase ? g_store.timer_work_minutes : g_store.timer_rest_minutes) * 60.0 + 0.5));
+        const int secondsRemaining = (std::min)(phaseDuration, g_intervalTimer.SecondsRemaining());
+        const int innerWidth = (std::max)(0,
+            static_cast<int>(rcTimerTrack.right - rcTimerTrack.left) - 4);
+        const int fillWidth = static_cast<int>(
+            static_cast<long long>(innerWidth) * secondsRemaining / phaseDuration);
+        if (fillWidth > 0) {
+            RECT rcTimerFill = { rcTimerTrack.left + 2, rcTimerTrack.top + 2,
+                rcTimerTrack.left + 2 + fillWidth, rcTimerTrack.bottom - 2 };
+            HBRUSH fillBrush = CreateSolidBrush(phaseColor);
+            HPEN fillPen = CreatePen(PS_SOLID, 1, phaseColor);
+            HGDIOBJ oldFillBrush = SelectObject(hdcMem, fillBrush);
+            HGDIOBJ oldFillPen = SelectObject(hdcMem, fillPen);
+            RoundRect(hdcMem, rcTimerFill.left, rcTimerFill.top,
+                rcTimerFill.right, rcTimerFill.bottom, 4, 4);
+            SelectObject(hdcMem, oldFillBrush);
+            SelectObject(hdcMem, oldFillPen);
+            DeleteObject(fillBrush);
+            DeleteObject(fillPen);
+        }
+
+        SelectObject(hdcMem, g_hFontSmall);
+        SetBkMode(hdcMem, TRANSPARENT);
+        SetTextColor(hdcMem, g_themeMode == ThemeMode::Dark ? RGB(255, 255, 255) : RGB(0, 0, 0));
+        const std::wstring timerStatus = (g_intervalTimer.IsPaused()
+            ? L"Szüneteltetve...    " : (workPhase ? L"Munka    " : L"Pihenés    ")) +
+            FormatTimerTime(secondsRemaining) + L" (" +
+            std::to_wstring(g_intervalTimer.CurrentRepetition()) + L"/" +
+            std::to_wstring(g_intervalTimer.RepetitionCount()) + L")";
+        RECT rcTimerLabel = { rcTimerTrack.left + 8, rcTimerTrack.top,
+            rcTimerTrack.right - 8, rcTimerTrack.bottom };
+        DrawTextW(hdcMem, timerStatus.c_str(), -1, &rcTimerLabel,
+            DT_LEFT | DT_VCENTER | DT_SINGLELINE);
+    }
     COLORREF bgBottom = isHistory ? (g_themeMode == ThemeMode::Pink ? th.bgHeader : RGB(8, 25, 54))
         : (g_darkMode ? RGB(18, 18, 22) : th.bgSubBar);
     HBRUSH hBrBottom = CreateSolidBrush(bgBottom);

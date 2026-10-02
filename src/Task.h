@@ -15,6 +15,10 @@ public:
     time_t last_reset_time = 0;
     int work_reset_hour = 9;
     int work_reset_minute = 15;
+    double timer_work_minutes = 50.0;
+    double timer_rest_minutes = 10.0;
+    int timer_repetitions = 8;
+    bool sounds_enabled = true;
     ThemeMode theme_mode = ThemeMode::Dark;
     WorkHistory::Records work_history;
     WorkHistory::Records manual_work_history;

@@ -1,4 +1,5 @@
 #include "AudioCue.h"
+#include "AppState.h"
 #include <windows.h>
 #include <mmsystem.h>
 #include <algorithm>
@@ -6,6 +7,7 @@
 #include <cmath>
 #include <cstdint>
 #include <cstring>
+#include <random>
 #include <vector>
 
 namespace {
@@ -29,10 +31,17 @@ struct WaveHeader {
 };
 #pragma pack(pop)
 
-void AppendTone(std::vector<std::int16_t>& samples, std::uint32_t frequency, std::size_t count) {
+struct MelodyNote {
+    std::uint32_t frequency;
+    std::uint32_t durationMs;
+    std::uint32_t silenceAfterMs;
+    double amplitude;
+};
+
+void AppendTone(std::vector<std::int16_t>& samples, std::uint32_t frequency,
+    std::size_t count, double amplitude) {
     constexpr double pi = 3.14159265358979323846;
     constexpr std::size_t fadeSamples = 110;
-    constexpr double amplitude = 6000.0;
 
     for (std::size_t i = 0; i < count; ++i) {
         const double fadeIn = static_cast<double>(i) / fadeSamples;
@@ -43,20 +52,51 @@ void AppendTone(std::vector<std::int16_t>& samples, std::uint32_t frequency, std
     }
 }
 
-void CALLBACK PlayMelody(PTP_CALLBACK_INSTANCE, void*) {
+void CALLBACK PlayMelody(PTP_CALLBACK_INSTANCE, void* context) {
     try {
         constexpr std::uint32_t sampleRate = 22050;
-        constexpr std::uint32_t firstToneSamples = sampleRate * 75 / 1000;
-        constexpr std::uint32_t silenceSamples = sampleRate * 30 / 1000;
-        constexpr std::uint32_t secondToneSamples = sampleRate * 125 / 1000;
-        constexpr std::uint32_t dataSize =
-            (firstToneSamples + silenceSamples + secondToneSamples) * sizeof(std::int16_t);
+        static constexpr MelodyNote newTaskNotes[] = {
+            { 784, 115, 30, 6000.0 }, { 1047, 115, 30, 6000.0 }
+        };
+        const std::uintptr_t melody = reinterpret_cast<std::uintptr_t>(context);
+        std::vector<MelodyNote> notes;
+        if (melody == 1) {
+            notes = {
+                { 659, 140, 130, 6000.0 },
+                { 659, 140, 55, 6000.0 },
+                { 659, 140, 55, 6000.0 },
+                { 988, 500, 90, 6000.0 }
+            };
+            static constexpr std::uint32_t extraFrequencies[] = { 587, 698, 784, 880, 1047, 1175 };
+            std::mt19937 generator(static_cast<std::mt19937::result_type>(GetTickCount64()));
+            std::uniform_int_distribution<int> extraCountDistribution(3, 4);
+            std::uniform_int_distribution<int> frequencyDistribution(0, _countof(extraFrequencies) - 1);
+            const int extraCount = extraCountDistribution(generator);
+            for (int i = 0; i < extraCount; ++i) {
+                const std::uint32_t frequency = extraFrequencies[frequencyDistribution(generator)];
+                notes.push_back({ frequency, 150, 80, 5200.0 });
+            }
+        } else if (melody == 2) {
+            notes = {
+                { 247, 650, 170, 3600.0 },
+                { 220, 650, 170, 3600.0 },
+                { 196, 650, 0, 3600.0 }
+            };
+        } else {
+            notes.assign(std::begin(newTaskNotes), std::end(newTaskNotes));
+        }
 
         std::vector<std::int16_t> samples;
-        samples.reserve(dataSize / sizeof(std::int16_t));
-        AppendTone(samples, 784, firstToneSamples);
-        samples.insert(samples.end(), silenceSamples, 0);
-        AppendTone(samples, 1047, secondToneSamples);
+        for (std::size_t noteIndex = 0; noteIndex < notes.size(); ++noteIndex) {
+            const MelodyNote& note = notes[noteIndex];
+            const std::size_t toneSamples = static_cast<std::size_t>(sampleRate) * note.durationMs / 1000;
+            AppendTone(samples, note.frequency, toneSamples, note.amplitude);
+            if (noteIndex + 1 < notes.size() && note.silenceAfterMs > 0) {
+                const std::size_t silenceSamples = static_cast<std::size_t>(sampleRate) * note.silenceAfterMs / 1000;
+                samples.insert(samples.end(), silenceSamples, 0);
+            }
+        }
+        const std::uint32_t dataSize = static_cast<std::uint32_t>(samples.size() * sizeof(std::int16_t));
 
         const WaveHeader header{
             { 'R', 'I', 'F', 'F' }, sizeof(WaveHeader) - 8 + dataSize,
@@ -67,16 +107,31 @@ void CALLBACK PlayMelody(PTP_CALLBACK_INSTANCE, void*) {
         std::vector<std::uint8_t> wave(sizeof(header) + dataSize);
         std::memcpy(wave.data(), &header, sizeof(header));
         std::memcpy(wave.data() + sizeof(header), samples.data(), dataSize);
-        PlaySoundW(reinterpret_cast<LPCWSTR>(wave.data()), nullptr, SND_MEMORY | SND_NODEFAULT);
+        if (g_store.sounds_enabled) {
+            PlaySoundW(reinterpret_cast<LPCWSTR>(wave.data()), nullptr, SND_MEMORY | SND_NODEFAULT);
+        }
     } catch (...) {
     }
     g_isPlaying.clear(std::memory_order_release);
 }
+
+void SubmitMelody(std::uintptr_t melody) {
+    if (!g_store.sounds_enabled) return;
+    if (g_isPlaying.test_and_set(std::memory_order_acquire)) return;
+    if (!TrySubmitThreadpoolCallback(PlayMelody, reinterpret_cast<void*>(melody), nullptr)) {
+        g_isPlaying.clear(std::memory_order_release);
+    }
+}
 }
 
 void AudioCue::PlayNewTaskMelody() {
-    if (g_isPlaying.test_and_set(std::memory_order_acquire)) return;
-    if (!TrySubmitThreadpoolCallback(PlayMelody, nullptr, nullptr)) {
-        g_isPlaying.clear(std::memory_order_release);
-    }
+    SubmitMelody(0);
+}
+
+void AudioCue::PlayTimerWorkMelody() {
+    SubmitMelody(1);
+}
+
+void AudioCue::PlayTimerRestMelody() {
+    SubmitMelody(2);
 }

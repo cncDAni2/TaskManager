@@ -10,6 +10,8 @@
 #include "FocusMode.h"
 #include "SettingsDialog.h"
 #include "TaskUtils.h"
+#include "IntervalTimer.h"
+#include "TimerView.h"
 #include <windowsx.h>
 #include <commctrl.h>
 #include <algorithm>
@@ -46,7 +48,7 @@ void ReloadSyncAndNotify() {
         bool wasInContextMenu = g_inContextMenu;
         g_inContextMenu = true;
         MessageBoxW(g_hWnd, conflictMessage.c_str(), L"A feladat felelőse megváltozott",
-            MB_OK | MB_ICONINFORMATION);
+            MB_OK | (g_store.sounds_enabled ? MB_ICONINFORMATION : 0));
         g_inContextMenu = wasInContextMenu;
     }
 }
@@ -79,7 +81,7 @@ void ShowAppWindow() {
 
     RECT rcWork;
     SystemParametersInfoW(SPI_GETWORKAREA, 0, &rcWork, 0);
-    int winW = 585;
+    int winW = 620;
     int winH = 550;
     int x = rcWork.right - winW - 12;
     int y = rcWork.bottom - winH - 12;
@@ -141,6 +143,10 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                 OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE, L"Segoe UI");
             g_hFontSmall = CreateFontW(14, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET,
                 OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE, L"Segoe UI");
+            g_hFontMiniTimer = CreateFontW(12, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET,
+                OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE, L"Segoe UI");
+            g_hFontTimerLabel = CreateFontW(-14, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET,
+                OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE, L"Segoe UI");
             g_hFontHeader = CreateFontW(15, 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE, DEFAULT_CHARSET,
                 OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE, L"Segoe UI");
 
@@ -171,18 +177,24 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                 345, 10, 125, 28, hWnd, (HMENU)IDC_TOGGLE_VIEW_BTN, hInst, nullptr);
             SendMessageW(g_hToggleViewBtn, WM_SETFONT, (WPARAM)g_hFontSmall, TRUE);
 
+            g_hTimerBtn = CreateWindowW(L"BUTTON", L"",
+                WS_CHILD | WS_VISIBLE | BS_OWNERDRAW | WS_TABSTOP,
+                478, 10, 28, 28, hWnd, (HMENU)IDC_TIMER_BTN, hInst, nullptr);
+
             g_hSettingsBtn = CreateWindowW(L"BUTTON", L"",
                 WS_CHILD | WS_VISIBLE | BS_OWNERDRAW | WS_TABSTOP,
-                478, 10, 28, 28, hWnd, (HMENU)IDC_SETTINGS_BTN, hInst, nullptr);
+                512, 10, 28, 28, hWnd, (HMENU)IDC_SETTINGS_BTN, hInst, nullptr);
 
             g_hPinBtn = CreateWindowW(L"BUTTON", L"",
                 WS_CHILD | WS_VISIBLE | BS_OWNERDRAW | WS_TABSTOP,
-                512, 10, 28, 28, hWnd, (HMENU)IDC_PIN_BTN, hInst, nullptr);
+                546, 10, 28, 28, hWnd, (HMENU)IDC_PIN_BTN, hInst, nullptr);
 
             g_hCloseBtn = CreateWindowW(L"BUTTON", L"✕",
                 WS_CHILD | WS_VISIBLE | BS_OWNERDRAW | WS_TABSTOP,
-                545, 10, 28, 28, hWnd, (HMENU)IDC_CLOSE_BTN, hInst, nullptr);
+                580, 10, 28, 28, hWnd, (HMENU)IDC_CLOSE_BTN, hInst, nullptr);
             SendMessageW(g_hCloseBtn, WM_SETFONT, (WPARAM)g_hFontNormal, TRUE);
+
+            TimerView::CreateControls(hWnd, hInst);
 
             HWND hTooltip = CreateWindowExW(WS_EX_TOPMOST, TOOLTIPS_CLASS, nullptr,
                 WS_POPUP | TTS_ALWAYSTIP | TTS_NOPREFIX,
@@ -196,6 +208,14 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                 tiSettings.uId = (UINT_PTR)g_hSettingsBtn;
                 tiSettings.lpszText = (LPWSTR)L"Beállítások";
                 SendMessageW(hTooltip, TTM_ADDTOOL, 0, (LPARAM)&tiSettings);
+
+                TOOLINFOW tiTimer{};
+                tiTimer.cbSize = sizeof(TOOLINFOW);
+                tiTimer.uFlags = TTF_SUBCLASS | TTF_IDISHWND;
+                tiTimer.hwnd = hWnd;
+                tiTimer.uId = (UINT_PTR)g_hTimerBtn;
+                tiTimer.lpszText = (LPWSTR)L"Munka/pihenés időzítő";
+                SendMessageW(hTooltip, TTM_ADDTOOL, 0, (LPARAM)&tiTimer);
 
                 TOOLINFOW tiPin{};
                 tiPin.cbSize = sizeof(TOOLINFOW);
@@ -318,7 +338,32 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         }
 
         case WM_TIMER: {
+            if (wParam == IDT_MINI_TIMER_FLASH) {
+                if (!g_isMiniMode || !g_pinMode || !IsWindowVisible(hWnd)) {
+                    g_miniTimerFlashStep = 0;
+                    KillTimer(hWnd, IDT_MINI_TIMER_FLASH);
+                } else if (g_miniTimerFlashStep >= 6) {
+                    g_miniTimerFlashStep = 0;
+                    KillTimer(hWnd, IDT_MINI_TIMER_FLASH);
+                } else {
+                    ++g_miniTimerFlashStep;
+                }
+                InvalidateRect(hWnd, nullptr, FALSE);
+                return 0;
+            }
             if (wParam == IDT_WORK_TIMER) {
+                const bool timerWasRunning = g_intervalTimer.IsRunning();
+                if (g_intervalTimer.Tick()) {
+                    TimerView::RefreshRunState();
+                    RecalculateLayout();
+                    if (g_isMiniMode && g_pinMode && IsWindowVisible(hWnd)) {
+                        g_miniTimerFlashStep = 1;
+                        g_miniTimerFlashWorkPhase = g_intervalTimer.IsWorkPhase();
+                        SetTimer(hWnd, IDT_MINI_TIMER_FLASH, 120, nullptr);
+                        InvalidateRect(hWnd, nullptr, FALSE);
+                    }
+                }
+
                 if (g_isMiniMode && IsWindowVisible(hWnd)) {
                     const time_t now = time(nullptr);
                     const bool hasExpiredCompletedTask = std::any_of(
@@ -329,6 +374,12 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                     if (hasExpiredCompletedTask) {
                         RecalculateMiniLayout();
                         InvalidateRect(hWnd, nullptr, FALSE);
+                    }
+                    if (timerWasRunning || g_intervalTimer.IsRunning()) {
+                        RECT rcClient{};
+                        GetClientRect(hWnd, &rcClient);
+                        RECT rcTimerText = { 0, 0, GetMiniFocusButtonRect(rcClient.right).left, 26 };
+                        InvalidateRect(hWnd, &rcTimerText, FALSE);
                     }
                 }
 
@@ -398,6 +449,16 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                     } else {
                         RECT rcBottom = { 0, rcClient.bottom - BOTTOM_BAR_HEIGHT, rcClient.right, rcClient.bottom };
                         InvalidateRect(hWnd, &rcBottom, FALSE);
+                        if (timerWasRunning || g_intervalTimer.IsRunning()) {
+                            RECT rcTimerStatus = { 0,
+                                rcClient.bottom - BOTTOM_BAR_HEIGHT - TIMER_STATUS_HEIGHT,
+                                rcClient.right, rcClient.bottom };
+                            InvalidateRect(hWnd, &rcTimerStatus, FALSE);
+                            if (g_viewMode == ViewMode::IntervalTimer) {
+                                RECT rcTimerDisplay = { 0, 200, rcClient.right, 340 };
+                                InvalidateRect(hWnd, &rcTimerDisplay, FALSE);
+                            }
+                        }
                     }
                 }
             }
@@ -466,6 +527,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         }
 
         case WM_COMMAND: {
+            if (TimerView::HandleCommand(hWnd, wParam)) return 0;
             if (HandleCommand(hWnd, LOWORD(wParam))) return 0;
             break;
         }
@@ -587,6 +649,15 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         case WM_CTLCOLORBTN:
         case WM_CTLCOLORSTATIC: {
             HDC hdcStatic = (HDC)wParam;
+            const int controlId = GetDlgCtrlID((HWND)lParam);
+            if (controlId == IDC_TIMER_WORK_EDIT || controlId == IDC_TIMER_REST_EDIT ||
+                controlId == IDC_TIMER_REPEATS_EDIT) {
+                ThemeColors th = GetThemeColors(g_themeMode);
+                SetTextColor(hdcStatic, th.textSecondary);
+                SetBkColor(hdcStatic, th.bgEdit);
+                SetBkMode(hdcStatic, OPAQUE);
+                return (LRESULT)g_hEditBrush;
+            }
             SetBkMode(hdcStatic, TRANSPARENT);
             return (LRESULT)GetStockObject(NULL_BRUSH);
         }
@@ -603,6 +674,8 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             if (g_hFontNormalStrike) DeleteObject(g_hFontNormalStrike);
             if (g_hFontSmall) DeleteObject(g_hFontSmall);
             if (g_hFontHeader) DeleteObject(g_hFontHeader);
+            if (g_hFontMiniTimer) DeleteObject(g_hFontMiniTimer);
+                        if (g_hFontTimerLabel) DeleteObject(g_hFontTimerLabel);
             PostQuitMessage(0);
             return 0;
         }

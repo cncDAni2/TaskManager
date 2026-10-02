@@ -12,6 +12,7 @@ HWND g_hWorkMeasureBtn = nullptr;
 HWND g_hCloseBtn = nullptr;
 HWND g_hPinBtn = nullptr;
 HWND g_hSettingsBtn = nullptr;
+HWND g_hTimerBtn = nullptr;
 HWND g_hSyncToggleBtn = nullptr;
 HWND g_hInlineEdit = nullptr;
 HBRUSH g_hEditBrush = nullptr;
@@ -24,6 +25,8 @@ HFONT g_hFontNormal = nullptr;
 HFONT g_hFontNormalStrike = nullptr;
 HFONT g_hFontSmall = nullptr;
 HFONT g_hFontHeader = nullptr;
+HFONT g_hFontMiniTimer = nullptr;
+HFONT g_hFontTimerLabel = nullptr;
 
 // Data Store and View Configuration
 TaskStore g_store;
@@ -38,11 +41,13 @@ bool g_isMiniMode = false;
 bool g_inContextMenu = false;
 int g_fullWinX = 0;
 int g_fullWinY = 0;
-int g_fullWinW = 585;
+int g_fullWinW = 620;
 int g_fullWinH = 550;
 int g_miniWinX = 0;
 int g_miniWinY = 0;
 bool g_miniPositionValid = false;
+int g_miniTimerFlashStep = 0;
+bool g_miniTimerFlashWorkPhase = false;
 
 // Session Tasks Cache
 std::vector<int> g_sessionActiveTaskIds;

@@ -1,6 +1,8 @@
 #include "Layout.h"
 #include "AppState.h"
 #include "InlineEdit.h"
+#include "IntervalTimer.h"
+#include "TimerView.h"
 #include <algorithm>
 #include <set>
 
@@ -12,7 +14,8 @@ static int MeasureTaskTextHeight(HDC hdc, const std::wstring& text, int width) {
 
 int GetListBottom(int clientHeight) {
     int footerHeight = g_viewMode == ViewMode::WorkHistory ? WORK_MEASURE_FOOTER_HEIGHT : 0;
-    return clientHeight - BOTTOM_BAR_HEIGHT - footerHeight;
+    int timerStatusHeight = g_intervalTimer.IsActive() ? TIMER_STATUS_HEIGHT : 0;
+    return clientHeight - BOTTOM_BAR_HEIGHT - footerHeight - timerStatusHeight;
 }
 
 void EnsureVisible(int itemIndex) {
@@ -100,12 +103,23 @@ RECT GetMiniFocusButtonRect(int clientWidth) {
     return { clientWidth - 66, 2, clientWidth - 34, 24 };
 }
 
+RECT GetMiniTimerTextRect(int clientWidth) {
+    const int left = GetMiniFocusButtonRect(clientWidth).left - 33;
+    return { left, 6, left + 30, 20 };
+}
+
+RECT GetTimerPanelRect(int clientWidth) {
+    const int left = (clientWidth - 300) / 2;
+    return { left, 96, left + 300, 306 };
+}
+
 void UpdateControlsVisibility() {
     if (g_isMiniMode) {
         ShowWindow(g_hEdit, SW_HIDE);
         ShowWindow(g_hAddBtn, SW_HIDE);
         ShowWindow(g_hSyncToggleBtn, SW_HIDE);
         ShowWindow(g_hSettingsBtn, SW_HIDE);
+        ShowWindow(g_hTimerBtn, SW_HIDE);
         ShowWindow(g_hToggleViewBtn, SW_HIDE);
         ShowWindow(g_hTimeHistoryBtn, SW_HIDE);
         ShowWindow(g_hWorkMeasureBtn, SW_HIDE);
@@ -113,6 +127,7 @@ void UpdateControlsVisibility() {
         ShowWindow(g_hManualWorkBtn, SW_HIDE);
         ShowWindow(g_hCloseBtn, SW_HIDE);
         ShowWindow(g_hPinBtn, SW_HIDE);
+        TimerView::UpdateVisibility(false);
         return;
     }
 
@@ -120,10 +135,12 @@ void UpdateControlsVisibility() {
     ShowWindow(g_hPinBtn, SW_SHOW);
     ShowWindow(g_hFocusModeBtn, SW_SHOW);
     ShowWindow(g_hSettingsBtn, SW_SHOW);
+    ShowWindow(g_hTimerBtn, SW_SHOW);
     ShowWindow(g_hToggleViewBtn, SW_SHOW);
 
     bool isActive = (g_viewMode == ViewMode::ActiveTasks);
     bool isHistory = (g_viewMode == ViewMode::WorkHistory);
+    bool isTimer = (g_viewMode == ViewMode::IntervalTimer);
     ShowWindow(g_hTimeHistoryBtn, isHistory ? SW_HIDE : SW_SHOW);
     if (isHistory) {
         RECT rcClient{};
@@ -146,6 +163,9 @@ void UpdateControlsVisibility() {
     if (isHistory) {
         SetWindowTextW(g_hToggleViewBtn, L"← Feladatok");
         SetWindowTextW(g_hTimeHistoryBtn, L"● Idők");
+    } else if (isTimer) {
+        SetWindowTextW(g_hToggleViewBtn, L"← Feladatok");
+        SetWindowTextW(g_hTimeHistoryBtn, L"Idők");
     } else if (isActive) {
         SetWindowTextW(g_hTimeHistoryBtn, L"Idők");
         size_t count = g_store.GetRecentCompletedTasks().size();
@@ -155,6 +175,7 @@ void UpdateControlsVisibility() {
         SetWindowTextW(g_hTimeHistoryBtn, L"Idők");
         SetWindowTextW(g_hToggleViewBtn, L"← Aktívak");
     }
+    TimerView::UpdateVisibility(isTimer);
 }
 
 void RecalculateMiniLayout() {
@@ -242,6 +263,13 @@ void RecalculateMiniLayout() {
         rcFocusButton.right, rcFocusButton.bottom);
     CombineRgn(hMiniRegion, hMiniRegion, hFocusButtonRegion, RGN_OR);
     DeleteObject(hFocusButtonRegion);
+    if (g_intervalTimer.IsActive()) {
+        const RECT rcTimerText = GetMiniTimerTextRect(miniW);
+        HRGN hTimerTextRegion = CreateRectRgn(rcTimerText.left, rcTimerText.top,
+            rcTimerText.right, rcTimerText.bottom);
+        CombineRgn(hMiniRegion, hMiniRegion, hTimerTextRegion, RGN_OR);
+        DeleteObject(hTimerTextRegion);
+    }
     if (!SetWindowRgn(g_hWnd, hMiniRegion, TRUE)) {
         DeleteObject(hMiniRegion);
     }
@@ -257,7 +285,7 @@ void EnterMiniMode() {
 
     RECT rcWork;
     SystemParametersInfoW(SPI_GETWORKAREA, 0, &rcWork, 0);
-    int defaultW = 585;
+    int defaultW = 620;
     int defaultH = 550;
     int defaultX = rcWork.right - defaultW - 12;
     int defaultY = rcWork.bottom - defaultH - 12;
@@ -333,6 +361,11 @@ void RecalculateLayout() {
             if (entry.isWeeklySummary) weeklySpacing += 12;
         }
         g_totalContentHeight = 24 + (int)entries.size() * 18 + weeklySpacing;
+        return;
+    }
+
+    if (g_viewMode == ViewMode::IntervalTimer) {
+        g_totalContentHeight = 0;
         return;
     }
 

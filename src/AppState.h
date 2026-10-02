@@ -16,6 +16,7 @@ extern HWND g_hWorkMeasureBtn;
 extern HWND g_hCloseBtn;
 extern HWND g_hPinBtn;
 extern HWND g_hSettingsBtn;
+extern HWND g_hTimerBtn;
 extern HWND g_hSyncToggleBtn;
 extern HWND g_hInlineEdit;
 extern HBRUSH g_hEditBrush;
@@ -28,6 +29,8 @@ extern HFONT g_hFontNormal;
 extern HFONT g_hFontNormalStrike;
 extern HFONT g_hFontSmall;
 extern HFONT g_hFontHeader;
+extern HFONT g_hFontMiniTimer;
+extern HFONT g_hFontTimerLabel;
 
 // Data Store and View Configuration
 extern TaskStore g_store;
@@ -47,6 +50,8 @@ extern int g_fullWinH;
 extern int g_miniWinX;
 extern int g_miniWinY;
 extern bool g_miniPositionValid;
+extern int g_miniTimerFlashStep;
+extern bool g_miniTimerFlashWorkPhase;
 
 // Session Tasks Cache
 extern std::vector<int> g_sessionActiveTaskIds;

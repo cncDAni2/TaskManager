@@ -13,7 +13,8 @@ namespace {
     constexpr int IDC_SETTINGS_THEME = 5103;
     constexpr int IDC_SETTINGS_RESET_TIME = 5104;
     constexpr int IDC_SETTINGS_OK = 5105;
-    constexpr wchar_t APP_VERSION[] = L"v1.8.0";
+    constexpr int IDC_SETTINGS_SOUNDS = 5106;
+    constexpr wchar_t APP_VERSION[] = L"v1.9.0";
     constexpr COLORREF SETTINGS_DIALOG_BG = RGB(245, 245, 245);
     constexpr COLORREF SETTINGS_DIALOG_TEXT = RGB(0, 0, 0);
     constexpr wchar_t DIALOG_CLASS[] = L"TaskManager_Settings_Dialog_Class";
@@ -24,6 +25,7 @@ namespace {
         HWND syncTooltip = nullptr;
         HWND themeCombo = nullptr;
         HWND resetTime = nullptr;
+        HWND soundsCheckbox = nullptr;
         HBRUSH backgroundBrush = nullptr;
         std::wstring syncFilePath;
         int resetHour = 9;
@@ -172,6 +174,18 @@ namespace {
             selectedTime.wSecond = 0;
             DateTime_SetSystemtime(state->resetTime, GDT_VALID, &selectedTime);
 
+            HWND soundsLabel = CreateWindowW(L"STATIC", L"Hangok",
+                WS_CHILD | WS_VISIBLE | SS_LEFT, 18, 213, 144, 28, hWnd, nullptr, instance, nullptr);
+            SetControlFont(soundsLabel, g_hFontNormal);
+            CreateWindowW(L"STATIC", L"", WS_CHILD | WS_VISIBLE | SS_ETCHEDVERT,
+                170, 203, 2, 38, hWnd, nullptr, instance, nullptr);
+            state->soundsCheckbox = CreateWindowW(L"BUTTON", L"Engedélyezve",
+                WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_AUTOCHECKBOX,
+                184, 208, 190, 28, hWnd, (HMENU)(INT_PTR)IDC_SETTINGS_SOUNDS, instance, nullptr);
+            SendMessageW(state->soundsCheckbox, BM_SETCHECK,
+                g_store.sounds_enabled ? BST_CHECKED : BST_UNCHECKED, 0);
+            SetControlFont(state->soundsCheckbox, g_hFontNormal);
+
             HWND versionLabel = CreateWindowW(L"STATIC", APP_VERSION,
                 WS_CHILD | WS_VISIBLE | SS_LEFT, 18, 242, 120, 24, hWnd, nullptr, instance, nullptr);
             SetControlFont(versionLabel, g_hFontSmall);
@@ -220,6 +234,7 @@ namespace {
                 if (DateTime_GetSystemtime(state->resetTime, &selectedTime) != GDT_VALID) return 0;
                 g_store.work_reset_hour = selectedTime.wHour;
                 g_store.work_reset_minute = selectedTime.wMinute;
+                g_store.sounds_enabled = SendMessageW(state->soundsCheckbox, BM_GETCHECK, 0, 0) == BST_CHECKED;
                 g_store.SaveLocal();
                 g_store.CheckWorkReset();
                 DestroyWindow(hWnd);

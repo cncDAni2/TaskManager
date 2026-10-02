@@ -9,5 +9,6 @@ void DrawPinIcon(HDC hdc, const RECT& rc, COLORREF color, bool isPinned);
 void DrawCloudIcon(HDC hdc, const RECT& rc, COLORREF color, bool filled = false);
 void DrawFolderCloudIcon(HDC hdc, const RECT& rc, COLORREF color);
 void DrawSettingsIcon(HDC hdc, const RECT& rc, COLORREF color, COLORREF backgroundColor);
+void DrawTimerIcon(HDC hdc, const RECT& rc, COLORREF color);
 HICON GenerateAppIcon();
 void ApplyDarkModeTitleBar(HWND hWnd, bool dark);

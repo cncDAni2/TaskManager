@@ -232,3 +232,23 @@ void DrawSettingsIcon(HDC hdc, const RECT& rc, COLORREF color, COLORREF backgrou
     SelectObject(hdc, hOldPen);
     DeleteObject(hPen);
 }
+
+void DrawTimerIcon(HDC hdc, const RECT& rc, COLORREF color) {
+    const int cx = rc.left + (rc.right - rc.left) / 2;
+    const int cy = rc.top + (rc.bottom - rc.top) / 2 + 1;
+    HPEN pen = CreatePen(PS_SOLID, 2, color);
+    HGDIOBJ oldPen = SelectObject(hdc, pen);
+    HGDIOBJ oldBrush = SelectObject(hdc, GetStockObject(NULL_BRUSH));
+    Ellipse(hdc, cx - 7, cy - 7, cx + 8, cy + 8);
+    MoveToEx(hdc, cx, cy, nullptr);
+    LineTo(hdc, cx, cy - 4);
+    MoveToEx(hdc, cx, cy, nullptr);
+    LineTo(hdc, cx + 4, cy + 2);
+    MoveToEx(hdc, cx - 3, cy - 10, nullptr);
+    LineTo(hdc, cx + 3, cy - 10);
+    MoveToEx(hdc, cx, cy - 10, nullptr);
+    LineTo(hdc, cx, cy - 7);
+    SelectObject(hdc, oldBrush);
+    SelectObject(hdc, oldPen);
+    DeleteObject(pen);
+}

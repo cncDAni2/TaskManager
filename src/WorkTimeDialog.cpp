@@ -130,7 +130,8 @@ namespace {
                 GetWindowTextW(state->hoursEdit, input, _countof(input));
                 int seconds = 0;
                 if (!ParseHours(input, seconds)) {
-                    MessageBoxW(hWnd, L"Adj meg 0 és 1000 közötti óraszámot, legfeljebb 4 tizedessel.", L"Manuális munkaidő", MB_OK | MB_ICONWARNING);
+                    MessageBoxW(hWnd, L"Adj meg 0 és 1000 közötti óraszámot, legfeljebb 4 tizedessel.",
+                        L"Manuális munkaidő", MB_OK | (g_store.sounds_enabled ? MB_ICONWARNING : 0));
                     SetFocus(state->hoursEdit);
                     return 0;
                 }

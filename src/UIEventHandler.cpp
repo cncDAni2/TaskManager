@@ -8,6 +8,7 @@
 #include "WorkTimeDialog.h"
 #include "SettingsDialog.h"
 #include "FocusMode.h"
+#include "IntervalTimer.h"
 #include <windowsx.h>
 #include <algorithm>
 #include <cwctype>
@@ -22,7 +23,8 @@ void ToggleTaskAssignment(HWND hWnd, int taskId) {
     std::wstring message = conflictingAssignee + L" már levette ezt a feladatot.";
     bool wasInContextMenu = g_inContextMenu;
     g_inContextMenu = true;
-    MessageBoxW(hWnd, message.c_str(), L"Feladat már foglalt", MB_OK | MB_ICONINFORMATION);
+    MessageBoxW(hWnd, message.c_str(), L"Feladat már foglalt",
+        MB_OK | (g_store.sounds_enabled ? MB_ICONINFORMATION : 0));
     g_inContextMenu = wasInContextMenu;
 }
 
@@ -59,7 +61,7 @@ void DeleteTaskWithConfirmation(HWND hWnd, int taskId, const std::wstring& initi
     g_messageBoxOwner = hWnd;
     HHOOK messageBoxHook = SetWindowsHookExW(WH_CBT, CenterMessageBoxHook, nullptr, GetCurrentThreadId());
     int answer = MessageBoxW(hWnd, confirmText.c_str(), L"Feladat törlése",
-        MB_YESNO | MB_ICONQUESTION | MB_DEFBUTTON2);
+        MB_YESNO | (g_store.sounds_enabled ? MB_ICONQUESTION : 0) | MB_DEFBUTTON2);
     if (messageBoxHook) UnhookWindowsHookEx(messageBoxHook);
     g_messageBoxOwner = nullptr;
     g_inContextMenu = wasInContextMenu;
@@ -226,8 +228,14 @@ bool HandleLButtonDown(HWND hWnd, LPARAM lParam) {
         int my = GET_Y_LPARAM(lParam);
         RECT rcClient;
         GetClientRect(hWnd, &rcClient);
+        RECT rcTimerText = GetMiniTimerTextRect(rcClient.right);
         RECT rcDragHandle = GetMiniDragHandleRect(rcClient.right);
         RECT rcFocusButton = GetMiniFocusButtonRect(rcClient.right);
+        if (g_intervalTimer.IsActive() && PtInRect(&rcTimerText, { mx, my })) {
+            g_viewMode = ViewMode::IntervalTimer;
+            ShowAppWindow();
+            return true;
+        }
         if (g_pinMode && PtInRect(&rcFocusButton, { mx, my })) {
             FocusMode::Toggle();
             return true;
@@ -273,6 +281,18 @@ bool HandleLButtonDown(HWND hWnd, LPARAM lParam) {
 
     RECT rcClient;
     GetClientRect(hWnd, &rcClient);
+    const int timerStatusTop = rcClient.bottom - BOTTOM_BAR_HEIGHT - TIMER_STATUS_HEIGHT;
+    const int workStatusTop = rcClient.bottom - BOTTOM_BAR_HEIGHT;
+    if (g_intervalTimer.IsActive() && clickRawY >= timerStatusTop && clickRawY < workStatusTop) {
+        CommitInlineEdit();
+        g_viewMode = ViewMode::IntervalTimer;
+        g_scrollY = 0;
+        g_selectedIndex = -1;
+        UpdateControlsVisibility();
+        RecalculateLayout();
+        InvalidateRect(hWnd, nullptr, TRUE);
+        return true;
+    }
     if (clickRawY >= rcClient.bottom - BOTTOM_BAR_HEIGHT) {
         CommitInlineEdit();
         return true;
@@ -611,6 +631,16 @@ bool HandleCommand(HWND hWnd, int id) {
         RecalculateLayout();
         InvalidateRect(hWnd, nullptr, TRUE);
         return true;
+    } else if (id == IDC_TIMER_BTN) {
+        CommitInlineEdit();
+        g_viewMode = ViewMode::IntervalTimer;
+        g_scrollY = 0;
+        g_selectedIndex = -1;
+        UpdateControlsVisibility();
+        RecalculateLayout();
+        if (g_hTimerBtn) InvalidateRect(g_hTimerBtn, nullptr, TRUE);
+        InvalidateRect(hWnd, nullptr, TRUE);
+        return true;
     } else if (id == IDC_STOP_WORK_BTN) {
         g_workMeasurementStopped = !g_workMeasurementStopped;
         g_isWorkActive = false;
@@ -632,7 +662,9 @@ bool HandleCommand(HWND hWnd, int id) {
         return true;
     } else if (id == IDC_TOGGLE_VIEW_BTN) {
         CommitInlineEdit();
-        if (g_viewMode == ViewMode::ActiveTasks) {
+        if (g_viewMode == ViewMode::IntervalTimer) {
+            g_viewMode = ViewMode::ActiveTasks;
+        } else if (g_viewMode == ViewMode::ActiveTasks) {
             g_viewMode = ViewMode::CompletedTasks;
         } else {
             g_viewMode = ViewMode::ActiveTasks;
@@ -641,6 +673,7 @@ bool HandleCommand(HWND hWnd, int id) {
         g_selectedIndex = -1;
         UpdateControlsVisibility();
         RecalculateLayout();
+        if (g_hTimerBtn) InvalidateRect(g_hTimerBtn, nullptr, TRUE);
         InvalidateRect(hWnd, nullptr, TRUE);
         return true;
     } else if (id == IDC_SETTINGS_BTN) {
@@ -658,6 +691,13 @@ bool HandleCommand(HWND hWnd, int id) {
             ExitMiniMode(false);
         }
         g_viewMode = ViewMode::CompletedTasks;
+        ShowAppWindow();
+        return true;
+    } else if (id == IDM_TRAY_TIMER) {
+        if (g_isMiniMode) {
+            ExitMiniMode(false);
+        }
+        g_viewMode = ViewMode::IntervalTimer;
         ShowAppWindow();
         return true;
     } else if (id == IDM_TRAY_PIN) {
@@ -688,7 +728,9 @@ bool HandleDrawItem(HWND /*hWnd*/, DRAWITEMSTRUCT* pDIS) {
 
     bool isTextButton = pDIS->CtlID == IDC_TIME_HISTORY_BTN || pDIS->CtlID == IDC_MANUAL_WORK_BTN ||
         pDIS->CtlID == IDC_STOP_WORK_BTN ||
-        pDIS->CtlID == IDC_TOGGLE_VIEW_BTN || pDIS->CtlID == IDC_CLOSE_BTN ||
+        pDIS->CtlID == IDC_TOGGLE_VIEW_BTN || pDIS->CtlID == IDC_TIMER_START_BTN ||
+        pDIS->CtlID == IDC_TIMER_PAUSE_BTN ||
+        pDIS->CtlID == IDC_CLOSE_BTN ||
         pDIS->CtlID == IDC_ADD_TASK_BTN;
     if (isTextButton) {
         bool isDark = g_themeMode == ThemeMode::Dark;
@@ -722,6 +764,12 @@ bool HandleDrawItem(HWND /*hWnd*/, DRAWITEMSTRUCT* pDIS) {
         InflateRect(&textRect, -4, -2);
         DrawTextW(pDIS->hDC, label, -1, &textRect,
             DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS);
+        if ((pDIS->CtlID == IDC_TIMER_START_BTN || pDIS->CtlID == IDC_TIMER_PAUSE_BTN) &&
+            (pDIS->itemState & ODS_FOCUS)) {
+            RECT focusRect = pDIS->rcItem;
+            InflateRect(&focusRect, -4, -4);
+            DrawFocusRect(pDIS->hDC, &focusRect);
+        }
         if (oldFont) SelectObject(pDIS->hDC, oldFont);
         return true;
     }
@@ -778,6 +826,26 @@ bool HandleDrawItem(HWND /*hWnd*/, DRAWITEMSTRUCT* pDIS) {
         RECT rcPin = pDIS->rcItem;
         if (isSelected) OffsetRect(&rcPin, 1, 1);
         DrawPinIcon(pDIS->hDC, rcPin, pinColor, isPinned);
+        return true;
+    } else if (pDIS->CtlID == IDC_TIMER_BTN) {
+        const bool selected = g_viewMode == ViewMode::IntervalTimer;
+        COLORREF bgBtn = isPink ? pinkButtonBg
+            : (selected ? th.bgCardSelected : th.bgHeader);
+        COLORREF borderBtn = selected ? th.borderCardSelected : th.borderSep;
+        COLORREF iconColor = (isPink || selected) ? RGB(255, 255, 255) : th.textSecondary;
+        HBRUSH brush = CreateSolidBrush(bgBtn);
+        HPEN pen = CreatePen(PS_SOLID, 1, borderBtn);
+        HGDIOBJ oldBrush = SelectObject(pDIS->hDC, brush);
+        HGDIOBJ oldPen = SelectObject(pDIS->hDC, pen);
+        RoundRect(pDIS->hDC, pDIS->rcItem.left, pDIS->rcItem.top,
+            pDIS->rcItem.right, pDIS->rcItem.bottom, 6, 6);
+        SelectObject(pDIS->hDC, oldBrush);
+        SelectObject(pDIS->hDC, oldPen);
+        DeleteObject(brush);
+        DeleteObject(pen);
+        RECT iconRect = pDIS->rcItem;
+        if (isSelected) OffsetRect(&iconRect, 1, 1);
+        DrawTimerIcon(pDIS->hDC, iconRect, iconColor);
         return true;
     } else if (pDIS->CtlID == IDC_SETTINGS_BTN) {
         COLORREF bgBtn = isSelected ? RGB(226, 232, 240) : RGB(248, 250, 252);
@@ -850,16 +918,17 @@ bool HandleAppTray(HWND hWnd, LPARAM lParam) {
         HMENU hMenu = CreatePopupMenu();
         InsertMenuW(hMenu, 0, MF_BYPOSITION | MF_STRING, IDM_TRAY_OPEN, L"Megnyitás (Ctrl+F1)");
         InsertMenuW(hMenu, 1, MF_BYPOSITION | MF_STRING, IDM_TRAY_COMPLETED, L"Elkészült feladatok...");
-        InsertMenuW(hMenu, 2, MF_BYPOSITION | MF_SEPARATOR, 0, nullptr);
+        InsertMenuW(hMenu, 2, MF_BYPOSITION | MF_STRING, IDM_TRAY_TIMER, L"Időzítő");
+        InsertMenuW(hMenu, 3, MF_BYPOSITION | MF_SEPARATOR, 0, nullptr);
 
         UINT uPinCheck = g_pinMode ? MF_CHECKED : MF_UNCHECKED;
-        InsertMenuW(hMenu, 3, MF_BYPOSITION | MF_STRING | uPinCheck, IDM_TRAY_PIN, L"PIN mód (Ctrl+F2)");
+        InsertMenuW(hMenu, 4, MF_BYPOSITION | MF_STRING | uPinCheck, IDM_TRAY_PIN, L"PIN mód (Ctrl+F2)");
 
         UINT uCheck = IsAutoRunEnabled() ? MF_CHECKED : MF_UNCHECKED;
-        InsertMenuW(hMenu, 4, MF_BYPOSITION | MF_STRING | uCheck, IDM_TRAY_AUTORUN, L"Indítás a Windows-zal");
+        InsertMenuW(hMenu, 5, MF_BYPOSITION | MF_STRING | uCheck, IDM_TRAY_AUTORUN, L"Indítás a Windows-zal");
 
-        InsertMenuW(hMenu, 5, MF_BYPOSITION | MF_SEPARATOR, 0, nullptr);
-        InsertMenuW(hMenu, 6, MF_BYPOSITION | MF_STRING, IDM_TRAY_EXIT, L"Kilépés");
+        InsertMenuW(hMenu, 6, MF_BYPOSITION | MF_SEPARATOR, 0, nullptr);
+        InsertMenuW(hMenu, 7, MF_BYPOSITION | MF_STRING, IDM_TRAY_EXIT, L"Kilépés");
 
         SetForegroundWindow(hWnd);
         TrackPopupMenu(hMenu, TPM_RIGHTALIGN | TPM_BOTTOMALIGN, pt.x, pt.y, 0, hWnd, nullptr);

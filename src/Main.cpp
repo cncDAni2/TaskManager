@@ -45,7 +45,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR, int) {
 
     RECT rcWork;
     SystemParametersInfoW(SPI_GETWORKAREA, 0, &rcWork, 0);
-    int defaultW = 585;
+    int defaultW = 620;
     int defaultH = 550;
     int defaultX = rcWork.right - defaultW - 12;
     int defaultY = rcWork.bottom - defaultH - 12;

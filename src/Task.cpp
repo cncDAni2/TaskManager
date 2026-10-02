@@ -216,6 +216,10 @@ void TaskStore::SaveLocal() {
         << "  \"theme_mode\": \"" << themeName << "\",\n"
         << "  \"work_reset_hour\": " << work_reset_hour << ",\n"
         << "  \"work_reset_minute\": " << work_reset_minute << ",\n"
+        << "  \"timer_work_minutes\": " << timer_work_minutes << ",\n"
+        << "  \"timer_rest_minutes\": " << timer_rest_minutes << ",\n"
+        << "  \"timer_repetitions\": " << timer_repetitions << ",\n"
+        << "  \"sounds_enabled\": " << (sounds_enabled ? "true" : "false") << ",\n"
         << "  \"sync_file_path\": \"" << TaskUtils::EscapeJsonString(TaskUtils::WideToUtf8(syncFilePath)) << "\",\n"
         << "  \"active_order\": [";
     for (size_t i = 0; i < active_order.size(); ++i) {
@@ -488,6 +492,39 @@ void TaskStore::LoadLocal() {
         size_t valueStart = content.find_first_of("0123456789", resetMinutePos + 20);
         if (valueStart != std::string::npos) {
             work_reset_minute = (std::min)(59, std::stoi(content.substr(valueStart)));
+        }
+    }
+
+    const auto loadTimerMinutes = [&content](const char* key, double& value) {
+        size_t keyPos = content.find(key);
+        if (keyPos == std::string::npos) return;
+        size_t valueStart = content.find_first_of("0123456789", keyPos + strlen(key));
+        if (valueStart == std::string::npos) return;
+        try {
+            const double loaded = std::stod(content.substr(valueStart));
+            const double clamped = (std::max)(0.1, (std::min)(999.9, loaded));
+            value = static_cast<double>(static_cast<int>(clamped * 10.0 + 0.5)) / 10.0;
+        } catch (...) {
+        }
+    };
+    loadTimerMinutes("\"timer_work_minutes\":", timer_work_minutes);
+    loadTimerMinutes("\"timer_rest_minutes\":", timer_rest_minutes);
+
+    const auto loadTimerRepetitions = [&content](int& value) {
+        const char* key = "\"timer_repetitions\":";
+        size_t keyPos = content.find(key);
+        if (keyPos == std::string::npos) return;
+        size_t valueStart = content.find_first_of("0123456789", keyPos + strlen(key));
+        if (valueStart == std::string::npos) return;
+        value = (std::max)(1, (std::min)(99, std::stoi(content.substr(valueStart))));
+    };
+    loadTimerRepetitions(timer_repetitions);
+
+    size_t soundsEnabledPos = content.find("\"sounds_enabled\":");
+    if (soundsEnabledPos != std::string::npos) {
+        size_t valueStart = content.find_first_not_of(" \t\r\n", soundsEnabledPos + 17);
+        if (valueStart != std::string::npos) {
+            sounds_enabled = content.compare(valueStart, 4, "true") == 0;
         }
     }
 
