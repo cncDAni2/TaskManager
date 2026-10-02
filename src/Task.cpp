@@ -112,7 +112,7 @@ void TaskStore::ToggleCompleted(int id) {
 }
 
 std::wstring TaskStore::ToggleAssignment(int id, const std::wstring& userName) {
-    if (CheckSyncFileChanged()) LoadSync();
+    if (!LoadSync()) return L"";
 
     for (auto& t : tasks) {
         if (t.id == id && t.is_sync) {
@@ -292,6 +292,12 @@ bool TaskStore::CheckSyncFileChanged() {
 bool TaskStore::LoadSync() {
     if (syncFilePath.empty()) return false;
 
+    std::ifstream in(syncFilePath, std::ios::in | std::ios::binary);
+    if (!in.is_open()) return false;
+
+    std::string content((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+    in.close();
+
     WIN32_FILE_ATTRIBUTE_DATA fad;
     if (GetFileAttributesExW(syncFilePath.c_str(), GetFileExInfoStandard, &fad)) {
         lastSyncFileTime = fad.ftLastWriteTime;
@@ -301,11 +307,6 @@ bool TaskStore::LoadSync() {
         return t.is_sync;
     }), tasks.end());
 
-    std::ifstream in(syncFilePath, std::ios::in | std::ios::binary);
-    if (!in.is_open()) return false;
-
-    std::string content((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
-    in.close();
     WorkHistory::LoadFromJson(content, work_history, manual_work_history);
 
     size_t pos = 0;

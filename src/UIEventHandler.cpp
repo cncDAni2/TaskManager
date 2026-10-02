@@ -211,20 +211,7 @@ bool HandleKeyDown(HWND hWnd, WPARAM wParam) {
         if (g_selectedIndex >= 0 && g_selectedIndex < (int)g_displayItems.size()) {
             const auto& item = g_displayItems[g_selectedIndex];
             if (!item.isHeader) {
-                int delId = item.task.id;
-                g_store.Delete(delId);
-
-                auto it = std::find(g_sessionActiveTaskIds.begin(), g_sessionActiveTaskIds.end(), delId);
-                if (it != g_sessionActiveTaskIds.end()) {
-                    g_sessionActiveTaskIds.erase(it);
-                }
-
-                UpdateControlsVisibility();
-                RecalculateLayout();
-                if (g_selectedIndex >= (int)g_displayItems.size()) {
-                    g_selectedIndex = (int)g_displayItems.size() - 1;
-                }
-                InvalidateRect(hWnd, nullptr, TRUE);
+                DeleteTaskWithConfirmation(hWnd, item.task.id, item.task.text);
             }
         }
         return true;

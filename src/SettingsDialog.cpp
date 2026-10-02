@@ -13,6 +13,7 @@ namespace {
     constexpr int IDC_SETTINGS_THEME = 5103;
     constexpr int IDC_SETTINGS_RESET_TIME = 5104;
     constexpr int IDC_SETTINGS_OK = 5105;
+    constexpr wchar_t APP_VERSION[] = L"v1.6.5";
     constexpr COLORREF SETTINGS_DIALOG_BG = RGB(245, 245, 245);
     constexpr COLORREF SETTINGS_DIALOG_TEXT = RGB(0, 0, 0);
     constexpr wchar_t DIALOG_CLASS[] = L"TaskManager_Settings_Dialog_Class";
@@ -134,6 +135,10 @@ namespace {
             selectedTime.wMinute = static_cast<WORD>(state->resetMinute);
             selectedTime.wSecond = 0;
             DateTime_SetSystemtime(state->resetTime, GDT_VALID, &selectedTime);
+
+            HWND versionLabel = CreateWindowW(L"STATIC", APP_VERSION,
+                WS_CHILD | WS_VISIBLE | SS_LEFT, 18, 242, 120, 24, hWnd, nullptr, instance, nullptr);
+            SetControlFont(versionLabel, g_hFontSmall);
 
             HWND okButton = CreateWindowW(L"BUTTON", L"OK",
                 WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_DEFPUSHBUTTON,

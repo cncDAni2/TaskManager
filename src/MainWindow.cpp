@@ -363,6 +363,19 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                     }
                 }
 
+                static int s_syncTimer = 0;
+                s_syncTimer++;
+                if (s_syncTimer >= 10) {
+                    s_syncTimer = 0;
+                    if (g_editingTaskId == -1 && g_store.CheckSyncFileChanged()) {
+                        ReloadSyncAndNotify();
+                        if (IsWindowVisible(hWnd)) {
+                            RecalculateLayout();
+                            InvalidateRect(hWnd, nullptr, FALSE);
+                        }
+                    }
+                }
+
                 if (IsWindowVisible(hWnd)) {
                     RECT rcClient;
                     GetClientRect(hWnd, &rcClient);
@@ -372,17 +385,6 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                     } else {
                         RECT rcBottom = { 0, rcClient.bottom - BOTTOM_BAR_HEIGHT, rcClient.right, rcClient.bottom };
                         InvalidateRect(hWnd, &rcBottom, FALSE);
-                    }
-
-                    static int s_syncTimer = 0;
-                    s_syncTimer++;
-                    if (s_syncTimer >= 10) {
-                        s_syncTimer = 0;
-                        if (g_editingTaskId == -1 && g_store.CheckSyncFileChanged()) {
-                            ReloadSyncAndNotify();
-                            RecalculateLayout();
-                            InvalidateRect(hWnd, nullptr, FALSE);
-                        }
                     }
                 }
             }

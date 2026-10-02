@@ -10,6 +10,10 @@ For feature overview and usage, see [README.md](README.md).
   - Uses MSVC x64 (`vcvars64.bat`), compiles resources via `rc.exe`, and builds `src\*.cpp` with `/utf-8 /std:c++17 /O2 /MT /W4`.
   - Intermediate object and resource files: `dist\obj\` and `dist\TaskManager.res` (ignored by Git).
   - Output binary: `TaskManager.exe` (kept beside `tasks.json`, which the app locates relative to its executable).
+- **Versioning**:
+  - The Settings dialog version is `APP_VERSION` in [src/SettingsDialog.cpp](src/SettingsDialog.cpp). Update it automatically for requests that change application code; do not bump it for questions or documentation-only changes.
+  - Keep the major version unchanged. For a bug fix or small change, increment the patch by 1 (for example, `v1.6.4` to `v1.6.5`). For a new feature or larger change, increment the minor by 1 and reset the patch to 0 (for example, `v1.6.4` to `v1.7.0`).
+  - A release happens when the changes are committed. Check the current version against `HEAD` before bumping: if a version increase is already uncommitted, do not bump again for later requests before that commit. If that pending patch bump should instead represent a feature or larger change, promote it to the next minor version with patch 0 (for example, `v1.6.5` to `v1.7.0`), not an additional increment.
 - **Process lifecycle**: Before building or testing, stop any running instance to release `TaskManager.exe` (`Stop-Process -Name TaskManager -Force -ErrorAction SilentlyContinue`). After a successful build, reopen the app with `Start-Process .\TaskManager.exe` from the repository root; `build.bat` does not launch it automatically.
 - **Testing**:
   - Logic tests: compile against [Task.h](Task.h) or `src/Task.h` with MSVC (`cl.exe /nologo /EHsc /std:c++17 test_*.cpp user32.lib secur32.lib`) and clean up test binaries.
