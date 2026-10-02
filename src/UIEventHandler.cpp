@@ -1,5 +1,6 @@
 #include "UIEventHandler.h"
 #include "AppState.h"
+#include "AudioCue.h"
 #include "Drawing.h"
 #include "Layout.h"
 #include "InlineEdit.h"
@@ -566,6 +567,7 @@ bool HandleCommand(HWND hWnd, int id) {
         }
 
         g_store.Add(taskText, g_syncToggle);
+        AudioCue::PlayNewTaskMelody();
         g_syncToggle = false;
         if (g_hSyncToggleBtn) InvalidateRect(g_hSyncToggleBtn, nullptr, TRUE);
         g_sessionActiveTaskIds.insert(g_sessionActiveTaskIds.begin(), g_store.tasks.back().id);

@@ -13,7 +13,7 @@ namespace {
     constexpr int IDC_SETTINGS_THEME = 5103;
     constexpr int IDC_SETTINGS_RESET_TIME = 5104;
     constexpr int IDC_SETTINGS_OK = 5105;
-    constexpr wchar_t APP_VERSION[] = L"v1.7.1";
+    constexpr wchar_t APP_VERSION[] = L"v1.7.2";
     constexpr COLORREF SETTINGS_DIALOG_BG = RGB(245, 245, 245);
     constexpr COLORREF SETTINGS_DIALOG_TEXT = RGB(0, 0, 0);
     constexpr wchar_t DIALOG_CLASS[] = L"TaskManager_Settings_Dialog_Class";
