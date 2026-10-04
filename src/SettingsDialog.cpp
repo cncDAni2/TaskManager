@@ -2,10 +2,14 @@
 #include "AppState.h"
 #include "Drawing.h"
 #include "Layout.h"
+#include "Version.h"
 #include <commctrl.h>
 #include <commdlg.h>
 #include <string>
 #include <vector>
+
+#define TASK_MANAGER_WIDEN_INNER(value) L##value
+#define TASK_MANAGER_WIDEN(value) TASK_MANAGER_WIDEN_INNER(value)
 
 namespace {
     constexpr int IDC_SETTINGS_PATH = 5101;
@@ -15,7 +19,10 @@ namespace {
     constexpr int IDC_SETTINGS_OK = 5105;
     constexpr int IDC_SETTINGS_SOUNDS = 5106;
     constexpr int IDC_SETTINGS_TIMER_AUTO_START = 5107;
-    constexpr wchar_t APP_VERSION[] = L"v1.10.0";
+    constexpr wchar_t APP_VERSION[] = L"v"
+        TASK_MANAGER_WIDEN(TASK_MANAGER_STRINGIFY(TASK_MANAGER_VERSION_MAJOR)) L"."
+        TASK_MANAGER_WIDEN(TASK_MANAGER_STRINGIFY(TASK_MANAGER_VERSION_MINOR)) L"."
+        TASK_MANAGER_WIDEN(TASK_MANAGER_STRINGIFY(TASK_MANAGER_VERSION_PATCH));
     constexpr COLORREF SETTINGS_DIALOG_BG = RGB(245, 245, 245);
     constexpr COLORREF SETTINGS_DIALOG_TEXT = RGB(0, 0, 0);
     constexpr wchar_t DIALOG_CLASS[] = L"TaskManager_Settings_Dialog_Class";
