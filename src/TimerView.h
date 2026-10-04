@@ -6,6 +6,7 @@ namespace TimerView {
 void CreateControls(HWND owner, HINSTANCE instance);
 void UpdateVisibility(bool visible);
 void RefreshRunState();
+void StartConfiguredTimer();
 void Layout(HWND owner);
 bool HandleCommand(HWND owner, WPARAM wParam);
 }

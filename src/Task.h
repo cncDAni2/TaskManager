@@ -18,6 +18,8 @@ public:
     double timer_work_minutes = 50.0;
     double timer_rest_minutes = 10.0;
     int timer_repetitions = 8;
+    bool timer_2020_enabled = false;
+    bool timer_start_with_app = false;
     bool sounds_enabled = true;
     ThemeMode theme_mode = ThemeMode::Dark;
     WorkHistory::Records work_history;

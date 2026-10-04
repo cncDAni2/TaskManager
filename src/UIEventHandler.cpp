@@ -726,6 +726,56 @@ bool HandleDrawItem(HWND /*hWnd*/, DRAWITEMSTRUCT* pDIS) {
     bool isPink = g_themeMode == ThemeMode::Pink;
     COLORREF pinkButtonBg = RGB(183, 0, 99);
 
+    if (pDIS->CtlID == IDC_TIMER_2020_CHECK) {
+        const bool isDisabled = (pDIS->itemState & ODS_DISABLED) != 0;
+        const COLORREF textColor = isDisabled ? th.textSecondary : th.textPrimary;
+        HBRUSH backgroundBrush = CreateSolidBrush(th.bgWindow);
+        FillRect(pDIS->hDC, &pDIS->rcItem, backgroundBrush);
+        DeleteObject(backgroundBrush);
+
+        RECT checkRect = pDIS->rcItem;
+        checkRect.left += 1;
+        checkRect.top += ((checkRect.bottom - checkRect.top) - 18) / 2;
+        checkRect.right = checkRect.left + 18;
+        checkRect.bottom = checkRect.top + 18;
+
+        SetBkMode(pDIS->hDC, TRANSPARENT);
+        HGDIOBJ oldBrush = SelectObject(pDIS->hDC, GetStockObject(NULL_BRUSH));
+        HPEN borderPen = CreatePen(PS_SOLID, 1, isDisabled ? th.textSecondary : th.checkActiveBorder);
+        HGDIOBJ oldPen = SelectObject(pDIS->hDC, borderPen);
+        Rectangle(pDIS->hDC, checkRect.left, checkRect.top, checkRect.right, checkRect.bottom);
+        SelectObject(pDIS->hDC, oldPen);
+        DeleteObject(borderPen);
+
+        if (g_store.timer_2020_enabled) {
+            HPEN checkPen = CreatePen(PS_SOLID, 2, textColor);
+            oldPen = SelectObject(pDIS->hDC, checkPen);
+            MoveToEx(pDIS->hDC, checkRect.left + 4, checkRect.top + 9, nullptr);
+            LineTo(pDIS->hDC, checkRect.left + 7, checkRect.top + 13);
+            LineTo(pDIS->hDC, checkRect.left + 14, checkRect.top + 4);
+            SelectObject(pDIS->hDC, oldPen);
+            DeleteObject(checkPen);
+        }
+
+        SetTextColor(pDIS->hDC, textColor);
+        HFONT font = (HFONT)SendMessageW(pDIS->hwndItem, WM_GETFONT, 0, 0);
+        HGDIOBJ oldFont = font ? SelectObject(pDIS->hDC, font) : nullptr;
+        wchar_t label[128]{};
+        GetWindowTextW(pDIS->hwndItem, label, _countof(label));
+        RECT textRect = pDIS->rcItem;
+        textRect.left = checkRect.right + 8;
+        DrawTextW(pDIS->hDC, label, -1, &textRect,
+            DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS);
+        if (pDIS->itemState & ODS_FOCUS) {
+            RECT focusRect = pDIS->rcItem;
+            InflateRect(&focusRect, -1, -1);
+            DrawFocusRect(pDIS->hDC, &focusRect);
+        }
+        if (oldFont) SelectObject(pDIS->hDC, oldFont);
+        SelectObject(pDIS->hDC, oldBrush);
+        return true;
+    }
+
     bool isTextButton = pDIS->CtlID == IDC_TIME_HISTORY_BTN || pDIS->CtlID == IDC_MANUAL_WORK_BTN ||
         pDIS->CtlID == IDC_STOP_WORK_BTN ||
         pDIS->CtlID == IDC_TOGGLE_VIEW_BTN || pDIS->CtlID == IDC_TIMER_START_BTN ||

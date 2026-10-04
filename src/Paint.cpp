@@ -129,7 +129,8 @@ void PaintMiniWindow(HWND hWnd, HDC hdc) {
         SelectObject(hdcMem, g_hFontMiniTimer);
         SetTextColor(hdcMem, g_themeMode == ThemeMode::Pink ? RGB(0, 0, 0) : th.textSecondary);
         SetBkMode(hdcMem, TRANSPARENT);
-        const std::wstring remaining = FormatTimerTime(g_intervalTimer.SecondsRemaining());
+        const std::wstring remaining = g_intervalTimer.IsVisionBreakActive()
+            ? L"👁️" : FormatTimerTime(g_intervalTimer.SecondsRemaining());
         DrawTextW(hdcMem, remaining.c_str(), -1, (LPRECT)&rcTimer,
             DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
     }

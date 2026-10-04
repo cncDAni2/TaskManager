@@ -12,6 +12,9 @@
 
 namespace {
 std::atomic_flag g_isPlaying = ATOMIC_FLAG_INIT;
+constexpr std::uint32_t kVisionBeepFrequency = 880;
+constexpr std::uint32_t kVisionBeepDurationMs = 330;
+constexpr double kVisionBeepAmplitude = 5200.0;
 
 #pragma pack(push, 1)
 struct WaveHeader {
@@ -82,6 +85,13 @@ void CALLBACK PlayMelody(PTP_CALLBACK_INSTANCE, void* context) {
                 { 220, 650, 170, 3600.0 },
                 { 196, 650, 0, 3600.0 }
             };
+        } else if (melody == 3) {
+            notes = {
+                { kVisionBeepFrequency, kVisionBeepDurationMs, 100, kVisionBeepAmplitude },
+                { kVisionBeepFrequency, kVisionBeepDurationMs, 0, kVisionBeepAmplitude }
+            };
+        } else if (melody == 4) {
+            notes = { { kVisionBeepFrequency, kVisionBeepDurationMs, 0, kVisionBeepAmplitude } };
         } else {
             notes.assign(std::begin(newTaskNotes), std::end(newTaskNotes));
         }
@@ -134,4 +144,12 @@ void AudioCue::PlayTimerWorkMelody() {
 
 void AudioCue::PlayTimerRestMelody() {
     SubmitMelody(2);
+}
+
+void AudioCue::PlayVisionBreakStart() {
+    SubmitMelody(3);
+}
+
+void AudioCue::PlayVisionBreakEnd() {
+    SubmitMelody(4);
 }

@@ -5,7 +5,13 @@
 
 IntervalTimer g_intervalTimer;
 
-void IntervalTimer::Start(int newWorkSeconds, int newRestSeconds, int newRepetitions) {
+namespace {
+constexpr unsigned long long kVisionBreakIntervalMs = 20ULL * 60 * 1000;
+constexpr unsigned long long kVisionBreakDurationMs = 25ULL * 1000;
+}
+
+void IntervalTimer::Start(int newWorkSeconds, int newRestSeconds, int newRepetitions,
+    bool newVisionBreakEnabled) {
     workSeconds = newWorkSeconds;
     restSeconds = newRestSeconds;
     repetitions = newRepetitions;
@@ -14,36 +20,68 @@ void IntervalTimer::Start(int newWorkSeconds, int newRestSeconds, int newRepetit
     paused = false;
     pausedSecondsRemaining = 0;
     running = true;
-    phaseEndTick = GetTickCount64() + static_cast<unsigned long long>(workSeconds) * 1000;
+    const unsigned long long now = GetTickCount64();
+    phaseStartedTick = now;
+    phaseEndTick = now + static_cast<unsigned long long>(workSeconds) * 1000;
+    visionBreakEnabled = newVisionBreakEnabled;
+    visionBreakActive = false;
+    nextVisionBreakTick = now + kVisionBreakIntervalMs;
+    visionBreakEndTick = 0;
+    pausedPhaseElapsedMs = 0;
+    pausedVisionBreakRemainingMs = 0;
 }
 
 void IntervalTimer::Stop() {
     running = false;
     paused = false;
     pausedSecondsRemaining = 0;
+    visionBreakActive = false;
 }
 
 void IntervalTimer::Pause() {
     if (!running) return;
     pausedSecondsRemaining = SecondsRemaining();
+    const unsigned long long now = GetTickCount64();
+    pausedPhaseElapsedMs = now - phaseStartedTick;
+    pausedVisionBreakRemainingMs = visionBreakActive && visionBreakEndTick > now
+        ? visionBreakEndTick - now : 0;
     running = false;
     paused = true;
 }
 
 void IntervalTimer::Resume() {
     if (!paused) return;
-    phaseEndTick = GetTickCount64() + static_cast<unsigned long long>(pausedSecondsRemaining) * 1000;
+    const unsigned long long now = GetTickCount64();
+    phaseStartedTick = now - pausedPhaseElapsedMs;
+    phaseEndTick = now + static_cast<unsigned long long>(pausedSecondsRemaining) * 1000;
+    if (visionBreakActive) visionBreakEndTick = now + pausedVisionBreakRemainingMs;
+    else nextVisionBreakTick = phaseStartedTick + kVisionBreakIntervalMs;
     pausedSecondsRemaining = 0;
     paused = false;
     running = true;
 }
 
 bool IntervalTimer::Tick() {
-    if (!running || GetTickCount64() < phaseEndTick) return false;
+    if (!running) return false;
 
     const unsigned long long now = GetTickCount64();
+    if (now < phaseEndTick && workPhase && visionBreakEnabled &&
+        static_cast<unsigned long long>(workSeconds) * 1000 > kVisionBreakIntervalMs) {
+        if (visionBreakActive && now >= visionBreakEndTick) {
+            visionBreakActive = false;
+            nextVisionBreakTick = now + kVisionBreakIntervalMs;
+            AudioCue::PlayVisionBreakEnd();
+        } else if (!visionBreakActive && now >= nextVisionBreakTick) {
+            visionBreakActive = true;
+            visionBreakEndTick = now + kVisionBreakDurationMs;
+            AudioCue::PlayVisionBreakStart();
+        }
+    }
+    if (now < phaseEndTick) return false;
+
     if (workPhase) {
         AudioCue::PlayTimerRestMelody();
+        visionBreakActive = false;
         workPhase = false;
         phaseEndTick = now + static_cast<unsigned long long>(restSeconds) * 1000;
     } else {
@@ -53,6 +91,9 @@ bool IntervalTimer::Tick() {
             running = false;
         } else {
             workPhase = true;
+            phaseStartedTick = now;
+            visionBreakActive = false;
+            nextVisionBreakTick = now + kVisionBreakIntervalMs;
             phaseEndTick = now + static_cast<unsigned long long>(workSeconds) * 1000;
         }
     }
@@ -81,6 +122,10 @@ int IntervalTimer::SecondsRemaining() const {
     const unsigned long long now = GetTickCount64();
     if (now >= phaseEndTick) return 0;
     return static_cast<int>((phaseEndTick - now + 999) / 1000);
+}
+
+bool IntervalTimer::IsVisionBreakActive() const {
+    return visionBreakActive;
 }
 
 int IntervalTimer::CurrentRepetition() const {

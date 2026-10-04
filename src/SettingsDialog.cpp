@@ -14,7 +14,8 @@ namespace {
     constexpr int IDC_SETTINGS_RESET_TIME = 5104;
     constexpr int IDC_SETTINGS_OK = 5105;
     constexpr int IDC_SETTINGS_SOUNDS = 5106;
-    constexpr wchar_t APP_VERSION[] = L"v1.9.0";
+    constexpr int IDC_SETTINGS_TIMER_AUTO_START = 5107;
+    constexpr wchar_t APP_VERSION[] = L"v1.10.0";
     constexpr COLORREF SETTINGS_DIALOG_BG = RGB(245, 245, 245);
     constexpr COLORREF SETTINGS_DIALOG_TEXT = RGB(0, 0, 0);
     constexpr wchar_t DIALOG_CLASS[] = L"TaskManager_Settings_Dialog_Class";
@@ -26,6 +27,7 @@ namespace {
         HWND themeCombo = nullptr;
         HWND resetTime = nullptr;
         HWND soundsCheckbox = nullptr;
+        HWND timerAutoStartCheckbox = nullptr;
         HBRUSH backgroundBrush = nullptr;
         std::wstring syncFilePath;
         int resetHour = 9;
@@ -186,13 +188,26 @@ namespace {
                 g_store.sounds_enabled ? BST_CHECKED : BST_UNCHECKED, 0);
             SetControlFont(state->soundsCheckbox, g_hFontNormal);
 
+            HWND timerAutoStartLabel = CreateWindowW(L"STATIC", L"Munkaidőzítő indítása a programmal",
+                WS_CHILD | WS_VISIBLE | SS_LEFT, 18, 247, 144, 40, hWnd, nullptr, instance, nullptr);
+            SetControlFont(timerAutoStartLabel, g_hFontNormal);
+            CreateWindowW(L"STATIC", L"", WS_CHILD | WS_VISIBLE | SS_ETCHEDVERT,
+                170, 244, 2, 40, hWnd, nullptr, instance, nullptr);
+            state->timerAutoStartCheckbox = CreateWindowW(L"BUTTON", L"Engedélyezve",
+                WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_AUTOCHECKBOX,
+                184, 250, 190, 28, hWnd,
+                (HMENU)(INT_PTR)IDC_SETTINGS_TIMER_AUTO_START, instance, nullptr);
+            SendMessageW(state->timerAutoStartCheckbox, BM_SETCHECK,
+                g_store.timer_start_with_app ? BST_CHECKED : BST_UNCHECKED, 0);
+            SetControlFont(state->timerAutoStartCheckbox, g_hFontNormal);
+
             HWND versionLabel = CreateWindowW(L"STATIC", APP_VERSION,
-                WS_CHILD | WS_VISIBLE | SS_LEFT, 18, 242, 120, 24, hWnd, nullptr, instance, nullptr);
+                WS_CHILD | WS_VISIBLE | SS_LEFT, 18, 286, 120, 24, hWnd, nullptr, instance, nullptr);
             SetControlFont(versionLabel, g_hFontSmall);
 
             HWND okButton = CreateWindowW(L"BUTTON", L"OK",
                 WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_DEFPUSHBUTTON,
-                392, 238, 90, 30, hWnd, (HMENU)(INT_PTR)IDC_SETTINGS_OK, instance, nullptr);
+                392, 280, 90, 30, hWnd, (HMENU)(INT_PTR)IDC_SETTINGS_OK, instance, nullptr);
             SetControlFont(okButton, g_hFontNormal);
             SetFocus(state->themeCombo);
             return 0;
@@ -235,6 +250,8 @@ namespace {
                 g_store.work_reset_hour = selectedTime.wHour;
                 g_store.work_reset_minute = selectedTime.wMinute;
                 g_store.sounds_enabled = SendMessageW(state->soundsCheckbox, BM_GETCHECK, 0, 0) == BST_CHECKED;
+                g_store.timer_start_with_app = SendMessageW(state->timerAutoStartCheckbox,
+                    BM_GETCHECK, 0, 0) == BST_CHECKED;
                 g_store.SaveLocal();
                 g_store.CheckWorkReset();
                 DestroyWindow(hWnd);
@@ -280,7 +297,7 @@ void ShowSettingsDialog(HWND owner) {
     EnableWindow(owner, FALSE);
     HWND dialog = CreateWindowExW(WS_EX_DLGMODALFRAME | WS_EX_TOPMOST | WS_EX_CONTROLPARENT,
         DIALOG_CLASS, L"Beállítások", WS_POPUP | WS_CAPTION | WS_SYSMENU | WS_CLIPCHILDREN,
-        CW_USEDEFAULT, CW_USEDEFAULT, 500, 310, owner, nullptr,
+        CW_USEDEFAULT, CW_USEDEFAULT, 500, 350, owner, nullptr,
         GetModuleHandleW(nullptr), &state);
     if (!dialog) {
         EnableWindow(owner, TRUE);
@@ -294,8 +311,8 @@ void ShowSettingsDialog(HWND owner) {
     GetWindowRect(owner, &ownerRect);
     SetWindowPos(dialog, HWND_TOPMOST,
         ownerRect.left + ((ownerRect.right - ownerRect.left) - 500) / 2,
-        ownerRect.top + ((ownerRect.bottom - ownerRect.top) - 310) / 2,
-        500, 310, SWP_SHOWWINDOW);
+        ownerRect.top + ((ownerRect.bottom - ownerRect.top) - 350) / 2,
+        500, 350, SWP_SHOWWINDOW);
     SetForegroundWindow(dialog);
 
     MSG message{};

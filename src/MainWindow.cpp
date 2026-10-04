@@ -195,6 +195,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             SendMessageW(g_hCloseBtn, WM_SETFONT, (WPARAM)g_hFontNormal, TRUE);
 
             TimerView::CreateControls(hWnd, hInst);
+            if (g_store.timer_start_with_app) TimerView::StartConfiguredTimer();
 
             HWND hTooltip = CreateWindowExW(WS_EX_TOPMOST, TOOLTIPS_CLASS, nullptr,
                 WS_POPUP | TTS_ALWAYSTIP | TTS_NOPREFIX,
@@ -650,6 +651,12 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         case WM_CTLCOLORSTATIC: {
             HDC hdcStatic = (HDC)wParam;
             const int controlId = GetDlgCtrlID((HWND)lParam);
+            if (controlId == IDC_TIMER_2020_CHECK) {
+                ThemeColors th = GetThemeColors(g_themeMode);
+                SetTextColor(hdcStatic, th.textPrimary);
+                SetBkMode(hdcStatic, TRANSPARENT);
+                return (LRESULT)GetStockObject(NULL_BRUSH);
+            }
             if (controlId == IDC_TIMER_WORK_EDIT || controlId == IDC_TIMER_REST_EDIT ||
                 controlId == IDC_TIMER_REPEATS_EDIT) {
                 ThemeColors th = GetThemeColors(g_themeMode);

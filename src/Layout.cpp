@@ -110,7 +110,7 @@ RECT GetMiniTimerTextRect(int clientWidth) {
 
 RECT GetTimerPanelRect(int clientWidth) {
     const int left = (clientWidth - 300) / 2;
-    return { left, 96, left + 300, 306 };
+    return { left, 96, left + 300, 340 };
 }
 
 void UpdateControlsVisibility() {
