@@ -355,13 +355,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             if (wParam == IDT_WORK_TIMER) {
                 const bool timerWasRunning = g_intervalTimer.IsRunning();
                 if (g_intervalTimer.Tick()) {
-                    if (g_store.timer_strict_mode) {
-                        if (g_intervalTimer.IsWorkPhase()) {
-                            if (g_intervalTimer.IsRunning()) SetWorkMeasurementStopped(false);
-                        } else {
-                            SetWorkMeasurementStopped(true);
-                        }
-                    }
+                    TimerView::HandlePhaseChange();
                     TimerView::RefreshRunState();
                     RecalculateLayout();
                     if (g_isMiniMode && g_pinMode && IsWindowVisible(hWnd)) {
@@ -434,6 +428,14 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                         }
                     }
                 }
+
+                const bool shouldPauseStrictWorkTimer = g_store.timer_strict_mode &&
+                    g_intervalTimer.IsActive() && g_intervalTimer.IsWorkPhase() &&
+                    (g_workMeasurementStopped || g_isSessionLocked ||
+                        (g_isIdlePaused && !g_focusMode));
+                if (shouldPauseStrictWorkTimer) g_intervalTimer.PauseForMeasurement();
+                else g_intervalTimer.ResumeFromMeasurement();
+                g_intervalTimer.SetWorkMeasurementActive(countWork);
 
                 static int s_syncTimer = 0;
                 s_syncTimer++;

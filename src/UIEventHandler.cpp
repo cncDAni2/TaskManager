@@ -786,7 +786,7 @@ bool HandleDrawItem(HWND /*hWnd*/, DRAWITEMSTRUCT* pDIS) {
     bool isTextButton = pDIS->CtlID == IDC_TIME_HISTORY_BTN || pDIS->CtlID == IDC_MANUAL_WORK_BTN ||
         pDIS->CtlID == IDC_STOP_WORK_BTN ||
         pDIS->CtlID == IDC_TOGGLE_VIEW_BTN || pDIS->CtlID == IDC_TIMER_START_BTN ||
-        pDIS->CtlID == IDC_TIMER_PAUSE_BTN ||
+        pDIS->CtlID == IDC_TIMER_PAUSE_BTN || pDIS->CtlID == IDC_TIMER_NEXT_BTN ||
         pDIS->CtlID == IDC_CLOSE_BTN ||
         pDIS->CtlID == IDC_ADD_TASK_BTN;
     if (isTextButton) {
@@ -821,7 +821,8 @@ bool HandleDrawItem(HWND /*hWnd*/, DRAWITEMSTRUCT* pDIS) {
         InflateRect(&textRect, -4, -2);
         DrawTextW(pDIS->hDC, label, -1, &textRect,
             DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS);
-        if ((pDIS->CtlID == IDC_TIMER_START_BTN || pDIS->CtlID == IDC_TIMER_PAUSE_BTN) &&
+        if ((pDIS->CtlID == IDC_TIMER_START_BTN || pDIS->CtlID == IDC_TIMER_PAUSE_BTN ||
+            pDIS->CtlID == IDC_TIMER_NEXT_BTN) &&
             (pDIS->itemState & ODS_FOCUS)) {
             RECT focusRect = pDIS->rcItem;
             InflateRect(&focusRect, -4, -4);

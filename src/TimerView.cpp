@@ -12,6 +12,7 @@ HWND g_restEdit = nullptr;
 HWND g_repetitionsEdit = nullptr;
 HWND g_startButton = nullptr;
 HWND g_pauseButton = nullptr;
+HWND g_nextButton = nullptr;
 HWND g_2020Check = nullptr;
 HWND g_strictCheck = nullptr;
 HWND g_timerTooltip = nullptr;
@@ -77,7 +78,7 @@ bool IsTimerEdit(HWND control) {
 }
 
 HWND GetAdjacentTimerControl(HWND currentControl, bool reverse) {
-    HWND focusStops[7]{};
+    HWND focusStops[8]{};
     size_t focusStopCount = 0;
     const HWND timerEdits[] = { g_workEdit, g_restEdit, g_repetitionsEdit };
     for (HWND edit : timerEdits) {
@@ -94,6 +95,9 @@ HWND GetAdjacentTimerControl(HWND currentControl, bool reverse) {
     }
     if (IsWindowVisible(g_pauseButton) && IsWindowEnabled(g_pauseButton)) {
         focusStops[focusStopCount++] = g_pauseButton;
+    }
+    if (IsWindowVisible(g_nextButton) && IsWindowEnabled(g_nextButton)) {
+        focusStops[focusStopCount++] = g_nextButton;
     }
     if (focusStopCount == 0) return nullptr;
 
@@ -120,17 +124,19 @@ LRESULT CALLBACK TimerControlSubclassProc(HWND control, UINT message, WPARAM wPa
         return 0;
     }
     if (message == WM_KEYDOWN && wParam == VK_RETURN && control != g_2020Check) {
-        HWND button = control == g_pauseButton ? g_pauseButton : g_startButton;
+        HWND button = control == g_nextButton ? g_nextButton
+            : (control == g_pauseButton ? g_pauseButton : g_startButton);
         if (IsWindowVisible(button) && IsWindowEnabled(button)) SendMessageW(button, BM_CLICK, 0, 0);
         return 0;
     }
     if (message == WM_KEYDOWN && wParam == VK_SPACE &&
-        (control == g_startButton || control == g_pauseButton)) {
+        (control == g_startButton || control == g_pauseButton || control == g_nextButton)) {
         SendMessageW(control, BM_CLICK, 0, 0);
         return 0;
     }
     if (message == WM_CHAR && (wParam == L'\t' || wParam == L'\r' ||
-        (wParam == L' ' && (control == g_startButton || control == g_pauseButton)))) return 0;
+        (wParam == L' ' && (control == g_startButton || control == g_pauseButton ||
+            control == g_nextButton)))) return 0;
     if (message == WM_NCDESTROY) RemoveWindowSubclass(control, TimerControlSubclassProc, subclassId);
     return DefSubclassProc(control, message, wParam, lParam);
 }
@@ -169,6 +175,9 @@ void TimerView::CreateControls(HWND owner, HINSTANCE instance) {
     g_pauseButton = CreateWindowW(L"BUTTON", L"Pause",
         WS_CHILD | BS_OWNERDRAW | WS_TABSTOP, 0, 0, 104, 32, owner,
         (HMENU)IDC_TIMER_PAUSE_BTN, instance, nullptr);
+    g_nextButton = CreateWindowW(L"BUTTON", L"Következő >",
+        WS_CHILD | BS_OWNERDRAW | WS_TABSTOP, 0, 0, 100, 32, owner,
+        (HMENU)IDC_TIMER_NEXT_BTN, instance, nullptr);
     g_2020Check = CreateWindowW(L"BUTTON", L"20-20-20 szabály",
         WS_CHILD | BS_OWNERDRAW | WS_TABSTOP, 0, 0, 180, 24, owner,
         (HMENU)IDC_TIMER_2020_CHECK, instance, nullptr);
@@ -177,6 +186,7 @@ void TimerView::CreateControls(HWND owner, HINSTANCE instance) {
         (HMENU)IDC_TIMER_STRICT_CHECK, instance, nullptr);
     SetWindowSubclass(g_startButton, TimerControlSubclassProc, IDC_TIMER_START_BTN, 0);
     SetWindowSubclass(g_pauseButton, TimerControlSubclassProc, IDC_TIMER_PAUSE_BTN, 0);
+    SetWindowSubclass(g_nextButton, TimerControlSubclassProc, IDC_TIMER_NEXT_BTN, 0);
     SetWindowSubclass(g_2020Check, TimerControlSubclassProc, IDC_TIMER_2020_CHECK, 0);
     SetWindowSubclass(g_strictCheck, TimerControlSubclassProc, IDC_TIMER_STRICT_CHECK, 0);
 
@@ -188,6 +198,7 @@ void TimerView::CreateControls(HWND owner, HINSTANCE instance) {
     SendMessageW(g_repetitionsEdit, EM_SETLIMITTEXT, 2, 0);
     SendMessageW(g_startButton, WM_SETFONT, (WPARAM)g_hFontSmall, TRUE);
     SendMessageW(g_pauseButton, WM_SETFONT, (WPARAM)g_hFontSmall, TRUE);
+    SendMessageW(g_nextButton, WM_SETFONT, (WPARAM)g_hFontSmall, TRUE);
     SendMessageW(g_2020Check, WM_SETFONT, (WPARAM)g_hFontSmall, TRUE);
     SendMessageW(g_strictCheck, WM_SETFONT, (WPARAM)g_hFontSmall, TRUE);
     g_timerTooltip = CreateWindowExW(WS_EX_TOPMOST, TOOLTIPS_CLASSW, nullptr,
@@ -210,6 +221,14 @@ void TimerView::CreateControls(HWND owner, HINSTANCE instance) {
         strictTool.uId = reinterpret_cast<UINT_PTR>(g_strictCheck);
         strictTool.lpszText = const_cast<LPWSTR>(L"Pihenő alatt kényszerítetten leállítja a munkaidő mérését, Munkaidő kezdetekor pedig újraindítja.");
         SendMessageW(g_timerTooltip, TTM_ADDTOOLW, 0, reinterpret_cast<LPARAM>(&strictTool));
+
+        TOOLINFOW nextTool{};
+        nextTool.cbSize = sizeof(nextTool);
+        nextTool.uFlags = TTF_SUBCLASS | TTF_IDISHWND;
+        nextTool.hwnd = owner;
+        nextTool.uId = reinterpret_cast<UINT_PTR>(g_nextButton);
+        nextTool.lpszText = const_cast<LPWSTR>(L"Azonnal továbblép a következő fázisra, mintha letelt volna az aktuális idő.");
+        SendMessageW(g_timerTooltip, TTM_ADDTOOLW, 0, reinterpret_cast<LPARAM>(&nextTool));
     }
     SetWindowTextW(g_workEdit, FormatMinutes(g_store.timer_work_minutes).c_str());
     SetWindowTextW(g_restEdit, FormatMinutes(g_store.timer_rest_minutes).c_str());
@@ -229,6 +248,7 @@ void TimerView::UpdateVisibility(bool visible) {
     ShowWindow(g_strictCheck, show);
     ShowWindow(g_startButton, show);
     ShowWindow(g_pauseButton, g_viewVisible && g_intervalTimer.IsActive() ? SW_SHOW : SW_HIDE);
+    ShowWindow(g_nextButton, g_viewVisible && g_intervalTimer.IsActive() ? SW_SHOW : SW_HIDE);
     if (g_hWnd) Layout(g_hWnd);
 }
 
@@ -238,9 +258,19 @@ void TimerView::RefreshRunState() {
     EnableWindow(g_restEdit, !active);
     EnableWindow(g_repetitionsEdit, !active);
     SetWindowTextW(g_startButton, active ? L"Stop" : L"Start");
-    SetWindowTextW(g_pauseButton, g_intervalTimer.IsPaused() ? L"Folytatás" : L"Pause");
+    SetWindowTextW(g_pauseButton, g_intervalTimer.IsPaused() ? L"Folytatás" : L"Szünet");
     ShowWindow(g_pauseButton, g_viewVisible && active ? SW_SHOW : SW_HIDE);
+    ShowWindow(g_nextButton, g_viewVisible && active ? SW_SHOW : SW_HIDE);
     if (g_hWnd) Layout(g_hWnd);
+}
+
+void TimerView::HandlePhaseChange() {
+    if (!g_store.timer_strict_mode) return;
+    if (g_intervalTimer.IsWorkPhase()) {
+        if (g_intervalTimer.IsRunning()) SetWorkMeasurementStopped(false);
+    } else {
+        SetWorkMeasurementStopped(true);
+    }
 }
 
 void TimerView::StartConfiguredTimer() {
@@ -248,6 +278,7 @@ void TimerView::StartConfiguredTimer() {
     const int restSeconds = static_cast<int>(g_store.timer_rest_minutes * 60.0 + 0.5);
     g_intervalTimer.Start(workSeconds, restSeconds, g_store.timer_repetitions,
         g_store.timer_2020_enabled);
+    g_intervalTimer.SetWorkMeasurementActive(g_isWorkActive);
     if (g_store.timer_strict_mode) SetWorkMeasurementStopped(false);
     RefreshRunState();
 }
@@ -296,11 +327,21 @@ void TimerView::Layout(HWND owner) {
         panel.bottom - 93, strictWidth, 28, SWP_NOZORDER | SWP_NOACTIVATE);
     const int buttonY = panel.bottom - 52;
     const bool active = g_intervalTimer.IsActive();
-    const int groupWidth = active ? 216 : 104;
+    const int startWidth = active ? 78 : 104;
+    const int pauseWidth = 78;
+    const int nextWidth = 100;
+    const int buttonGap = 6;
+    const int groupWidth = active
+        ? startWidth + pauseWidth + nextWidth + buttonGap * 2
+        : startWidth;
     const int buttonLeft = (width - groupWidth) / 2;
-    SetWindowPos(g_startButton, nullptr, buttonLeft, buttonY, 104, 32,
+    SetWindowPos(g_startButton, nullptr, buttonLeft, buttonY, startWidth, 32,
         SWP_NOZORDER | SWP_NOACTIVATE);
-    SetWindowPos(g_pauseButton, nullptr, buttonLeft + 112, buttonY, 104, 32,
+    SetWindowPos(g_pauseButton, nullptr, buttonLeft + startWidth + buttonGap,
+        buttonY, pauseWidth, 32, SWP_NOZORDER | SWP_NOACTIVATE);
+    SetWindowPos(g_nextButton, nullptr,
+        buttonLeft + startWidth + buttonGap + pauseWidth + buttonGap,
+        buttonY, nextWidth, 32,
         SWP_NOZORDER | SWP_NOACTIVATE);
 }
 
@@ -359,6 +400,7 @@ bool TimerView::HandleCommand(HWND owner, WPARAM wParam) {
             g_store.timer_repetitions = repetitions;
             g_store.SaveLocal();
             g_intervalTimer.Start(workSeconds, restSeconds, repetitions, g_store.timer_2020_enabled);
+            g_intervalTimer.SetWorkMeasurementActive(g_isWorkActive);
             if (g_store.timer_strict_mode) SetWorkMeasurementStopped(false);
         }
     } else if (id == IDC_TIMER_PAUSE_BTN) {
@@ -366,6 +408,10 @@ bool TimerView::HandleCommand(HWND owner, WPARAM wParam) {
             g_intervalTimer.Resume();
         } else {
             g_intervalTimer.Pause();
+        }
+    } else if (id == IDC_TIMER_NEXT_BTN) {
+        if (g_intervalTimer.AdvancePhase()) {
+            HandlePhaseChange();
         }
     } else {
         return false;
