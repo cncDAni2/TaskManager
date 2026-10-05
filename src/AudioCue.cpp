@@ -65,20 +65,24 @@ void CALLBACK PlayMelody(PTP_CALLBACK_INSTANCE, void* context) {
         std::vector<MelodyNote> notes;
         if (melody == 1) {
             notes = {
-                { 659, 140, 130, 6000.0 },
-                { 659, 140, 55, 6000.0 },
-                { 659, 140, 55, 6000.0 },
-                { 988, 500, 90, 6000.0 }
+                { 392, 150, 30, 6000.0 },
+                { 523, 150, 30, 6000.0 },
+                { 659, 66, 30, 6000.0 },
+                { 523, 66, 30, 6000.0 },
+                { 392, 150, 30, 6000.0 },
+                { 659, 150, 30, 6000.0 },
+                { 523, 150, 30, 6000.0 },
+                { 659, 66, 30, 6000.0 },
+                { 523, 66, 30, 6000.0 },
+                { 392, 150, 30, 6000.0 },
+                { 659, 150, 30, 6000.0 },
+                { 523, 150, 30, 6000.0 },
+                { 659, 66, 30, 6000.0 },
+                { 523, 66, 30, 6000.0 },
+                { 392, 150, 30, 6000.0 },
+                { 523, 150, 30, 6000.0 },
+                { 659, 400, 0, 6000.0 }
             };
-            static constexpr std::uint32_t extraFrequencies[] = { 587, 698, 784, 880, 1047, 1175 };
-            std::mt19937 generator(static_cast<std::mt19937::result_type>(GetTickCount64()));
-            std::uniform_int_distribution<int> extraCountDistribution(3, 4);
-            std::uniform_int_distribution<int> frequencyDistribution(0, _countof(extraFrequencies) - 1);
-            const int extraCount = extraCountDistribution(generator);
-            for (int i = 0; i < extraCount; ++i) {
-                const std::uint32_t frequency = extraFrequencies[frequencyDistribution(generator)];
-                notes.push_back({ frequency, 150, 80, 5200.0 });
-            }
         } else if (melody == 2) {
             notes = {
                 { 247, 650, 170, 3600.0 },
