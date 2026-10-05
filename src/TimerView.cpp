@@ -325,7 +325,10 @@ bool TimerView::HandleCommand(HWND owner, WPARAM wParam) {
     if (id == IDC_TIMER_STRICT_CHECK) {
         g_store.timer_strict_mode = !g_store.timer_strict_mode;
         g_store.SaveLocal();
-        if (g_store.timer_strict_mode) SetWorkMeasurementStopped(true);
+        if (g_store.timer_strict_mode && g_intervalTimer.IsActive() &&
+            !g_intervalTimer.IsWorkPhase()) {
+            SetWorkMeasurementStopped(true);
+        }
         InvalidateRect(g_strictCheck, nullptr, FALSE);
         return true;
     }
