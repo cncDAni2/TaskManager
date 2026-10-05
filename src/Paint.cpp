@@ -126,8 +126,20 @@ void PaintMiniWindow(HWND hWnd, HDC hdc) {
 
     if (g_intervalTimer.IsActive()) {
         const RECT rcTimer = GetMiniTimerTextRect(clientW);
+        const bool workPhase = g_intervalTimer.IsWorkPhase();
+        const COLORREF timerColor = workPhase ? RGB(220, 38, 38) : RGB(37, 99, 235);
+        const COLORREF timerBorder = workPhase ? RGB(185, 28, 28) : RGB(29, 78, 216);
+        HBRUSH timerBrush = CreateSolidBrush(timerColor);
+        HPEN timerPen = CreatePen(PS_SOLID, 1, timerBorder);
+        HGDIOBJ oldTimerBrush = SelectObject(hdcMem, timerBrush);
+        HGDIOBJ oldTimerPen = SelectObject(hdcMem, timerPen);
+        RoundRect(hdcMem, rcTimer.left, rcTimer.top, rcTimer.right, rcTimer.bottom, 5, 5);
+        SelectObject(hdcMem, oldTimerPen);
+        SelectObject(hdcMem, oldTimerBrush);
+        DeleteObject(timerPen);
+        DeleteObject(timerBrush);
         SelectObject(hdcMem, g_hFontMiniTimer);
-        SetTextColor(hdcMem, g_themeMode == ThemeMode::Pink ? RGB(0, 0, 0) : th.textSecondary);
+        SetTextColor(hdcMem, RGB(255, 255, 255));
         SetBkMode(hdcMem, TRANSPARENT);
         const std::wstring remaining = g_intervalTimer.IsVisionBreakActive()
             ? L"👁️" : FormatTimerTime(g_intervalTimer.SecondsRemaining());

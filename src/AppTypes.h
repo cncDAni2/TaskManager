@@ -32,6 +32,7 @@
 #define IDC_TIMER_START_BTN 2019
 #define IDC_TIMER_PAUSE_BTN 2020
 #define IDC_TIMER_2020_CHECK 2021
+#define IDC_TIMER_STRICT_CHECK 2022
 
 // System Tray and Menu IDs
 #define IDM_TRAY_OPEN       3001

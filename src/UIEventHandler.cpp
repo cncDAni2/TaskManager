@@ -13,6 +13,18 @@
 #include <algorithm>
 #include <cwctype>
 
+void SetWorkMeasurementStopped(bool stopped) {
+    if (g_workMeasurementStopped == stopped) return;
+    g_workMeasurementStopped = stopped;
+    g_isWorkActive = false;
+    SetWindowTextW(g_hWorkMeasureBtn,
+        stopped ? L"Mérés indítása" : L"Mérés leállítása");
+    g_store.Save();
+    g_secondsSinceLastSave = 0;
+    if (g_hWorkMeasureBtn) InvalidateRect(g_hWorkMeasureBtn, nullptr, TRUE);
+    if (g_hWnd) InvalidateRect(g_hWnd, nullptr, FALSE);
+}
+
 namespace {
 HWND g_messageBoxOwner = nullptr;
 
@@ -642,14 +654,7 @@ bool HandleCommand(HWND hWnd, int id) {
         InvalidateRect(hWnd, nullptr, TRUE);
         return true;
     } else if (id == IDC_STOP_WORK_BTN) {
-        g_workMeasurementStopped = !g_workMeasurementStopped;
-        g_isWorkActive = false;
-        SetWindowTextW(g_hWorkMeasureBtn,
-            g_workMeasurementStopped ? L"Mérés indítása" : L"Mérés leállítása");
-        g_store.Save();
-        g_secondsSinceLastSave = 0;
-        InvalidateRect(g_hWorkMeasureBtn, nullptr, TRUE);
-        InvalidateRect(hWnd, nullptr, FALSE);
+        SetWorkMeasurementStopped(!g_workMeasurementStopped);
         return true;
     } else if (id == IDC_MANUAL_WORK_BTN) {
         std::string date;
@@ -726,8 +731,10 @@ bool HandleDrawItem(HWND /*hWnd*/, DRAWITEMSTRUCT* pDIS) {
     bool isPink = g_themeMode == ThemeMode::Pink;
     COLORREF pinkButtonBg = RGB(183, 0, 99);
 
-    if (pDIS->CtlID == IDC_TIMER_2020_CHECK) {
+    if (pDIS->CtlID == IDC_TIMER_2020_CHECK || pDIS->CtlID == IDC_TIMER_STRICT_CHECK) {
         const bool isDisabled = (pDIS->itemState & ODS_DISABLED) != 0;
+        const bool isChecked = pDIS->CtlID == IDC_TIMER_2020_CHECK
+            ? g_store.timer_2020_enabled : g_store.timer_strict_mode;
         const COLORREF textColor = isDisabled ? th.textSecondary : th.textPrimary;
         HBRUSH backgroundBrush = CreateSolidBrush(th.bgWindow);
         FillRect(pDIS->hDC, &pDIS->rcItem, backgroundBrush);
@@ -747,7 +754,7 @@ bool HandleDrawItem(HWND /*hWnd*/, DRAWITEMSTRUCT* pDIS) {
         SelectObject(pDIS->hDC, oldPen);
         DeleteObject(borderPen);
 
-        if (g_store.timer_2020_enabled) {
+        if (isChecked) {
             HPEN checkPen = CreatePen(PS_SOLID, 2, textColor);
             oldPen = SelectObject(pDIS->hDC, checkPen);
             MoveToEx(pDIS->hDC, checkRect.left + 4, checkRect.top + 9, nullptr);

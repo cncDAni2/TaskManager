@@ -21,13 +21,12 @@ void IntervalTimer::Start(int newWorkSeconds, int newRestSeconds, int newRepetit
     pausedSecondsRemaining = 0;
     running = true;
     const unsigned long long now = GetTickCount64();
-    phaseStartedTick = now;
     phaseEndTick = now + static_cast<unsigned long long>(workSeconds) * 1000;
     visionBreakEnabled = newVisionBreakEnabled;
     visionBreakActive = false;
     nextVisionBreakTick = now + kVisionBreakIntervalMs;
     visionBreakEndTick = 0;
-    pausedPhaseElapsedMs = 0;
+    pausedNextVisionBreakRemainingMs = 0;
     pausedVisionBreakRemainingMs = 0;
 }
 
@@ -36,15 +35,19 @@ void IntervalTimer::Stop() {
     paused = false;
     pausedSecondsRemaining = 0;
     visionBreakActive = false;
+    pausedNextVisionBreakRemainingMs = 0;
+    pausedVisionBreakRemainingMs = 0;
 }
 
 void IntervalTimer::Pause() {
     if (!running) return;
     pausedSecondsRemaining = SecondsRemaining();
     const unsigned long long now = GetTickCount64();
-    pausedPhaseElapsedMs = now - phaseStartedTick;
     pausedVisionBreakRemainingMs = visionBreakActive && visionBreakEndTick > now
         ? visionBreakEndTick - now : 0;
+    pausedNextVisionBreakRemainingMs = !visionBreakActive && workPhase && visionBreakEnabled &&
+        static_cast<unsigned long long>(workSeconds) * 1000 > kVisionBreakIntervalMs &&
+        nextVisionBreakTick > now ? nextVisionBreakTick - now : 0;
     running = false;
     paused = true;
 }
@@ -52,13 +55,33 @@ void IntervalTimer::Pause() {
 void IntervalTimer::Resume() {
     if (!paused) return;
     const unsigned long long now = GetTickCount64();
-    phaseStartedTick = now - pausedPhaseElapsedMs;
     phaseEndTick = now + static_cast<unsigned long long>(pausedSecondsRemaining) * 1000;
     if (visionBreakActive) visionBreakEndTick = now + pausedVisionBreakRemainingMs;
-    else nextVisionBreakTick = phaseStartedTick + kVisionBreakIntervalMs;
+    else nextVisionBreakTick = now + pausedNextVisionBreakRemainingMs;
     pausedSecondsRemaining = 0;
+    pausedNextVisionBreakRemainingMs = 0;
+    pausedVisionBreakRemainingMs = 0;
     paused = false;
     running = true;
+}
+
+void IntervalTimer::SetVisionBreakEnabled(bool enabled) {
+    if (visionBreakEnabled == enabled) return;
+    visionBreakEnabled = enabled;
+    if (!enabled) {
+        if (visionBreakActive) AudioCue::PlayVisionBreakEnd();
+        visionBreakActive = false;
+        pausedNextVisionBreakRemainingMs = 0;
+        pausedVisionBreakRemainingMs = 0;
+        return;
+    }
+
+    if (!workPhase) return;
+    if (paused) {
+        pausedNextVisionBreakRemainingMs = kVisionBreakIntervalMs;
+    } else if (running) {
+        nextVisionBreakTick = GetTickCount64() + kVisionBreakIntervalMs;
+    }
 }
 
 bool IntervalTimer::Tick() {
@@ -91,7 +114,6 @@ bool IntervalTimer::Tick() {
             running = false;
         } else {
             workPhase = true;
-            phaseStartedTick = now;
             visionBreakActive = false;
             nextVisionBreakTick = now + kVisionBreakIntervalMs;
             phaseEndTick = now + static_cast<unsigned long long>(workSeconds) * 1000;

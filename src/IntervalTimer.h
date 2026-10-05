@@ -8,6 +8,7 @@ public:
     void Stop();
     void Pause();
     void Resume();
+    void SetVisionBreakEnabled(bool enabled);
     bool Tick();
 
     bool IsRunning() const;
@@ -31,10 +32,9 @@ private:
     unsigned long long phaseEndTick = 0;
     bool visionBreakEnabled = false;
     bool visionBreakActive = false;
-    unsigned long long phaseStartedTick = 0;
     unsigned long long nextVisionBreakTick = 0;
     unsigned long long visionBreakEndTick = 0;
-    unsigned long long pausedPhaseElapsedMs = 0;
+    unsigned long long pausedNextVisionBreakRemainingMs = 0;
     unsigned long long pausedVisionBreakRemainingMs = 0;
 };
 

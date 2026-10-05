@@ -19,6 +19,7 @@ public:
     double timer_rest_minutes = 10.0;
     int timer_repetitions = 8;
     bool timer_2020_enabled = false;
+    bool timer_strict_mode = false;
     bool timer_start_with_app = false;
     bool sounds_enabled = true;
     ThemeMode theme_mode = ThemeMode::Dark;

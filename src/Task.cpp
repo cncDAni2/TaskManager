@@ -220,6 +220,7 @@ void TaskStore::SaveLocal() {
         << "  \"timer_rest_minutes\": " << timer_rest_minutes << ",\n"
         << "  \"timer_repetitions\": " << timer_repetitions << ",\n"
         << "  \"timer_2020_enabled\": " << (timer_2020_enabled ? "true" : "false") << ",\n"
+        << "  \"timer_strict_mode\": " << (timer_strict_mode ? "true" : "false") << ",\n"
         << "  \"timer_start_with_app\": " << (timer_start_with_app ? "true" : "false") << ",\n"
         << "  \"sounds_enabled\": " << (sounds_enabled ? "true" : "false") << ",\n"
         << "  \"sync_file_path\": \"" << TaskUtils::EscapeJsonString(TaskUtils::WideToUtf8(syncFilePath)) << "\",\n"
@@ -527,6 +528,15 @@ void TaskStore::LoadLocal() {
         size_t valueStart = content.find_first_not_of(" \t\r\n", timer2020Pos + 21);
         if (valueStart != std::string::npos) {
             timer_2020_enabled = content.compare(valueStart, 4, "true") == 0;
+        }
+    }
+
+    size_t timerStrictPos = content.find("\"timer_strict_mode\":");
+    if (timerStrictPos != std::string::npos) {
+        const char* timerStrictKey = "\"timer_strict_mode\":";
+        size_t valueStart = content.find_first_not_of(" \t\r\n", timerStrictPos + strlen(timerStrictKey));
+        if (valueStart != std::string::npos) {
+            timer_strict_mode = content.compare(valueStart, 4, "true") == 0;
         }
     }
 

@@ -104,8 +104,8 @@ RECT GetMiniFocusButtonRect(int clientWidth) {
 }
 
 RECT GetMiniTimerTextRect(int clientWidth) {
-    const int left = GetMiniFocusButtonRect(clientWidth).left - 33;
-    return { left, 6, left + 30, 20 };
+    const int right = GetMiniFocusButtonRect(clientWidth).left - 3;
+    return { right - 38, 6, right, 20 };
 }
 
 RECT GetTimerPanelRect(int clientWidth) {

@@ -9,3 +9,4 @@ bool HandleMouseMove(HWND hWnd, LPARAM lParam);
 bool HandleCommand(HWND hWnd, int id);
 bool HandleDrawItem(HWND hWnd, DRAWITEMSTRUCT* pDIS);
 bool HandleAppTray(HWND hWnd, LPARAM lParam);
+void SetWorkMeasurementStopped(bool stopped);
