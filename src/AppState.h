@@ -55,6 +55,7 @@ extern bool g_miniTimerFlashWorkPhase;
 
 // Session Tasks Cache
 extern std::vector<int> g_sessionActiveTaskIds;
+extern std::vector<int> g_miniCompletionGraceTaskIds;
 extern bool g_sessionActiveIdsInitialized;
 
 // Render Items & Scroll State

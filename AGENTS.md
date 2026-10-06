@@ -54,6 +54,7 @@ The application is modularized under `src/` into focused, single-responsibility 
 
 ## Conventions & Critical Gotchas
 
+- **User-facing documentation and controls**: When adding a user-facing feature, update [README.md](README.md) with its visible behavior and relevant workflow. Give buttons clear, self-explanatory labels; add concise tooltips for icon-only, abbreviated, state-dependent, or otherwise ambiguous actions. A tooltip should clarify the action or effect rather than merely repeat the label, and should not be redundant when the label and context are already clear.
 - **Modular structure**: Keep source and header files compact and focused. Prefer a dedicated `.h` / `.cpp` pair or a logical subfolder for new features rather than inflating an unrelated module.
 - **Performance**:
   - Preserve the event-driven, non-polling design. The README contains approximate resource-use estimates; do not present them as measured values without checking the running process.

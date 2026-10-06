@@ -51,6 +51,7 @@ bool g_miniTimerFlashWorkPhase = false;
 
 // Session Tasks Cache
 std::vector<int> g_sessionActiveTaskIds;
+std::vector<int> g_miniCompletionGraceTaskIds;
 bool g_sessionActiveIdsInitialized = false;
 
 // Render Items & Scroll State

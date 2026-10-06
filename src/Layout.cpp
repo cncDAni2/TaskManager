@@ -179,6 +179,7 @@ void UpdateControlsVisibility() {
 }
 
 void RecalculateMiniLayout() {
+    static int previousMiniHeight = 0;
     g_displayItems.clear();
     int miniW = g_fullWinW / 2;
     if (miniW < 260) miniW = 292;
@@ -188,7 +189,9 @@ void RecalculateMiniLayout() {
     const int spacing = 4;
     const time_t now = time(nullptr);
     const auto shouldShowTask = [now](const Task& task) {
-        return !task.completed || (task.completed_at > 0 && now - task.completed_at < 20);
+        return !task.completed || (task.completed_at > 0 && now - task.completed_at < 10 &&
+            std::find(g_miniCompletionGraceTaskIds.begin(), g_miniCompletionGraceTaskIds.end(), task.id) !=
+                g_miniCompletionGraceTaskIds.end());
     };
 
     std::vector<Task> orderedActiveTasks;
@@ -243,6 +246,9 @@ void RecalculateMiniLayout() {
 
     int x = g_miniPositionValid ? g_miniWinX : rcWork.right - miniW - 12;
     int y = g_miniPositionValid ? g_miniWinY : rcWork.bottom - totalH - 12;
+    if (g_miniPositionValid && previousMiniHeight > 0) {
+        y += previousMiniHeight - totalH;
+    }
     if (y < rcWork.top) y = rcWork.top;
     if (x < rcWork.left) x = rcWork.left;
     if (x + miniW > rcWork.right) x = rcWork.right - miniW;
@@ -251,6 +257,7 @@ void RecalculateMiniLayout() {
     g_miniWinX = x;
     g_miniWinY = y;
     g_miniPositionValid = true;
+    previousMiniHeight = totalH;
 
     RECT rcDragHandle = GetMiniDragHandleRect(miniW);
     HRGN hMiniRegion = CreateRectRgn(0, rcDragHandle.bottom - 4, miniW, totalH);
@@ -278,10 +285,27 @@ void RecalculateMiniLayout() {
     InvalidateRect(g_hWnd, nullptr, TRUE);
 }
 
+void FinalizeCompletedTaskSession() {
+    const auto isCompletedTask = [](int id) {
+        auto it = std::find_if(g_store.tasks.begin(), g_store.tasks.end(),
+            [id](const Task& task) { return task.id == id; });
+        return it == g_store.tasks.end() || it->completed;
+    };
+    const size_t oldOrderSize = g_store.active_order.size();
+    g_store.active_order.erase(std::remove_if(g_store.active_order.begin(), g_store.active_order.end(),
+        isCompletedTask), g_store.active_order.end());
+    g_sessionActiveTaskIds.erase(std::remove_if(g_sessionActiveTaskIds.begin(), g_sessionActiveTaskIds.end(),
+        isCompletedTask), g_sessionActiveTaskIds.end());
+    g_miniCompletionGraceTaskIds.erase(std::remove_if(g_miniCompletionGraceTaskIds.begin(),
+        g_miniCompletionGraceTaskIds.end(), isCompletedTask), g_miniCompletionGraceTaskIds.end());
+    if (g_store.active_order.size() != oldOrderSize) g_store.SaveLocal();
+}
+
 void EnterMiniMode() {
     if (g_isMiniMode) return;
 
     CommitInlineEdit();
+    FinalizeCompletedTaskSession();
 
     RECT rcWork;
     SystemParametersInfoW(SPI_GETWORKAREA, 0, &rcWork, 0);

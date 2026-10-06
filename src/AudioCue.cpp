@@ -138,10 +138,6 @@ void SubmitMelody(std::uintptr_t melody) {
 }
 }
 
-void AudioCue::PlayNewTaskMelody() {
-    SubmitMelody(0);
-}
-
 void AudioCue::PlayTimerWorkMelody() {
     SubmitMelody(1);
 }

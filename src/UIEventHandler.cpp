@@ -1,6 +1,5 @@
 #include "UIEventHandler.h"
 #include "AppState.h"
-#include "AudioCue.h"
 #include "Drawing.h"
 #include "Layout.h"
 #include "InlineEdit.h"
@@ -266,7 +265,17 @@ bool HandleLButtonDown(HWND hWnd, LPARAM lParam) {
                 InvalidateRect(hWnd, nullptr, FALSE);
                 return true;
             } else if (PtInRect(&item.checkRect, { mx, my })) {
+                const bool wasCompleted = item.task.completed;
                 g_store.ToggleCompleted(item.task.id);
+                auto graceIt = std::find(g_miniCompletionGraceTaskIds.begin(),
+                    g_miniCompletionGraceTaskIds.end(), item.task.id);
+                if (wasCompleted) {
+                    if (graceIt != g_miniCompletionGraceTaskIds.end()) {
+                        g_miniCompletionGraceTaskIds.erase(graceIt);
+                    }
+                } else if (graceIt == g_miniCompletionGraceTaskIds.end()) {
+                    g_miniCompletionGraceTaskIds.push_back(item.task.id);
+                }
                 g_store.Save();
                 RecalculateMiniLayout();
                 return true;
@@ -599,7 +608,6 @@ bool HandleCommand(HWND hWnd, int id) {
         }
 
         g_store.Add(taskText, g_syncToggle);
-        AudioCue::PlayNewTaskMelody();
         g_syncToggle = false;
         if (g_hSyncToggleBtn) InvalidateRect(g_hSyncToggleBtn, nullptr, TRUE);
         g_sessionActiveTaskIds.insert(g_sessionActiveTaskIds.begin(), g_store.tasks.back().id);

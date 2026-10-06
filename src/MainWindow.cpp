@@ -92,12 +92,36 @@ void ShowAppWindow() {
     g_fullWinH = winH;
 
     ReloadSyncAndNotify();
-    for (const auto& t : g_store.tasks) {
-        if (!t.completed && std::find(g_store.active_order.begin(), g_store.active_order.end(), t.id) == g_store.active_order.end()) {
-            g_store.active_order.push_back(t.id);
+    std::vector<int> activeOrder;
+    std::set<int> seenActiveIds;
+    for (int id : g_store.active_order) {
+        auto taskIt = std::find_if(g_store.tasks.begin(), g_store.tasks.end(),
+            [id](const Task& task) { return task.id == id; });
+        if (taskIt != g_store.tasks.end() && !taskIt->completed && seenActiveIds.insert(id).second) {
+            activeOrder.push_back(id);
         }
     }
-    g_sessionActiveTaskIds = g_store.active_order;
+    for (const auto& t : g_store.tasks) {
+        if (!t.completed && seenActiveIds.insert(t.id).second) {
+            activeOrder.push_back(t.id);
+        }
+    }
+    if (activeOrder != g_store.active_order) {
+        g_store.active_order = activeOrder;
+        g_store.SaveLocal();
+    }
+    g_sessionActiveTaskIds = std::move(activeOrder);
+    const time_t now = time(nullptr);
+    for (int id : g_miniCompletionGraceTaskIds) {
+        auto taskIt = std::find_if(g_store.tasks.begin(), g_store.tasks.end(),
+            [id](const Task& task) { return task.id == id; });
+        if (taskIt != g_store.tasks.end() && taskIt->completed && taskIt->completed_at > 0 &&
+            now - taskIt->completed_at < 10 &&
+            std::find(g_sessionActiveTaskIds.begin(), g_sessionActiveTaskIds.end(), id) ==
+                g_sessionActiveTaskIds.end()) {
+            g_sessionActiveTaskIds.push_back(id);
+        }
+    }
     g_sessionActiveIdsInitialized = true;
     g_selectedIndex = -1;
 
@@ -117,6 +141,7 @@ void ShowAppWindow() {
 
 void HideAppWindow() {
     CommitInlineEdit();
+    FinalizeCompletedTaskSession();
     if (g_isMiniMode) {
         ExitMiniMode(true);
     } else {
@@ -366,17 +391,34 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                     }
                 }
 
-                if (g_isMiniMode && IsWindowVisible(hWnd)) {
-                    const time_t now = time(nullptr);
-                    const bool hasExpiredCompletedTask = std::any_of(
-                        g_displayItems.begin(), g_displayItems.end(), [now](const DisplayItem& item) {
-                            return !item.isHeader && item.task.completed && item.task.completed_at > 0 &&
-                                now - item.task.completed_at >= 20;
-                        });
-                    if (hasExpiredCompletedTask) {
-                        RecalculateMiniLayout();
-                        InvalidateRect(hWnd, nullptr, FALSE);
+                const time_t now = time(nullptr);
+                bool hasExpiredMiniCompletion = false;
+                auto graceIt = g_miniCompletionGraceTaskIds.begin();
+                while (graceIt != g_miniCompletionGraceTaskIds.end()) {
+                    const int taskId = *graceIt;
+                    auto taskIt = std::find_if(g_store.tasks.begin(), g_store.tasks.end(),
+                        [taskId](const Task& task) { return task.id == taskId; });
+                    if (taskIt == g_store.tasks.end() || !taskIt->completed) {
+                        graceIt = g_miniCompletionGraceTaskIds.erase(graceIt);
+                    } else if (taskIt->completed_at > 0 && now - taskIt->completed_at >= 10) {
+                        auto activeIt = std::find(g_sessionActiveTaskIds.begin(),
+                            g_sessionActiveTaskIds.end(), taskId);
+                        if (activeIt != g_sessionActiveTaskIds.end()) {
+                            g_sessionActiveTaskIds.erase(activeIt);
+                        }
+                        graceIt = g_miniCompletionGraceTaskIds.erase(graceIt);
+                        hasExpiredMiniCompletion = true;
+                    } else {
+                        ++graceIt;
                     }
+                }
+                if (hasExpiredMiniCompletion && IsWindowVisible(hWnd)) {
+                    if (g_isMiniMode) RecalculateMiniLayout();
+                    else if (g_viewMode == ViewMode::ActiveTasks) RecalculateLayout();
+                    InvalidateRect(hWnd, nullptr, FALSE);
+                }
+
+                if (g_isMiniMode && IsWindowVisible(hWnd)) {
                     if (timerWasRunning || g_intervalTimer.IsRunning()) {
                         RECT rcClient{};
                         GetClientRect(hWnd, &rcClient);

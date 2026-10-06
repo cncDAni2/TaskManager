@@ -29,7 +29,7 @@ void DeletePreviousWord(HWND hEdit) {
 }
 
 LRESULT CALLBACK EditSubclassProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam, UINT_PTR /*uIdSubclass*/, DWORD_PTR /*dwRefData*/) {
-    if (uMsg == WM_CHAR && (wParam == VK_RETURN || wParam == 0x7F)) {
+    if (uMsg == WM_CHAR && (wParam == VK_RETURN || wParam == VK_TAB || wParam == 0x7F)) {
         if (wParam == 0x7F) DeletePreviousWord(hWnd);
         return 0;
     } else if (uMsg == WM_KEYDOWN) {
@@ -59,6 +59,8 @@ LRESULT CALLBACK EditSubclassProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lP
                     return 0;
                 }
             }
+            if (g_hAddBtn && IsWindowVisible(g_hAddBtn)) SetFocus(g_hAddBtn);
+            return 0;
         }
     }
     return DefSubclassProc(hWnd, uMsg, wParam, lParam);

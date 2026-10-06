@@ -6,6 +6,7 @@ void RecalculateLayout();
 void RecalculateMiniLayout();
 void EnterMiniMode();
 void ExitMiniMode(bool toHidden = false);
+void FinalizeCompletedTaskSession();
 void UpdateControlsVisibility();
 void EnsureVisible(int itemIndex);
 int GetListBottom(int clientHeight);

@@ -1,78 +1,98 @@
 # Ultra-könnyű Windows Feladatkezelő (TaskManager)
 
-Egy minimális erőforrásigényű (közel 0% CPU, ~2-4 MB RAM aktív állapotban, háttérbe rejtve < 1.5 MB RAM) natív C++ Win32 feladatkezelő alkalmazás.
+Az alkalmazás elsősorban a teendők gyors és egyszerű kezelésére szolgál, másodsorban pedig a munkaidőd nyomon követésére. Indítása a `TaskManager.exe` fájllal történik.
 
----
+## Feladatok kezelése
 
-## Főbb Jellemzők
+- Ctrl+F1: Feladatkezelő főablak megnyitása
+- Ctrl+F2: PIN mód bekapcsolása / kikapcsolása
 
-1. **Rendszertálca (System Tray) és Gyorsbillentyűk**:
-   - A tálca jobb alsó sarkában az óra mellett fut egy elegáns ikonnal.
-   - Bal kattintásra vagy a **`Ctrl + F1`** globális gyorsbillentyűre felugrik a képernyő jobb alsó sarkában (a tálca felett).
-   - A **`Ctrl + F2`** globális gyorsbillentyű kétirányú (toggle):
-     - Ha az ablak nyitva van: kikapcsolja a PIN módot és bezárja az ablakot a tálcára.
-     - Ha az ablak rejtve van: bekapcsolja a PIN módot és azonnal megnyitja a kis lebegő PIN ablakot a jobb alsó sarokban.
-   - Jobb kattintással elérhető a helyi menü: *Megnyitás*, *Elkészült feladatok*, *Kilépés*.
-   - Az **`Esc`** billentyű vagy a fejléc **`✕`** gombja azonnal visszacsukja a tálcára.
+A főablak megnyitásakor az új feladat felvételére szolgáló mező azonnal fókuszt kap. Nyomd meg a Ctrl+F1 billentyűkombinációt, írd be az új feladatot, majd nyomj Entert.  
+Ha folyamatosan látni szeretnéd a feladataidat, a Ctrl+F2 billentyűkombinációval mini nézetet jeleníthetsz meg. Újabb Ctrl+F2-re a nézet eltűnik.  
+**Helyi menü**: Az óra melletti ikonra jobb gombbal kattintva további funkciókat érhetsz el. Javasolt bekapcsolni az **Indítás a Windows-zal** lehetőséget.
 
-2. **Rögzített (PIN) mód**:
-   - Indításkor az alkalmazás **automatikusan bekapcsolt PIN móddal és közvetlenül a kis lebegő ablak megjelenítésével** indul.
-   - A fejléc jobb oldalán az `✕` mellett található a **Pin** (gombostű) gomb, illetve a jobb klikkes helyi menüben is elérhető a **PIN mód** opció.
-   - Bekapcsolt állapotban fókuszvesztéskor az ablak nem záródik be, hanem egy lebegő, minimalista módba vált:
-     - 80%-os áttetszőség (`opacity: 80%`), fél szélességű lebegő ablak.
-     - Magassága automatikusan igazodik a jelenleg aktív feladatok számához.
-     - Csak a jelenlegi aktív feladatok listázódnak; itt közvetlenül pipálhatóak / befejezhetőek.
-     - Bármely feladat kártyájára kattintva a teljes méretű ablak azonnal megnyílik és egyből szerkesztő (inline edit) módba lép a kiválasztott feladatra.
-     - **Munkaidő kijelző csík**: az ablak legalján egy 3px magas sáv mutatja a munkaidő százalékos előrehaladását (ugyanúgy a 8 órás cél alapján arányos szélességgel, mint a normál módban, szöveg nélkül). A kitöltés **zöld**, amikor a számláló aktívan számol, és **piros**, amikor szünetel.
-   - Kilépés a PIN módból és bezárás:
-     - A **`Ctrl + F2`** gyorsbillentyűvel (kikapcsolja a PIN módot és bezárja az ablakot)
-     - A teljes ablakon az `✕` gombra kattintva
-     - A teljes ablakon újra a PIN ikonra kattintva
-     - A jobb klikkes helyi menüből a "PIN mód" pipáját kivéve.
+### Pin nézet
 
-3. **Aktív feladatok kezelése**:
-   - **Új feladat hozzáadása**: szövegmező + `Enter` vagy `+ Hozzáad` gomb.
-   - **Globális / Szinkronizált feladat (OneDrive)**: a `+ Hozzáad` gomb melletti felhő (`☁`) toggle gombbal bekapcsolható (kék hátterűvé válik). Mentés után automatikusan visszaáll normál helyi feladatra.
-   - **Szerkesztés**: ✎ gombra kattintva vagy a feladatra duplán kattintva felugró szerkesztő ablak.
-   - **Törlés**: 🗑 kuka ikonra kattintva.
-   - **Elkészültnek jelölés**: a bal oldali jelölőnégyzetre `[ ]` kattintva a feladat zöld pipát kap és átkerül az elkészült feladatok közé a pontos elkészülési időbélyeggel.
+A PIN nézet egy mini, kissé áttetsző lebegő ablak, amely mindig a képernyőn marad. A Ctrl+F2 billentyűkombinációval, a főablak PIN ikonjával vagy a helyi menüből kapcsolható be.  
+**Jelölőnégyzetek:** Ebben a nézetben is késznek jelölheted a feladatokat. A kész feladatok még 10 másodpercig láthatók, így marad időd ellenőrizni vagy visszavonni a jelölést; ezután a PIN és a főablak aktív listájából is eltűnnek, és az „Elkészült” nézetben találhatók meg.
+**Feladat címe:** Csak annyi szöveg látszik, amennyi kifér. Kattints a címre a főablak megnyitásához és a feladat szerkesztéséhez; a teljes szöveg ki lesz jelölve.
+**Jelölések:** Látható a feladat jelölőikonja, globálisan szinkronizált feladatnál pedig a felhőikon és az „ÉN” gomb.  
+**Felső fülek:** Itt látható a visszaszámlálás (piros háttér = munka, kék = pihenés, szem ikon = szem pihentetése), a Fókusz mód kapcsolója és a lebegő ablak mozgatófogantyúja.
 
-4. **Perzisztens adattárolás & Felhő-szinkronizáció**:
-   - **Helyi feladatok**: az alkalmazás mellett lévő `tasks-local.json` fájlba mentődnek (munkaidővel és beállításokkal).
-   - **Szinkronizált feladatok**: kizárólag feladatokat és a hozzáadó nevét tartalmazó megosztott JSON fájlba mentődnek (alapértelmezés: `C:\Users\<user>\OneDrive - Siemens AG\TaskManager\tasks.json`).
-   - **Fájlválasztó**: a fejlécben a bezárás (`✕`) mellett lévő mappa-felhő ikonra kattintva a szabványos Windows fájlkiválasztóval bármikor megváltoztatható a szinkronizációs fájl helye.
-   - **Megjelenítés**: a szinkronizált feladatok előtt kis felhő (`☁`) ikon látható a fő listában, a PIN (mini) ablakban és az előzményeknél is, a meta sorban pedig megjelenik a rögzítő neve (pl. `Burunkai, Dániel`).
+### Főablak nézet - alapértelmezett nézet
 
-5. **Elkészült feladatok nézet**:
-   - Az ablak jobb felső sarkában lévő **`Elkészült feladatok (N) →`** gombbal érhető el.
-   - **Alapértelmezett szűrés**: csak az **előző nap 9:30 óta** elkészült feladatokat mutatja.
-   - **`MIND (napi bontás)`** fül: megjeleníti a teljes előzményt, naponkénti csoportosításban és fejlécbontásban (`Ma`, `Tegnap`, stb.).
-   - Az elkészült feladatok mellett:
-     - **Kuka ikon (`🗑`)**: végleges törlés.
-     - **Jelölőnégyzet (`[✓]`)**: visszakattintva a feladat újra aktívvá válik! (Szerkesztési lehetőség itt a kérésnek megfelelően nincs, csak törlés és újra-aktiválás).
+A főablak megnyitásakor az új feladat hozzáadására szolgáló mező azonnal aktív. Mellette felhőikon található. A globális szinkronizáláshoz az új feladat létrehozása előtt kapcsold be a felhőikont.  
+A feladatokat szerkesztheted, törölheted, készre jelölheted, jelölőikonnal láthatod el (az ikonra kattintva válthatsz a jelölések között), és húzással rendezheted sorba.  
+Főablakban készre jelölve a feladat az ablak bezárásáig látható marad az aktív listában; újranyitáskor már csak az „Elkészült” nézetben szerepel.
+A kész feladatokat napi bontásban, a fenti „Elkészült” gombra kattintva láthatod.
 
-6. **Munkaidő nézet**:
-   - Az **`Idők`** gombbal a napi és heti munkaidő-előzmény jelenik meg.
-   - A **`Manuális`** gombbal dátumonként szerkeszthető a kézi idő órában; a kiválasztott nap meglévő értéke előtöltődik, a `0` törli azt.
-   - A mért és manuálisan hozzáadott idő eltérő színű csíkszakaszt kap; a részletek a csík fölötti eszköztippben láthatók.
+**Gyorsbillentyűk** a főablak nézetben:
 
-7. **Munka/pihenés időzítő**:
-   - A fejléc stopperóra ikonjával érhető el; a munkaidő, pihenőidő és ismétlésszám alapértéke `50`, `10` és `8`.
-   - A **Start** indítja, a **Stop** leállítja a ciklust. Minden munka- és pihenőszakasz végén külön dallam szól.
-   - Futás közben a főablak piros **Munka** vagy kék **Pihenés** sávon mutatja a következő dallamig hátralévő időt; PIN módban csak a `MM:SS` látszik.
-   - A módosított értékek a helyi `tasks-local.json` fájlba mentődnek.
+- Enter: új feladat hozzáadása, ha a beviteli mező aktív.  
+- Tab / Shift+Tab: Váltás a feladatok között
+- Space: A kijelölt feladat készre jelölése vagy a jelölés visszavonása
+- Enter: A kijelölt feladat szerkesztése, illetve a szerkesztés befejezése és mentése
+- ESC: Szerkesztés közben visszavonja a módosításokat; egyébként befejezi és menti a szerkesztést
+- Delete: Kijelölt feladat törlése (megerősítést kér)
+- Dupla kattintás egy feladatra: az adott feladat szerkesztése.
 
-8. **Közel 0 erőforrásigény**:
-   - Tiszta Win32 C++ (nincs keretrendszer, nincs háttérben pörgő felesleges szál vagy timer).
-   - Eseményvezérelt `GetMessage` üzenetciklus (0.00% CPU tétlen állapotban).
-   - Elrejtéskor a rendszer automatikusan kiüríti a memóriát (`SetProcessWorkingSetSize`), így az alkalmazás minimális memóriát foglal.
+### Szinkronizált feladatok
 
----
+A beállításokban megadható a szinkronizálási fájl helye. A program nem tölti fel a fájlt a hálózatra: annak megosztott helyen kell lennie (például OneDrive- vagy Google Drive-mappában), a szinkronizálást pedig a tárhelyszolgáltató alkalmazása végzi.  
 
-## Fordítás
+A szinkronizált fájl speciális:
+
+- Felhőikont kap.
+- Csak a megosztott helyen található fájlt használja.
+- Minden változtatás azonnal mentésre kerül a fájlba. Ha többen egyszerre módosítják, egy későbbi szinkronizálás felülírhatja a változtatásokat.
+- Nem jelölhető meg speciális ikonnal
+- Megjelenik, hogy ki vette fel a feladatot.
+- Az "ÉN" gombbal magadra veheted a feladatot. A többiek látják, ki vette fel, és a feladatot piros szín jelzi. Egy feladatot csak egy ember vehet fel; a többiek számára zárolva lesz.
+- A feladatok sorrendje módosítható, de csak nálad érvényes; mások nem látják.
+
+## Időmérés
+
+Nem ez a program fő funkciója, de hasznos a munkaidő nyomon követésére is. A képernyő előtt töltött aktív időt méri. A mérés szünetel, ha:
+
+- Két perce nem volt billentyű- vagy egéraktivitás.
+- A rendszer zárolva van.
+- Manuálisan szüneteltetted az időmérést
+- Az előtérben lévő ablak címe tartalmazza a Discord, YouTube vagy Facebook nevek egyikét.
+- Bezártad a programot.
+- Az időzítő "STRICT MODE"-ban van, és éppen pihenőidőt mér.
+
+Az időmérés "munkanapot" mér. A munkaidő kezdete alapértelmezés szerint 9:15.  
+Az eddigi méréseket napi és heti bontásban is megtekintheted az "Idők" oldalon.  
+**Manuális** munkaidőmegadás: Az Idők nézetben kézzel is megadhatsz munkaidőt. Kiválaszthatsz egy napot, ahol módosíthatod a korábbi kézi bejegyzést. Alapból minden naphoz ez 0 óra. A kézi megadást az áttekintő nézetek más színnel jelzik.  
+A százalékos kijelző a 8 órás munkaidőhöz viszonyítva mutatja az eltelt aktív idő arányát. Ez törvényileg szabályozott módon 6 óra 50 perc-nél jelez 100%-ot, ugyanis a törvény egy 20 perces szünetet ír elő, valamint hogy a képernyő előtti munkavégzést óránként 10 percre szüneteltetni kell. (Fontos megjegyezni: Ez NEM munkaszünet, de a program a képernyőidőt méri, azt pedig szüneteltetni kell - így a program számára ez nem számolható mint munkaidő.)
+
+### Időzítő: Munka/pihenés
+
+Az időzítő funkció segít az előző részben leírt munka- és pihenőciklusok betartásában. Kattints a főablakban a stopperóra ikonra. Itt beállíthatod a munka- és pihenőidő hosszát. A Start és a Pause gombbal elindíthatod, illetve szüneteltetheted az időzítőt; a Következő gombbal pedig azonnal továbbléphetsz a következő szakaszra. A program hangjelzéssel és a PIN ablak rövid villogtatásával jelzi a váltást.
+
+STRICT MODE: Ha ezt is bepipálod, akkor az időzítő kihatással lesz a munkaidő mérésre, és automatikusan szünetelteti a munkaidő mérést a pihenőidő alatt.
+
+20-20-20 szabály: A szem egészségének megőrzése érdekében minden 20 perc képernyőnézés után nézz 20 másodpercig 20 láb (kb. 6 méter) távolságra. Rövid hangjelzéssel emlékeztet a program, amikor ideje szünetet tartani, és mikor vissza kell térni. Ez a PIN ablakban is megjelenik: a számláló egy szem ikonra vált át, ha épp szempihenőidő van.
+
+### Fókusz mód
+
+Fókusz mód a főablakban és a PIN ablakban is elérhető (célkereszt ikon). Bekapcsolásakor a program az inaktivitás és a kizárt alkalmazások ellenére is méri az időt, amíg a gépet le nem zárolod, vagy ki nem kapcsolod a fókusz módot. A bekapcsolt mód ikonja kék.
+
+## Erőforrásigény és fordítás
+
+Közel 0 erőforrásigény:
+
+- Elsődleges cél a minimális erőforrásigény biztosítása.
+- Tiszta Win32 C++ (nincs keretrendszer, nincs háttérben pörgő felesleges szál vagy timer).
+- Eseményvezérelt `GetMessage` üzenetciklus (0% CPU tétlen állapotban).
+- Minimális memóriahasználat: 800KB - 2MB.
+- Elrejtéskor a rendszer automatikusan kiüríti a memóriát (`SetProcessWorkingSetSize`), így az alkalmazás minimális memóriát foglal.
+- Nincsenek külső hangfájlok: az alkalmazás memóriában generálja a hangokat.
 
 A mellékelt `build.bat` parancsfájl azonnal lefordítja az alkalmazást:
+
 ```cmd
 build.bat
 ```
+
 A generált futtatható fájl: `TaskManager.exe` (~550 KB méretű önálló natív exe). A fordítás köztes fájljai a `dist/` mappába kerülnek.
