@@ -19,6 +19,7 @@ namespace {
     constexpr int IDC_SETTINGS_OK = 5105;
     constexpr int IDC_SETTINGS_SOUNDS = 5106;
     constexpr int IDC_SETTINGS_TIMER_AUTO_START = 5107;
+    constexpr int IDC_SETTINGS_SYNC_NAME = 5108;
     constexpr wchar_t APP_VERSION[] = L"v"
         TASK_MANAGER_WIDEN(TASK_MANAGER_STRINGIFY(TASK_MANAGER_VERSION_MAJOR)) L"."
         TASK_MANAGER_WIDEN(TASK_MANAGER_STRINGIFY(TASK_MANAGER_VERSION_MINOR)) L"."
@@ -30,6 +31,7 @@ namespace {
     struct DialogState {
         HWND owner = nullptr;
         HWND pathText = nullptr;
+        HWND syncName = nullptr;
         HWND syncTooltip = nullptr;
         HWND themeCombo = nullptr;
         HWND resetTime = nullptr;
@@ -114,25 +116,58 @@ namespace {
         switch (message) {
         case WM_CREATE: {
             HINSTANCE instance = GetModuleHandleW(nullptr);
-            HWND syncLabel = CreateWindowW(L"STATIC", L"Szinkronizációs file ℹ️",
-                WS_CHILD | WS_VISIBLE | SS_LEFT, 18, 40, 152, 42, hWnd, nullptr, instance, nullptr);
-            SetControlFont(syncLabel, g_hFontNormal);
-            HWND syncDivider = CreateWindowW(L"STATIC", L"", WS_CHILD | WS_VISIBLE | SS_ETCHEDVERT,
-                170, 30, 2, 60, hWnd, nullptr, instance, nullptr);
+            RECT client{};
+            GetClientRect(hWnd, &client);
+            constexpr int groupLeft = 12;
+            constexpr int groupRightMargin = 12;
+            const int groupRight = client.right - groupRightMargin;
+            const int groupWidth = groupRight - groupLeft;
+            const int numberX = groupLeft + 14;
+            const int nameX = groupLeft + 48;
+            const int pathX = groupLeft + 140;
+            constexpr int browseWidth = 76;
+            const int browseX = groupRight - 10 - browseWidth;
+            const int nameWidth = pathX - nameX - 8;
+            const int pathWidth = browseX - pathX - 8;
+
+            HWND syncGroup = CreateWindowW(L"BUTTON", L"Szinkronizációs file-ok ℹ️",
+                WS_CHILD | WS_VISIBLE | BS_GROUPBOX, groupLeft, 12, groupWidth, 110,
+                hWnd, nullptr, instance, nullptr);
+            SetControlFont(syncGroup, g_hFontNormal);
+
+            HWND numberHeader = CreateWindowW(L"STATIC", L"No",
+                WS_CHILD | WS_VISIBLE | SS_CENTER, numberX, 45, 30, 18, hWnd, nullptr, instance, nullptr);
+            SetControlFont(numberHeader, g_hFontSmall);
+            HWND nameHeader = CreateWindowW(L"STATIC", L"Név",
+                WS_CHILD | WS_VISIBLE | SS_LEFT, nameX, 45, nameWidth, 18, hWnd, nullptr, instance, nullptr);
+            SetControlFont(nameHeader, g_hFontSmall);
+            HWND pathHeader = CreateWindowW(L"STATIC", L"Útvonal",
+                WS_CHILD | WS_VISIBLE | SS_LEFT, pathX, 45, pathWidth, 18, hWnd, nullptr, instance, nullptr);
+            SetControlFont(pathHeader, g_hFontSmall);
+
+            HWND syncNumber = CreateWindowW(L"STATIC", L"1",
+                WS_CHILD | WS_VISIBLE | SS_CENTER | SS_CENTERIMAGE,
+                numberX, 67, 30, 28, hWnd, nullptr, instance, nullptr);
+            SetControlFont(syncNumber, g_hFontNormal);
+            state->syncName = CreateWindowExW(WS_EX_CLIENTEDGE, L"EDIT", L"1",
+                WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_AUTOHSCROLL,
+                nameX, 69, nameWidth, 28, hWnd, (HMENU)(INT_PTR)IDC_SETTINGS_SYNC_NAME, instance, nullptr);
+            SetControlFont(state->syncName, g_hFontNormal);
             state->pathText = CreateWindowW(L"STATIC", state->syncFilePath.c_str(),
                 WS_CHILD | WS_VISIBLE | SS_LEFT | SS_NOPREFIX,
-                184, 34, 206, 54, hWnd, (HMENU)(INT_PTR)IDC_SETTINGS_PATH, instance, nullptr);
+                pathX, 66, pathWidth, 42, hWnd, (HMENU)(INT_PTR)IDC_SETTINGS_PATH, instance, nullptr);
             SetControlFont(state->pathText, g_hFontNormal);
 
             CreateWindowW(L"BUTTON", L"Tallózás", WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_PUSHBUTTON,
-                402, 43, 80, 30, hWnd, (HMENU)(INT_PTR)IDC_SETTINGS_BROWSE, instance, nullptr);
+                browseX, 69, browseWidth, 30, hWnd, (HMENU)(INT_PTR)IDC_SETTINGS_BROWSE, instance, nullptr);
             SetControlFont(GetDlgItem(hWnd, IDC_SETTINGS_BROWSE), g_hFontSmall);
 
             static constexpr wchar_t syncHelp[] =
-                L"OneDrive-megosztáshoz először ossz meg egy mappát a másik személlyel.\n"
-                L"A másik fél a \u201eParancsikon hozzáadása Saját fájlokhoz\u201d gombbal szinkronizálja a mappát a gépére.\n"
-                L"Ezután a C:\\Users\\<felhasználónév>\\OneDrive - Siemens AG\\ mappában megjelenik a megosztó személyének nevét viselő mappa. "
-                L"A megosztott fájl vagy mappa azon belül található; ezt tallózd be itt.";
+                L"Olyan fájlt válassz, amelyet valamelyik felhőszolgáltatás automatikusan szinkronizál.\n\n"
+                L"OneDrive esetén először ossz meg egy mappát a másik személlyel. A másik fél a "
+                L"\u201eParancsikon hozzáadása Saját fájlokhoz\u201d lehetőséggel szinkronizálja a mappát a gépére. "
+                L"Ezután a C:\\Users\\<felhasználónév>\\OneDrive - Siemens AG\\ mappában keresd meg a megosztó "
+                L"nevét viselő mappát, és tallózd be a megosztott fájlt.";
             state->syncTooltip = CreateWindowExW(WS_EX_TOPMOST, TOOLTIPS_CLASSW, nullptr,
                 WS_POPUP | TTS_ALWAYSTIP | TTS_NOPREFIX,
                 CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT,
@@ -143,24 +178,25 @@ namespace {
                 rowTool.cbSize = sizeof(rowTool);
                 rowTool.uFlags = TTF_SUBCLASS;
                 rowTool.hwnd = hWnd;
-                rowTool.uId = IDC_SETTINGS_PATH;
-                rowTool.rect = RECT{ 10, 30, 490, 100 };
+                rowTool.uId = 1;
+                rowTool.rect = RECT{ groupLeft, 12, groupRight, 122 };
                 rowTool.lpszText = const_cast<LPWSTR>(syncHelp);
                 SendMessageW(state->syncTooltip, TTM_ADDTOOLW, 0, (LPARAM)&rowTool);
-                AddSyncTooltip(state->syncTooltip, hWnd, syncLabel, syncHelp);
-                AddSyncTooltip(state->syncTooltip, hWnd, syncDivider, syncHelp);
+                AddSyncTooltip(state->syncTooltip, hWnd, syncGroup, syncHelp);
+                AddSyncTooltip(state->syncTooltip, hWnd, syncNumber, syncHelp);
+                AddSyncTooltip(state->syncTooltip, hWnd, state->syncName, syncHelp);
                 AddSyncTooltip(state->syncTooltip, hWnd, state->pathText, syncHelp);
                 AddSyncTooltip(state->syncTooltip, hWnd, GetDlgItem(hWnd, IDC_SETTINGS_BROWSE), syncHelp);
             }
 
             HWND themeLabel = CreateWindowW(L"STATIC", L"Téma",
-                WS_CHILD | WS_VISIBLE | SS_LEFT, 18, 119, 144, 28, hWnd, nullptr, instance, nullptr);
+                WS_CHILD | WS_VISIBLE | SS_LEFT, 18, 133, 144, 28, hWnd, nullptr, instance, nullptr);
             SetControlFont(themeLabel, g_hFontNormal);
             CreateWindowW(L"STATIC", L"", WS_CHILD | WS_VISIBLE | SS_ETCHEDVERT,
-                170, 105, 2, 54, hWnd, nullptr, instance, nullptr);
+                170, 119, 2, 54, hWnd, nullptr, instance, nullptr);
             state->themeCombo = CreateWindowW(L"COMBOBOX", L"",
                 WS_CHILD | WS_VISIBLE | WS_TABSTOP | CBS_DROPDOWNLIST | WS_VSCROLL,
-                184, 114, 206, 150, hWnd, (HMENU)(INT_PTR)IDC_SETTINGS_THEME, instance, nullptr);
+                184, 128, 206, 150, hWnd, (HMENU)(INT_PTR)IDC_SETTINGS_THEME, instance, nullptr);
             SendMessageW(state->themeCombo, CB_ADDSTRING, 0, (LPARAM)L"Sötét");
             SendMessageW(state->themeCombo, CB_ADDSTRING, 0, (LPARAM)L"Világos");
             SendMessageW(state->themeCombo, CB_ADDSTRING, 0, (LPARAM)L"Pink");
@@ -168,13 +204,13 @@ namespace {
             SetControlFont(state->themeCombo, g_hFontNormal);
 
             HWND resetLabel = CreateWindowW(L"STATIC", L"Munkaidő kezdete",
-                WS_CHILD | WS_VISIBLE | SS_LEFT, 18, 178, 144, 28, hWnd, nullptr, instance, nullptr);
+                WS_CHILD | WS_VISIBLE | SS_LEFT, 18, 192, 144, 28, hWnd, nullptr, instance, nullptr);
             SetControlFont(resetLabel, g_hFontNormal);
             CreateWindowW(L"STATIC", L"", WS_CHILD | WS_VISIBLE | SS_ETCHEDVERT,
-                170, 165, 2, 54, hWnd, nullptr, instance, nullptr);
+                170, 179, 2, 54, hWnd, nullptr, instance, nullptr);
             state->resetTime = CreateWindowExW(0, DATETIMEPICK_CLASSW, L"",
                 WS_CHILD | WS_VISIBLE | WS_TABSTOP | DTS_TIMEFORMAT | DTS_UPDOWN,
-                184, 173, 112, 28, hWnd, (HMENU)(INT_PTR)IDC_SETTINGS_RESET_TIME, instance, nullptr);
+                184, 187, 112, 28, hWnd, (HMENU)(INT_PTR)IDC_SETTINGS_RESET_TIME, instance, nullptr);
             SendMessageW(state->resetTime, DTM_SETFORMATW, 0, (LPARAM)L"HH':'mm");
             SYSTEMTIME selectedTime{};
             GetLocalTime(&selectedTime);
@@ -184,37 +220,37 @@ namespace {
             DateTime_SetSystemtime(state->resetTime, GDT_VALID, &selectedTime);
 
             HWND soundsLabel = CreateWindowW(L"STATIC", L"Hangok",
-                WS_CHILD | WS_VISIBLE | SS_LEFT, 18, 213, 144, 28, hWnd, nullptr, instance, nullptr);
+                WS_CHILD | WS_VISIBLE | SS_LEFT, 18, 227, 144, 28, hWnd, nullptr, instance, nullptr);
             SetControlFont(soundsLabel, g_hFontNormal);
             CreateWindowW(L"STATIC", L"", WS_CHILD | WS_VISIBLE | SS_ETCHEDVERT,
-                170, 203, 2, 38, hWnd, nullptr, instance, nullptr);
+                170, 217, 2, 38, hWnd, nullptr, instance, nullptr);
             state->soundsCheckbox = CreateWindowW(L"BUTTON", L"Engedélyezve",
                 WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_AUTOCHECKBOX,
-                184, 208, 190, 28, hWnd, (HMENU)(INT_PTR)IDC_SETTINGS_SOUNDS, instance, nullptr);
+                184, 222, 190, 28, hWnd, (HMENU)(INT_PTR)IDC_SETTINGS_SOUNDS, instance, nullptr);
             SendMessageW(state->soundsCheckbox, BM_SETCHECK,
                 g_store.sounds_enabled ? BST_CHECKED : BST_UNCHECKED, 0);
             SetControlFont(state->soundsCheckbox, g_hFontNormal);
 
             HWND timerAutoStartLabel = CreateWindowW(L"STATIC", L"Munkaidőzítő indítása a programmal",
-                WS_CHILD | WS_VISIBLE | SS_LEFT, 18, 247, 144, 40, hWnd, nullptr, instance, nullptr);
+                WS_CHILD | WS_VISIBLE | SS_LEFT, 18, 261, 144, 40, hWnd, nullptr, instance, nullptr);
             SetControlFont(timerAutoStartLabel, g_hFontNormal);
             CreateWindowW(L"STATIC", L"", WS_CHILD | WS_VISIBLE | SS_ETCHEDVERT,
-                170, 244, 2, 40, hWnd, nullptr, instance, nullptr);
+                170, 258, 2, 40, hWnd, nullptr, instance, nullptr);
             state->timerAutoStartCheckbox = CreateWindowW(L"BUTTON", L"Engedélyezve",
                 WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_AUTOCHECKBOX,
-                184, 250, 190, 28, hWnd,
+                184, 264, 190, 28, hWnd,
                 (HMENU)(INT_PTR)IDC_SETTINGS_TIMER_AUTO_START, instance, nullptr);
             SendMessageW(state->timerAutoStartCheckbox, BM_SETCHECK,
                 g_store.timer_start_with_app ? BST_CHECKED : BST_UNCHECKED, 0);
             SetControlFont(state->timerAutoStartCheckbox, g_hFontNormal);
 
             HWND versionLabel = CreateWindowW(L"STATIC", APP_VERSION,
-                WS_CHILD | WS_VISIBLE | SS_LEFT, 18, 286, 120, 24, hWnd, nullptr, instance, nullptr);
+                WS_CHILD | WS_VISIBLE | SS_LEFT, 18, 318, 120, 24, hWnd, nullptr, instance, nullptr);
             SetControlFont(versionLabel, g_hFontSmall);
 
             HWND okButton = CreateWindowW(L"BUTTON", L"OK",
                 WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_DEFPUSHBUTTON,
-                392, 280, 90, 30, hWnd, (HMENU)(INT_PTR)IDC_SETTINGS_OK, instance, nullptr);
+                392, 312, 90, 30, hWnd, (HMENU)(INT_PTR)IDC_SETTINGS_OK, instance, nullptr);
             SetControlFont(okButton, g_hFontNormal);
             SetFocus(state->themeCombo);
             return 0;
@@ -226,8 +262,19 @@ namespace {
             return 1;
         }
         case WM_CTLCOLORSTATIC:
-        case WM_CTLCOLORBTN:
-        case WM_CTLCOLORLISTBOX:
+        case WM_CTLCOLORBTN: {
+            HDC dc = (HDC)wParam;
+            SetTextColor(dc, SETTINGS_DIALOG_TEXT);
+            SetBkMode(dc, TRANSPARENT);
+            return (LRESULT)GetStockObject(HOLLOW_BRUSH);
+        }
+        case WM_CTLCOLORLISTBOX: {
+            HDC dc = (HDC)wParam;
+            SetTextColor(dc, SETTINGS_DIALOG_TEXT);
+            SetBkColor(dc, SETTINGS_DIALOG_BG);
+            SetBkMode(dc, OPAQUE);
+            return (LRESULT)state->backgroundBrush;
+        }
         case WM_CTLCOLOREDIT: {
             HDC dc = (HDC)wParam;
             SetTextColor(dc, SETTINGS_DIALOG_TEXT);
@@ -303,8 +350,8 @@ void ShowSettingsDialog(HWND owner) {
     g_inContextMenu = true;
     EnableWindow(owner, FALSE);
     HWND dialog = CreateWindowExW(WS_EX_DLGMODALFRAME | WS_EX_TOPMOST | WS_EX_CONTROLPARENT,
-        DIALOG_CLASS, L"Beállítások", WS_POPUP | WS_CAPTION | WS_SYSMENU | WS_CLIPCHILDREN,
-        CW_USEDEFAULT, CW_USEDEFAULT, 500, 350, owner, nullptr,
+        DIALOG_CLASS, L"Beállítások", WS_POPUP | WS_CAPTION | WS_SYSMENU,
+        CW_USEDEFAULT, CW_USEDEFAULT, 500, 383, owner, nullptr,
         GetModuleHandleW(nullptr), &state);
     if (!dialog) {
         EnableWindow(owner, TRUE);
@@ -318,8 +365,8 @@ void ShowSettingsDialog(HWND owner) {
     GetWindowRect(owner, &ownerRect);
     SetWindowPos(dialog, HWND_TOPMOST,
         ownerRect.left + ((ownerRect.right - ownerRect.left) - 500) / 2,
-        ownerRect.top + ((ownerRect.bottom - ownerRect.top) - 350) / 2,
-        500, 350, SWP_SHOWWINDOW);
+        ownerRect.top + ((ownerRect.bottom - ownerRect.top) - 383) / 2,
+        500, 383, SWP_SHOWWINDOW);
     SetForegroundWindow(dialog);
 
     MSG message{};
