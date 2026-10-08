@@ -211,7 +211,7 @@ void TimerView::CreateControls(HWND owner, HINSTANCE instance) {
         tool.uFlags = TTF_SUBCLASS | TTF_IDISHWND;
         tool.hwnd = owner;
         tool.uId = reinterpret_cast<UINT_PTR>(g_2020Check);
-        tool.lpszText = const_cast<LPWSTR>(L"20 percenként nézz legalább 6 méterre 20 másodpercig.\r\nKét csippanás indítja, egy csippanás zárja a szem pihentetését.");
+        tool.lpszText = const_cast<LPWSTR>(L"20 percenként jelez 25 mp szem-pihenőt; az intervallum-időzítő nélkül is működik. Futó időzítő mellett a munkaidő-mérés szünete megállítja a számlálót.\r\nNézz legalább 6 méterre; két csippanás indítja, egy csippanás zárja a szem pihentetését.");
         SendMessageW(g_timerTooltip, TTM_ADDTOOLW, 0, reinterpret_cast<LPARAM>(&tool));
 
         TOOLINFOW strictTool{};
@@ -233,6 +233,7 @@ void TimerView::CreateControls(HWND owner, HINSTANCE instance) {
     SetWindowTextW(g_workEdit, FormatMinutes(g_store.timer_work_minutes).c_str());
     SetWindowTextW(g_restEdit, FormatMinutes(g_store.timer_rest_minutes).c_str());
     SetWindowTextW(g_repetitionsEdit, std::to_wstring(g_store.timer_repetitions).c_str());
+    g_intervalTimer.SetVisionBreakEnabled(g_store.timer_2020_enabled);
     g_initializing = false;
     RefreshRunState();
     Layout(owner);
@@ -278,7 +279,6 @@ void TimerView::StartConfiguredTimer() {
     const int restSeconds = static_cast<int>(g_store.timer_rest_minutes * 60.0 + 0.5);
     g_intervalTimer.Start(workSeconds, restSeconds, g_store.timer_repetitions,
         g_store.timer_2020_enabled);
-    g_intervalTimer.SetWorkMeasurementActive(g_isWorkActive);
     if (g_store.timer_strict_mode) SetWorkMeasurementStopped(false);
     RefreshRunState();
 }
@@ -400,7 +400,6 @@ bool TimerView::HandleCommand(HWND owner, WPARAM wParam) {
             g_store.timer_repetitions = repetitions;
             g_store.SaveLocal();
             g_intervalTimer.Start(workSeconds, restSeconds, repetitions, g_store.timer_2020_enabled);
-            g_intervalTimer.SetWorkMeasurementActive(g_isWorkActive);
             if (g_store.timer_strict_mode) SetWorkMeasurementStopped(false);
         }
     } else if (id == IDC_TIMER_PAUSE_BTN) {

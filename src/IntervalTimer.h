@@ -10,7 +10,7 @@ public:
     void Resume();
     void PauseForMeasurement();
     void ResumeFromMeasurement();
-    void SetWorkMeasurementActive(bool active);
+    void SetVisionBreakScreenActive(bool active);
     void SetVisionBreakEnabled(bool enabled);
     bool Tick();
     bool AdvancePhase();
@@ -21,6 +21,8 @@ public:
     bool IsWorkPhase() const;
     int SecondsRemaining() const;
     bool IsVisionBreakActive() const;
+    bool IsVisionBreakEnabled() const;
+    int VisionBreakSecondsRemaining() const;
     int CurrentRepetition() const;
     int RepetitionCount() const;
 
@@ -37,7 +39,7 @@ private:
     unsigned long long phaseEndTick = 0;
     bool visionBreakEnabled = false;
     bool visionBreakActive = false;
-    bool workMeasurementActive = true;
+    bool visionBreakScreenActive = true;
     bool visionBreakClockPaused = false;
     unsigned long long visionBreakPauseTick = 0;
     unsigned long long nextVisionBreakTick = 0;

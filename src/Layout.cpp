@@ -270,7 +270,7 @@ void RecalculateMiniLayout() {
         rcFocusButton.right, rcFocusButton.bottom);
     CombineRgn(hMiniRegion, hMiniRegion, hFocusButtonRegion, RGN_OR);
     DeleteObject(hFocusButtonRegion);
-    if (g_intervalTimer.IsActive()) {
+    if (g_intervalTimer.IsActive() || g_intervalTimer.IsVisionBreakActive()) {
         const RECT rcTimerText = GetMiniTimerTextRect(miniW);
         HRGN hTimerTextRegion = CreateRectRgn(rcTimerText.left, rcTimerText.top,
             rcTimerText.right, rcTimerText.bottom);

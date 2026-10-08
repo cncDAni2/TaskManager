@@ -27,6 +27,16 @@ void SetWorkMeasurementStopped(bool stopped) {
 namespace {
 HWND g_messageBoxOwner = nullptr;
 
+void ShowWorkHistory(HWND hWnd) {
+    CommitInlineEdit();
+    g_viewMode = ViewMode::WorkHistory;
+    g_scrollY = 0;
+    g_selectedIndex = -1;
+    UpdateControlsVisibility();
+    RecalculateLayout();
+    InvalidateRect(hWnd, nullptr, TRUE);
+}
+
 void ToggleTaskAssignment(HWND hWnd, int taskId) {
     std::wstring conflictingAssignee = g_store.ToggleAssignment(taskId, TaskUtils::GetCleanUserName());
     if (conflictingAssignee.empty()) return;
@@ -314,8 +324,8 @@ bool HandleLButtonDown(HWND hWnd, LPARAM lParam) {
         InvalidateRect(hWnd, nullptr, TRUE);
         return true;
     }
-    if (clickRawY >= rcClient.bottom - BOTTOM_BAR_HEIGHT) {
-        CommitInlineEdit();
+    if (clickRawY >= workStatusTop) {
+        ShowWorkHistory(hWnd);
         return true;
     }
 
@@ -643,13 +653,7 @@ bool HandleCommand(HWND hWnd, int id) {
         ShowSettingsDialog(hWnd);
         return true;
     } else if (id == IDC_TIME_HISTORY_BTN) {
-        CommitInlineEdit();
-        g_viewMode = ViewMode::WorkHistory;
-        g_scrollY = 0;
-        g_selectedIndex = -1;
-        UpdateControlsVisibility();
-        RecalculateLayout();
-        InvalidateRect(hWnd, nullptr, TRUE);
+        ShowWorkHistory(hWnd);
         return true;
     } else if (id == IDC_TIMER_BTN) {
         CommitInlineEdit();

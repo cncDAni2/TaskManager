@@ -125,6 +125,11 @@ void StartInlineEdit(int itemIndex) {
     SendMessageW(g_hInlineEdit, WM_SETFONT, (WPARAM)g_hFontNormal, TRUE);
     SendMessageW(g_hInlineEdit, EM_SETSEL, 0, -1);
     SetWindowSubclass(g_hInlineEdit, InlineEditSubclassProc, 0, 0);
+    RECT itemRect = item.rect;
+    itemRect.top -= g_scrollY;
+    itemRect.bottom -= g_scrollY;
+    InvalidateRect(g_hWnd, &itemRect, FALSE);
+    UpdateWindow(g_hWnd);
     SetFocus(g_hInlineEdit);
 }
 

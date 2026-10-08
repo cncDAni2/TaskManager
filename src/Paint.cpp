@@ -124,7 +124,7 @@ void PaintMiniWindow(HWND hWnd, HDC hdc) {
     DeleteObject(hFocusBrush);
     DrawFocusIcon(hdcMem, rcFocusButton, focusIcon);
 
-    if (g_intervalTimer.IsActive()) {
+    if (g_intervalTimer.IsActive() || g_intervalTimer.IsVisionBreakActive()) {
         const RECT rcTimer = GetMiniTimerTextRect(clientW);
         const bool workPhase = g_intervalTimer.IsWorkPhase();
         const COLORREF timerColor = workPhase ? RGB(220, 38, 38) : RGB(37, 99, 235);

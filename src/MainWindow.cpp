@@ -379,6 +379,8 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             }
             if (wParam == IDT_WORK_TIMER) {
                 const bool timerWasRunning = g_intervalTimer.IsRunning();
+                const bool visionBreakWasActive = g_intervalTimer.IsVisionBreakActive();
+                g_intervalTimer.SetVisionBreakEnabled(g_store.timer_2020_enabled);
                 if (g_intervalTimer.Tick()) {
                     TimerView::HandlePhaseChange();
                     TimerView::RefreshRunState();
@@ -389,6 +391,10 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                         SetTimer(hWnd, IDT_MINI_TIMER_FLASH, 120, nullptr);
                         InvalidateRect(hWnd, nullptr, FALSE);
                     }
+                }
+                if (g_isMiniMode && IsWindowVisible(hWnd) &&
+                    visionBreakWasActive != g_intervalTimer.IsVisionBreakActive()) {
+                    RecalculateMiniLayout();
                 }
 
                 const time_t now = time(nullptr);
@@ -418,13 +424,12 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                     InvalidateRect(hWnd, nullptr, FALSE);
                 }
 
-                if (g_isMiniMode && IsWindowVisible(hWnd)) {
-                    if (timerWasRunning || g_intervalTimer.IsRunning()) {
-                        RECT rcClient{};
-                        GetClientRect(hWnd, &rcClient);
-                        RECT rcTimerText = { 0, 0, GetMiniFocusButtonRect(rcClient.right).left, 26 };
-                        InvalidateRect(hWnd, &rcTimerText, FALSE);
-                    }
+                if (g_isMiniMode && IsWindowVisible(hWnd) &&
+                    (timerWasRunning || g_intervalTimer.IsRunning())) {
+                    RECT rcClient{};
+                    GetClientRect(hWnd, &rcClient);
+                    RECT rcTimerText = { 0, 0, GetMiniFocusButtonRect(rcClient.right).left, 26 };
+                    InvalidateRect(hWnd, &rcTimerText, FALSE);
                 }
 
                 g_store.CheckWorkReset();
@@ -477,7 +482,8 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                         (g_isIdlePaused && !g_focusMode));
                 if (shouldPauseStrictWorkTimer) g_intervalTimer.PauseForMeasurement();
                 else g_intervalTimer.ResumeFromMeasurement();
-                g_intervalTimer.SetWorkMeasurementActive(countWork);
+                g_intervalTimer.SetVisionBreakScreenActive(!g_isSessionLocked &&
+                    (g_focusMode || !g_isIdlePaused));
 
                 static int s_syncTimer = 0;
                 s_syncTimer++;
@@ -498,6 +504,11 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                     if (g_isMiniMode) {
                         RECT rcMiniBottom = { 0, rcClient.bottom - 3, rcClient.right, rcClient.bottom };
                         InvalidateRect(hWnd, &rcMiniBottom, FALSE);
+                        if (visionBreakWasActive != g_intervalTimer.IsVisionBreakActive() ||
+                            g_intervalTimer.IsVisionBreakActive()) {
+                            RedrawWindow(hWnd, nullptr, nullptr,
+                                RDW_INVALIDATE | RDW_ERASE | RDW_UPDATENOW | RDW_ALLCHILDREN);
+                        }
                     } else {
                         RECT rcBottom = { 0, rcClient.bottom - BOTTOM_BAR_HEIGHT, rcClient.right, rcClient.bottom };
                         InvalidateRect(hWnd, &rcBottom, FALSE);

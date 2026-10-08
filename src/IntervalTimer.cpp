@@ -23,13 +23,8 @@ void IntervalTimer::Start(int newWorkSeconds, int newRestSeconds, int newRepetit
     running = true;
     const unsigned long long now = GetTickCount64();
     phaseEndTick = now + static_cast<unsigned long long>(workSeconds) * 1000;
-    visionBreakEnabled = newVisionBreakEnabled;
-    visionBreakActive = false;
-    visionBreakClockPaused = false;
-    visionBreakPauseTick = 0;
-    nextVisionBreakTick = now + kVisionBreakIntervalMs;
-    visionBreakEndTick = 0;
-    workMeasurementActive = true;
+    SetVisionBreakEnabled(newVisionBreakEnabled);
+    UpdateVisionBreakClockPause();
 }
 
 void IntervalTimer::Stop() {
@@ -37,9 +32,7 @@ void IntervalTimer::Stop() {
     paused = false;
     measurementPaused = false;
     pausedSecondsRemaining = 0;
-    visionBreakActive = false;
-    visionBreakClockPaused = false;
-    visionBreakPauseTick = 0;
+    UpdateVisionBreakClockPause();
 }
 
 void IntervalTimer::Pause() {
@@ -78,15 +71,14 @@ void IntervalTimer::ResumeFromMeasurement() {
     UpdateVisionBreakClockPause();
 }
 
-void IntervalTimer::SetWorkMeasurementActive(bool active) {
-    if (workMeasurementActive == active) return;
-    workMeasurementActive = active;
+void IntervalTimer::SetVisionBreakScreenActive(bool active) {
+    if (visionBreakScreenActive == active) return;
+    visionBreakScreenActive = active;
     UpdateVisionBreakClockPause();
 }
 
 void IntervalTimer::UpdateVisionBreakClockPause() {
-    const bool shouldPause = workPhase && visionBreakEnabled &&
-        (paused || measurementPaused || !workMeasurementActive);
+    const bool shouldPause = visionBreakEnabled && !visionBreakScreenActive;
     if (shouldPause == visionBreakClockPaused) return;
 
     const unsigned long long now = GetTickCount64();
@@ -114,17 +106,13 @@ void IntervalTimer::SetVisionBreakEnabled(bool enabled) {
         return;
     }
 
-    if (!workPhase) return;
     nextVisionBreakTick = GetTickCount64() + kVisionBreakIntervalMs;
     UpdateVisionBreakClockPause();
 }
 
 bool IntervalTimer::Tick() {
-    if (!running) return false;
-
     const unsigned long long now = GetTickCount64();
-    if (now < phaseEndTick && workPhase && visionBreakEnabled && !visionBreakClockPaused &&
-        static_cast<unsigned long long>(workSeconds) * 1000 > kVisionBreakIntervalMs) {
+    if (visionBreakEnabled && !visionBreakClockPaused) {
         if (visionBreakActive && now >= visionBreakEndTick) {
             visionBreakActive = false;
             nextVisionBreakTick = now + kVisionBreakIntervalMs;
@@ -135,6 +123,7 @@ bool IntervalTimer::Tick() {
             AudioCue::PlayVisionBreakStart();
         }
     }
+    if (!running) return false;
     if (now < phaseEndTick) return false;
 
     return AdvancePhaseAt(now);
@@ -153,9 +142,6 @@ bool IntervalTimer::AdvancePhaseAt(unsigned long long now) {
 
     if (workPhase) {
         AudioCue::PlayTimerRestMelody();
-        visionBreakActive = false;
-        visionBreakClockPaused = false;
-        visionBreakPauseTick = 0;
         workPhase = false;
         phaseEndTick = now + static_cast<unsigned long long>(restSeconds) * 1000;
     } else {
@@ -165,10 +151,6 @@ bool IntervalTimer::AdvancePhaseAt(unsigned long long now) {
             running = false;
         } else {
             workPhase = true;
-            visionBreakActive = false;
-            visionBreakClockPaused = false;
-            visionBreakPauseTick = 0;
-            nextVisionBreakTick = now + kVisionBreakIntervalMs;
             phaseEndTick = now + static_cast<unsigned long long>(workSeconds) * 1000;
             UpdateVisionBreakClockPause();
         }
@@ -202,6 +184,18 @@ int IntervalTimer::SecondsRemaining() const {
 
 bool IntervalTimer::IsVisionBreakActive() const {
     return visionBreakActive;
+}
+
+bool IntervalTimer::IsVisionBreakEnabled() const {
+    return visionBreakEnabled;
+}
+
+int IntervalTimer::VisionBreakSecondsRemaining() const {
+    if (!visionBreakEnabled) return 0;
+    const unsigned long long now = visionBreakClockPaused ? visionBreakPauseTick : GetTickCount64();
+    const unsigned long long target = visionBreakActive ? visionBreakEndTick : nextVisionBreakTick;
+    if (now >= target) return 0;
+    return static_cast<int>((target - now + 999) / 1000);
 }
 
 int IntervalTimer::CurrentRepetition() const {

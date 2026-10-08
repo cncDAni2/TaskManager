@@ -72,7 +72,7 @@ Az időzítő funkció segít az előző részben leírt munka- és pihenőciklu
 
 STRICT MODE: Ha ezt is bepipálod, akkor az időzítő kihatással lesz a munkaidő mérésre, és automatikusan szünetelteti a munkaidő mérést a pihenőidő alatt.
 
-20-20-20 szabály: A szem egészségének megőrzése érdekében minden 20 perc képernyőnézés után nézz 20 másodpercig 20 láb (kb. 6 méter) távolságra. Rövid hangjelzéssel emlékeztet a program, amikor ideje szünetet tartani, és mikor vissza kell térni. Ez a PIN ablakban is megjelenik: a számláló egy szem ikonra vált át, ha épp szempihenőidő van.
+20-20-20 szabály: A szem egészségének megőrzése érdekében minden 20 perc képernyőnézés után nézz 20 másodpercig 20 láb (kb. 6 méter) távolságra. A szabály a munkaidő-méréstől és az intervallum-időzítőtől függetlenül működik, YouTube, Discord és Facebook használata közben is. Két perc billentyű- vagy egérinaktivitás után szünetel, kivéve fókusz módban; a gép zárolásakor mindig szünetel. Rövid hangjelzéssel emlékeztet a program, amikor ideje szünetet tartani (2 csippanás), és mikor vissza kell térni(1 csippanás). A PIN ablakban a számláló szem ikonra vált a szem-pihenő alatt.
 
 ### Fókusz mód
 
