@@ -1,4 +1,5 @@
 #include "Paint.h"
+#include "SyncPicker.h"
 #include "AppState.h"
 #include "Drawing.h"
 #include "Layout.h"
@@ -608,6 +609,12 @@ void PaintMainWindow(HWND hWnd, HDC hdc) {
                 RECT rcCloud = { cloudLeft, cy - 6, cloudLeft + 14, cy + 6 };
                 COLORREF cloudCol = item.task.completed ? th.textCompleted : th.borderCardSelected;
                 DrawCloudIcon(hdcMem, rcCloud, cloudCol, true);
+                if (SyncPicker::ShowCounts()) {
+                    SyncPicker::DrawCloudCount(hdcMem, rcCloud, static_cast<int>(item.task.sources.size()),
+                        RGB(255, 255, 255));
+                }
+                RECT rcCloudTip = { rcCloud.left - 3, rcCloud.top - 4, rcCloud.right + 6, rcCloud.bottom + 6 };
+                barToolRegions.push_back({ rcCloudTip, L"Megtalálható itt:\n" + SyncPicker::SourceNames(item.task) });
             }
 
             if (!isInlineEditingThis) {
@@ -628,11 +635,14 @@ void PaintMainWindow(HWND hWnd, HDC hdc) {
                 std::wstring meta;
                 if (item.task.completed) {
                     meta = L"Kész: " + TaskUtils::FormatDateTime(item.task.completed_at);
+                } else if (item.task.is_sync && item.task.updated_at > 0) {
+                    meta = TaskUtils::FormatDateTime(item.task.updated_at); // Last change, not creation.
                 } else {
                     meta = TaskUtils::FormatDateTime(item.task.created_at);
                 }
-                if (item.task.is_sync && !item.task.author.empty()) {
-                    meta += L" • " + item.task.author;
+                const std::wstring& changedBy = item.task.updated_by.empty() ? item.task.author : item.task.updated_by;
+                if (item.task.is_sync && !changedBy.empty()) {
+                    meta += L" • " + changedBy;
                 }
                 if (item.task.is_sync && !item.task.assignee.empty()) {
                     meta += L" (" + item.task.assignee + L")";

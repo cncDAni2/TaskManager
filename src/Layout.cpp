@@ -4,6 +4,7 @@
 #include "IntervalTimer.h"
 #include "TimerView.h"
 #include "MemoryTrim.h"
+#include "SyncPicker.h"
 #include <algorithm>
 #include <set>
 
@@ -160,7 +161,12 @@ void UpdateControlsVisibility() {
     ShowWindow(g_hManualWorkBtn, isHistory ? SW_SHOW : SW_HIDE);
     ShowWindow(g_hEdit, isActive ? SW_SHOW : SW_HIDE);
     ShowWindow(g_hAddBtn, isActive ? SW_SHOW : SW_HIDE);
-    ShowWindow(g_hSyncToggleBtn, isActive ? SW_SHOW : SW_HIDE);
+    // Without sync files the cloud button disappears and the input row takes its place.
+    const bool showSync = isActive && SyncPicker::HasSources();
+    ShowWindow(g_hSyncToggleBtn, showSync ? SW_SHOW : SW_HIDE);
+    const int addButtonX = SyncPicker::HasSources() ? 479 : 516;
+    SetWindowPos(g_hEdit, nullptr, 12, 56, addButtonX - 6 - 12, 28, SWP_NOZORDER | SWP_NOACTIVATE);
+    SetWindowPos(g_hAddBtn, nullptr, addButtonX, 56, 92, 28, SWP_NOZORDER | SWP_NOACTIVATE);
     if (isHistory) {
         SetWindowTextW(g_hToggleViewBtn, L"← Feladatok");
         SetWindowTextW(g_hTimeHistoryBtn, L"● Idők");

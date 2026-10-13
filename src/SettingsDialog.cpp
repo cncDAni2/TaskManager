@@ -3,9 +3,10 @@
 #include "Drawing.h"
 #include "ExcludedApps.h"
 #include "Layout.h"
+#include "SettingsSyncRows.h"
+#include "SyncPicker.h"
 #include "Version.h"
 #include <commctrl.h>
-#include <commdlg.h>
 #include <string>
 #include <vector>
 
@@ -13,17 +14,16 @@
 #define TASK_MANAGER_WIDEN(value) TASK_MANAGER_WIDEN_INNER(value)
 
 namespace {
-    constexpr int IDC_SETTINGS_PATH = 5101;
-    constexpr int IDC_SETTINGS_BROWSE = 5102;
     constexpr int IDC_SETTINGS_THEME = 5103;
     constexpr int IDC_SETTINGS_RESET_TIME = 5104;
     constexpr int IDC_SETTINGS_OK = 5105;
     constexpr int IDC_SETTINGS_SOUNDS = 5106;
     constexpr int IDC_SETTINGS_TIMER_AUTO_START = 5107;
-    constexpr int IDC_SETTINGS_SYNC_NAME = 5108;
     constexpr int IDC_SETTINGS_EXCLUDED_KEYWORDS = 5109;
-    constexpr int SETTINGS_DIALOG_WIDTH = 500;
-    constexpr int SETTINGS_DIALOG_HEIGHT = 427;
+    constexpr int SETTINGS_DIALOG_WIDTH = 560;
+    constexpr UINT WM_APP_REBUILD = WM_APP + 1;
+    constexpr DWORD DIALOG_STYLE = WS_POPUP | WS_CAPTION | WS_SYSMENU;
+    constexpr DWORD DIALOG_EX_STYLE = WS_EX_DLGMODALFRAME | WS_EX_TOPMOST | WS_EX_CONTROLPARENT;
     constexpr wchar_t APP_VERSION[] = L"v"
         TASK_MANAGER_WIDEN(TASK_MANAGER_STRINGIFY(TASK_MANAGER_VERSION_MAJOR)) L"."
         TASK_MANAGER_WIDEN(TASK_MANAGER_STRINGIFY(TASK_MANAGER_VERSION_MINOR)) L"."
@@ -32,27 +32,38 @@ namespace {
     constexpr COLORREF SETTINGS_DIALOG_TEXT = RGB(0, 0, 0);
     constexpr wchar_t DIALOG_CLASS[] = L"TaskManager_Settings_Dialog_Class";
 
+    // Working copy of every value, so the dialog content can be rebuilt without losing edits.
     struct DialogState {
         HWND owner = nullptr;
-        HWND pathText = nullptr;
-        HWND syncName = nullptr;
-        HWND syncTooltip = nullptr;
+        HWND tooltip = nullptr;
         HWND themeCombo = nullptr;
         HWND resetTime = nullptr;
         HWND soundsCheckbox = nullptr;
         HWND timerAutoStartCheckbox = nullptr;
         HWND excludedKeywordsEdit = nullptr;
+        HWND okButton = nullptr;
         HBRUSH backgroundBrush = nullptr;
-        std::wstring syncFilePath;
+        bool building = false;
+        bool resetDirty = false; // Only the work-reset time waits for "Mentés"; everything else applies instantly.
+        std::vector<SettingsSyncRows::Row> syncRows;
+        SettingsSyncRows::Controls syncControls;
         int resetHour = 9;
         int resetMinute = 15;
+        bool soundsEnabled = true;
+        bool timerAutoStart = false;
+        std::wstring excludedKeywords;
     };
 
-    void SetControlFont(HWND control, HFONT font) {
+    HWND CreateChild(HWND dialog, const wchar_t* className, const wchar_t* text, DWORD style,
+        int x, int y, int width, int height, int id, HFONT font, DWORD exStyle = 0) {
+        HWND control = CreateWindowExW(exStyle, className, text, WS_CHILD | WS_VISIBLE | style,
+            x, y, width, height, dialog, (HMENU)(INT_PTR)id, GetModuleHandleW(nullptr), nullptr);
         if (control && font) SendMessageW(control, WM_SETFONT, (WPARAM)font, TRUE);
+        return control;
     }
 
-    void AddSyncTooltip(HWND tooltip, HWND dialog, HWND control, const wchar_t* text) {
+    void AddTooltip(HWND tooltip, HWND dialog, HWND control, const wchar_t* text) {
+        if (!tooltip || !control) return;
         TOOLINFOW tool{};
         tool.cbSize = sizeof(tool);
         tool.uFlags = TTF_SUBCLASS | TTF_IDISHWND;
@@ -60,6 +71,14 @@ namespace {
         tool.uId = reinterpret_cast<UINT_PTR>(control);
         tool.lpszText = const_cast<LPWSTR>(text);
         SendMessageW(tooltip, TTM_ADDTOOLW, 0, (LPARAM)&tool);
+    }
+
+    std::wstring ReadText(HWND control) {
+        const int length = GetWindowTextLengthW(control);
+        std::wstring text(static_cast<size_t>(length) + 1, wchar_t());
+        GetWindowTextW(control, text.data(), length + 1);
+        text.resize(static_cast<size_t>(length));
+        return text;
     }
 
     void ApplySelectedTheme(HWND dialog, DialogState* state, ThemeMode mode) {
@@ -78,35 +97,216 @@ namespace {
         RedrawWindow(dialog, nullptr, nullptr, redrawFlags);
     }
 
-    void BrowseSyncFile(HWND owner, DialogState* state) {
-        std::vector<wchar_t> filePath(32768, L'\0');
-        if (!state->syncFilePath.empty()) {
-            wcscpy_s(filePath.data(), filePath.size(), state->syncFilePath.c_str());
+    void SnapshotControls(DialogState* state) {
+        SettingsSyncRows::Snapshot(state->syncControls, state->syncRows);
+        SYSTEMTIME selectedTime{};
+        if (DateTime_GetSystemtime(state->resetTime, &selectedTime) == GDT_VALID) {
+            state->resetHour = selectedTime.wHour;
+            state->resetMinute = selectedTime.wMinute;
         }
+        state->soundsEnabled = SendMessageW(state->soundsCheckbox, BM_GETCHECK, 0, 0) == BST_CHECKED;
+        state->timerAutoStart = SendMessageW(state->timerAutoStartCheckbox, BM_GETCHECK, 0, 0) == BST_CHECKED;
+        state->excludedKeywords = ReadText(state->excludedKeywordsEdit);
+    }
 
-        OPENFILENAMEW ofn{};
-        ofn.lStructSize = sizeof(ofn);
-        ofn.hwndOwner = owner;
-        ofn.lpstrFile = filePath.data();
-        ofn.nMaxFile = static_cast<DWORD>(filePath.size());
-        ofn.lpstrFilter = L"JSON fájlok (*.json)\0*.json\0Minden fájl (*.*)\0*.*\0";
-        ofn.nFilterIndex = 1;
-        ofn.lpstrTitle = L"Szinkronizált feladatok fájljának kiválasztása";
-        ofn.Flags = OFN_PATHMUSTEXIST | OFN_ENABLESIZING | OFN_NOCHANGEDIR;
+    // Label | separator for one settings row of `rowHeight` starting at `top`. Returns the label.
+    HWND CreateRow(HWND dialog, const wchar_t* text, int top, int rowHeight, bool notify) {
+        const bool twoLines = rowHeight > 40;
+        const int labelHeight = twoLines ? 40 : 28;
+        // Single-line labels align with the control's text baseline (control top + 5).
+        const int labelY = twoLines ? top + (rowHeight - labelHeight) / 2 : top + (rowHeight - 28) / 2 + 5;
+        HWND label = CreateChild(dialog, L"STATIC", text, SS_LEFT | (notify ? SS_NOTIFY : 0),
+            18, labelY, 144, labelHeight, 0, g_hFontNormal);
+        CreateChild(dialog, L"STATIC", L"", SS_ETCHEDVERT, 170, top + 3, 2, rowHeight - 6, 0, nullptr);
+        return label;
+    }
 
-        std::wstring initialDirectory;
-        size_t lastSlash = state->syncFilePath.find_last_of(L"\\/");
-        if (lastSlash != std::wstring::npos) {
-            initialDirectory = state->syncFilePath.substr(0, lastSlash);
-            ofn.lpstrInitialDir = initialDirectory.c_str();
+    // Creates every control from `state` and sizes the dialog to fit; safe to call again after
+    // destroying the children (used when sync rows are added or removed).
+    void BuildControls(HWND hWnd, DialogState* state) {
+        state->building = true;
+        RECT client{};
+        GetClientRect(hWnd, &client);
+        constexpr int left = 12;
+        const int right = client.right - 12;
+
+        state->tooltip = CreateWindowExW(WS_EX_TOPMOST, TOOLTIPS_CLASSW, nullptr,
+            WS_POPUP | TTS_ALWAYSTIP | TTS_NOPREFIX,
+            CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT,
+            hWnd, nullptr, GetModuleHandleW(nullptr), nullptr);
+        if (state->tooltip) SendMessageW(state->tooltip, TTM_SETMAXTIPWIDTH, 0, 380);
+
+        const int groupBottom = SettingsSyncRows::Create(hWnd, state->tooltip, state->syncRows,
+            state->syncControls, 12, left, right);
+
+        // Uniform rows below the sync table: label | separator | 28px control, vertically centered.
+        constexpr int ROW = 38;
+        constexpr int TALL_ROW = 46; // Two-line label.
+        int top = groupBottom + 6;
+        auto controlY = [&top](int rowHeight) { return top + (rowHeight - 28) / 2; };
+
+        CreateRow(hWnd, L"Téma", top, ROW, false);
+        state->themeCombo = CreateChild(hWnd, L"COMBOBOX", L"",
+            WS_TABSTOP | CBS_DROPDOWNLIST | WS_VSCROLL, 184, controlY(ROW), 206, 150,
+            IDC_SETTINGS_THEME, g_hFontNormal);
+        SendMessageW(state->themeCombo, CB_ADDSTRING, 0, (LPARAM)L"Sötét");
+        SendMessageW(state->themeCombo, CB_ADDSTRING, 0, (LPARAM)L"Világos");
+        SendMessageW(state->themeCombo, CB_ADDSTRING, 0, (LPARAM)L"Pink");
+        SendMessageW(state->themeCombo, CB_SETCURSEL, static_cast<WPARAM>(g_store.theme_mode), 0);
+        top += ROW;
+
+        CreateRow(hWnd, L"Munkaidő kezdete", top, ROW, false);
+        state->resetTime = CreateChild(hWnd, DATETIMEPICK_CLASSW, L"",
+            WS_TABSTOP | DTS_TIMEFORMAT | DTS_UPDOWN, 184, controlY(ROW), 112, 28, IDC_SETTINGS_RESET_TIME, nullptr);
+        SendMessageW(state->resetTime, DTM_SETFORMATW, 0, (LPARAM)L"HH':'mm");
+        SYSTEMTIME selectedTime{};
+        GetLocalTime(&selectedTime);
+        selectedTime.wHour = static_cast<WORD>(state->resetHour);
+        selectedTime.wMinute = static_cast<WORD>(state->resetMinute);
+        selectedTime.wSecond = 0;
+        DateTime_SetSystemtime(state->resetTime, GDT_VALID, &selectedTime);
+        top += ROW;
+
+        CreateRow(hWnd, L"Hangok", top, ROW, false);
+        state->soundsCheckbox = CreateChild(hWnd, L"BUTTON", L"Engedélyezve",
+            WS_TABSTOP | BS_AUTOCHECKBOX, 184, controlY(ROW), 190, 28, IDC_SETTINGS_SOUNDS, g_hFontNormal);
+        SendMessageW(state->soundsCheckbox, BM_SETCHECK, state->soundsEnabled ? BST_CHECKED : BST_UNCHECKED, 0);
+        top += ROW;
+
+        CreateRow(hWnd, L"Munkaidőzítő indítása a programmal", top, TALL_ROW, false);
+        state->timerAutoStartCheckbox = CreateChild(hWnd, L"BUTTON", L"Engedélyezve",
+            WS_TABSTOP | BS_AUTOCHECKBOX, 184, controlY(TALL_ROW), 190, 28,
+            IDC_SETTINGS_TIMER_AUTO_START, g_hFontNormal);
+        SendMessageW(state->timerAutoStartCheckbox, BM_SETCHECK,
+            state->timerAutoStart ? BST_CHECKED : BST_UNCHECKED, 0);
+        top += TALL_ROW;
+
+        static constexpr wchar_t excludedHelp[] =
+            L"Vesszővel elválasztott kulcsszavak. Ha az előtérben lévő ablak címe tartalmazza "
+            L"valamelyiket, a munkaidő mérése szünetel. A kis- és nagybetű nem számít. "
+            L"Fókusz módban a mérés ilyenkor is folytatódik.";
+        HWND excludedLabel = CreateRow(hWnd, L"Kizárt ablakcímek", top, ROW, true);
+        state->excludedKeywordsEdit = CreateChild(hWnd, L"EDIT", state->excludedKeywords.c_str(),
+            WS_TABSTOP | ES_AUTOHSCROLL, 184, controlY(ROW), right - 184, 28,
+            IDC_SETTINGS_EXCLUDED_KEYWORDS, g_hFontNormal, WS_EX_CLIENTEDGE);
+        SendMessageW(state->excludedKeywordsEdit, EM_SETCUEBANNER, TRUE,
+            (LPARAM)L"pl. YouTube, Discord, Facebook");
+        AddTooltip(state->tooltip, hWnd, excludedLabel, excludedHelp);
+        AddTooltip(state->tooltip, hWnd, state->excludedKeywordsEdit, excludedHelp);
+        top += ROW;
+
+        const int y = top + 16;
+        CreateChild(hWnd, L"STATIC", APP_VERSION, SS_LEFT, 18, y + 6, 120, 24, 0, g_hFontSmall);
+        state->okButton = CreateChild(hWnd, L"BUTTON", state->resetDirty ? L"Mentés" : L"OK",
+            WS_TABSTOP | BS_OWNERDRAW, right - 90, y, 90, 30, IDC_SETTINGS_OK, g_hFontNormal);
+        AddTooltip(state->tooltip, hWnd, state->okButton,
+            L"A beállítások azonnal mentődnek. Csak a munkaidő kezdetének módosítását kell a Mentés gombbal jóváhagyni.");
+
+        RECT desired = { 0, 0, SETTINGS_DIALOG_WIDTH, y + 30 + 14 };
+        AdjustWindowRectEx(&desired, DIALOG_STYLE, FALSE, DIALOG_EX_STYLE);
+        RECT current{};
+        GetWindowRect(hWnd, &current);
+        SetWindowPos(hWnd, nullptr, 0, 0, current.right - current.left, desired.bottom - desired.top,
+            SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
+        state->building = false;
+    }
+
+    BOOL CALLBACK DestroyChild(HWND child, LPARAM) {
+        DestroyWindow(child);
+        return TRUE;
+    }
+
+    void RebuildControls(HWND hWnd, DialogState* state) {
+        SendMessageW(hWnd, WM_SETREDRAW, FALSE, 0);
+        if (state->tooltip && IsWindow(state->tooltip)) DestroyWindow(state->tooltip);
+        state->tooltip = nullptr;
+        EnumChildWindows(hWnd, DestroyChild, 0);
+        BuildControls(hWnd, state);
+        SendMessageW(hWnd, WM_SETREDRAW, TRUE, 0);
+        RedrawWindow(hWnd, nullptr, nullptr, RDW_INVALIDATE | RDW_ERASE | RDW_ALLCHILDREN | RDW_FRAME);
+    }
+
+    void RefreshMainWindow(DialogState* state) {
+        SyncPicker::ResetSelection();
+        UpdateControlsVisibility();
+        RecalculateLayout();
+        InvalidateRect(state->owner, nullptr, TRUE);
+    }
+
+    // Applies the sync table immediately. A structural change (file added, replaced or removed)
+    // reloads the files and creates new ones; names and default flags are just saved.
+    void ApplySyncRows(DialogState* state, bool structural) {
+        std::vector<SyncSource> sources = SettingsSyncRows::ToSources(state->syncRows);
+        if (structural) {
+            g_store.SetSyncSources(sources);
+            state->syncRows = SettingsSyncRows::FromSources(g_store.syncSources); // Picks up new ids.
+        } else {
+            for (const SyncSource& source : sources) {
+                for (SyncSource& existing : g_store.syncSources) {
+                    if (existing.id != source.id) continue;
+                    existing.name = source.name;
+                    existing.isDefault = source.isDefault;
+                }
+            }
+            g_store.SaveLocal();
         }
+        RefreshMainWindow(state);
+    }
 
-        if (GetOpenFileNameW(&ofn)) {
-            state->syncFilePath = filePath.data();
-            SetWindowTextW(state->pathText, state->syncFilePath.c_str());
-            g_store.SetSyncFilePath(state->syncFilePath);
-            RecalculateLayout();
+    void UpdateResetDirty(DialogState* state) {
+        SYSTEMTIME selectedTime{};
+        if (DateTime_GetSystemtime(state->resetTime, &selectedTime) != GDT_VALID) return;
+        state->resetHour = selectedTime.wHour;
+        state->resetMinute = selectedTime.wMinute;
+        const bool dirty = state->resetHour != g_store.work_reset_hour ||
+            state->resetMinute != g_store.work_reset_minute;
+        if (dirty == state->resetDirty) return;
+        state->resetDirty = dirty;
+        SetWindowTextW(state->okButton, dirty ? L"Mentés" : L"OK");
+        InvalidateRect(state->okButton, nullptr, TRUE);
+    }
+
+    void SaveAndClose(HWND hWnd, DialogState* state) {
+        if (state->resetDirty) {
+            g_store.work_reset_hour = state->resetHour;
+            g_store.work_reset_minute = state->resetMinute;
+            g_store.SaveLocal();
+            g_store.CheckWorkReset();
             InvalidateRect(state->owner, nullptr, TRUE);
+        }
+        DestroyWindow(hWnd);
+    }
+
+    // Plain button normally; filled accent while there is an unsaved work-reset time.
+    void DrawOkButton(const DRAWITEMSTRUCT* item, const DialogState* state) {
+        const bool pressed = (item->itemState & ODS_SELECTED) != 0;
+        COLORREF fill = state->resetDirty ? (pressed ? RGB(29, 78, 216) : RGB(37, 99, 235))
+            : (pressed ? RGB(229, 231, 235) : RGB(255, 255, 255));
+        COLORREF border = state->resetDirty ? RGB(29, 78, 216) : RGB(160, 160, 160);
+        HDC dc = item->hDC;
+        FillRect(dc, &item->rcItem, state->backgroundBrush);
+        HBRUSH brush = CreateSolidBrush(fill);
+        HPEN pen = CreatePen(PS_SOLID, 1, border);
+        HGDIOBJ oldBrush = SelectObject(dc, brush);
+        HGDIOBJ oldPen = SelectObject(dc, pen);
+        RoundRect(dc, item->rcItem.left, item->rcItem.top, item->rcItem.right, item->rcItem.bottom, 6, 6);
+        SelectObject(dc, oldPen);
+        SelectObject(dc, oldBrush);
+        DeleteObject(pen);
+        DeleteObject(brush);
+
+        wchar_t text[32]{};
+        GetWindowTextW(item->hwndItem, text, 32);
+        SetBkMode(dc, TRANSPARENT);
+        SetTextColor(dc, state->resetDirty ? RGB(255, 255, 255) : SETTINGS_DIALOG_TEXT);
+        HGDIOBJ oldFont = SelectObject(dc, state->resetDirty ? g_hFontTitle : g_hFontNormal);
+        RECT textRect = item->rcItem;
+        DrawTextW(dc, text, -1, &textRect, DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
+        SelectObject(dc, oldFont);
+        if (item->itemState & ODS_FOCUS) {
+            RECT focusRect = item->rcItem;
+            InflateRect(&focusRect, -4, -4);
+            DrawFocusRect(dc, &focusRect);
         }
     }
 
@@ -119,169 +319,10 @@ namespace {
         }
 
         switch (message) {
-        case WM_CREATE: {
-            HINSTANCE instance = GetModuleHandleW(nullptr);
-            RECT client{};
-            GetClientRect(hWnd, &client);
-            constexpr int groupLeft = 12;
-            constexpr int groupRightMargin = 12;
-            const int groupRight = client.right - groupRightMargin;
-            const int groupWidth = groupRight - groupLeft;
-            const int numberX = groupLeft + 14;
-            const int nameX = groupLeft + 48;
-            const int pathX = groupLeft + 140;
-            constexpr int browseWidth = 76;
-            const int browseX = groupRight - 10 - browseWidth;
-            const int nameWidth = pathX - nameX - 8;
-            const int pathWidth = browseX - pathX - 8;
-
-            HWND syncGroup = CreateWindowW(L"BUTTON", L"Szinkronizációs file-ok ℹ️",
-                WS_CHILD | WS_VISIBLE | BS_GROUPBOX, groupLeft, 12, groupWidth, 110,
-                hWnd, nullptr, instance, nullptr);
-            SetControlFont(syncGroup, g_hFontNormal);
-
-            HWND numberHeader = CreateWindowW(L"STATIC", L"No",
-                WS_CHILD | WS_VISIBLE | SS_CENTER, numberX, 45, 30, 18, hWnd, nullptr, instance, nullptr);
-            SetControlFont(numberHeader, g_hFontSmall);
-            HWND nameHeader = CreateWindowW(L"STATIC", L"Név",
-                WS_CHILD | WS_VISIBLE | SS_LEFT, nameX, 45, nameWidth, 18, hWnd, nullptr, instance, nullptr);
-            SetControlFont(nameHeader, g_hFontSmall);
-            HWND pathHeader = CreateWindowW(L"STATIC", L"Útvonal",
-                WS_CHILD | WS_VISIBLE | SS_LEFT, pathX, 45, pathWidth, 18, hWnd, nullptr, instance, nullptr);
-            SetControlFont(pathHeader, g_hFontSmall);
-
-            HWND syncNumber = CreateWindowW(L"STATIC", L"1",
-                WS_CHILD | WS_VISIBLE | SS_CENTER | SS_CENTERIMAGE,
-                numberX, 67, 30, 28, hWnd, nullptr, instance, nullptr);
-            SetControlFont(syncNumber, g_hFontNormal);
-            state->syncName = CreateWindowExW(WS_EX_CLIENTEDGE, L"EDIT", L"1",
-                WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_AUTOHSCROLL,
-                nameX, 69, nameWidth, 28, hWnd, (HMENU)(INT_PTR)IDC_SETTINGS_SYNC_NAME, instance, nullptr);
-            SetControlFont(state->syncName, g_hFontNormal);
-            state->pathText = CreateWindowW(L"STATIC", state->syncFilePath.c_str(),
-                WS_CHILD | WS_VISIBLE | SS_LEFT | SS_NOPREFIX,
-                pathX, 66, pathWidth, 42, hWnd, (HMENU)(INT_PTR)IDC_SETTINGS_PATH, instance, nullptr);
-            SetControlFont(state->pathText, g_hFontNormal);
-
-            CreateWindowW(L"BUTTON", L"Tallózás", WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_PUSHBUTTON,
-                browseX, 69, browseWidth, 30, hWnd, (HMENU)(INT_PTR)IDC_SETTINGS_BROWSE, instance, nullptr);
-            SetControlFont(GetDlgItem(hWnd, IDC_SETTINGS_BROWSE), g_hFontSmall);
-
-            static constexpr wchar_t syncHelp[] =
-                L"Olyan fájlt válassz, amelyet valamelyik felhőszolgáltatás automatikusan szinkronizál.\n\n"
-                L"OneDrive esetén először ossz meg egy mappát a másik személlyel. A másik fél a "
-                L"\u201eParancsikon hozzáadása Saját fájlokhoz\u201d lehetőséggel szinkronizálja a mappát a gépére. "
-                L"Ezután a C:\\Users\\<felhasználónév>\\OneDrive - Siemens AG\\ mappában keresd meg a megosztó "
-                L"nevét viselő mappát, és tallózd be a megosztott fájlt.";
-            state->syncTooltip = CreateWindowExW(WS_EX_TOPMOST, TOOLTIPS_CLASSW, nullptr,
-                WS_POPUP | TTS_ALWAYSTIP | TTS_NOPREFIX,
-                CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT,
-                hWnd, nullptr, instance, nullptr);
-            if (state->syncTooltip) {
-                SendMessageW(state->syncTooltip, TTM_SETMAXTIPWIDTH, 0, 360);
-                TOOLINFOW rowTool{};
-                rowTool.cbSize = sizeof(rowTool);
-                rowTool.uFlags = TTF_SUBCLASS;
-                rowTool.hwnd = hWnd;
-                rowTool.uId = 1;
-                rowTool.rect = RECT{ groupLeft, 12, groupRight, 122 };
-                rowTool.lpszText = const_cast<LPWSTR>(syncHelp);
-                SendMessageW(state->syncTooltip, TTM_ADDTOOLW, 0, (LPARAM)&rowTool);
-                AddSyncTooltip(state->syncTooltip, hWnd, syncGroup, syncHelp);
-                AddSyncTooltip(state->syncTooltip, hWnd, syncNumber, syncHelp);
-                AddSyncTooltip(state->syncTooltip, hWnd, state->syncName, syncHelp);
-                AddSyncTooltip(state->syncTooltip, hWnd, state->pathText, syncHelp);
-                AddSyncTooltip(state->syncTooltip, hWnd, GetDlgItem(hWnd, IDC_SETTINGS_BROWSE), syncHelp);
-            }
-
-            HWND themeLabel = CreateWindowW(L"STATIC", L"Téma",
-                WS_CHILD | WS_VISIBLE | SS_LEFT, 18, 133, 144, 28, hWnd, nullptr, instance, nullptr);
-            SetControlFont(themeLabel, g_hFontNormal);
-            CreateWindowW(L"STATIC", L"", WS_CHILD | WS_VISIBLE | SS_ETCHEDVERT,
-                170, 119, 2, 54, hWnd, nullptr, instance, nullptr);
-            state->themeCombo = CreateWindowW(L"COMBOBOX", L"",
-                WS_CHILD | WS_VISIBLE | WS_TABSTOP | CBS_DROPDOWNLIST | WS_VSCROLL,
-                184, 128, 206, 150, hWnd, (HMENU)(INT_PTR)IDC_SETTINGS_THEME, instance, nullptr);
-            SendMessageW(state->themeCombo, CB_ADDSTRING, 0, (LPARAM)L"Sötét");
-            SendMessageW(state->themeCombo, CB_ADDSTRING, 0, (LPARAM)L"Világos");
-            SendMessageW(state->themeCombo, CB_ADDSTRING, 0, (LPARAM)L"Pink");
-            SendMessageW(state->themeCombo, CB_SETCURSEL, static_cast<WPARAM>(g_store.theme_mode), 0);
-            SetControlFont(state->themeCombo, g_hFontNormal);
-
-            HWND resetLabel = CreateWindowW(L"STATIC", L"Munkaidő kezdete",
-                WS_CHILD | WS_VISIBLE | SS_LEFT, 18, 192, 144, 28, hWnd, nullptr, instance, nullptr);
-            SetControlFont(resetLabel, g_hFontNormal);
-            CreateWindowW(L"STATIC", L"", WS_CHILD | WS_VISIBLE | SS_ETCHEDVERT,
-                170, 179, 2, 54, hWnd, nullptr, instance, nullptr);
-            state->resetTime = CreateWindowExW(0, DATETIMEPICK_CLASSW, L"",
-                WS_CHILD | WS_VISIBLE | WS_TABSTOP | DTS_TIMEFORMAT | DTS_UPDOWN,
-                184, 187, 112, 28, hWnd, (HMENU)(INT_PTR)IDC_SETTINGS_RESET_TIME, instance, nullptr);
-            SendMessageW(state->resetTime, DTM_SETFORMATW, 0, (LPARAM)L"HH':'mm");
-            SYSTEMTIME selectedTime{};
-            GetLocalTime(&selectedTime);
-            selectedTime.wHour = static_cast<WORD>(state->resetHour);
-            selectedTime.wMinute = static_cast<WORD>(state->resetMinute);
-            selectedTime.wSecond = 0;
-            DateTime_SetSystemtime(state->resetTime, GDT_VALID, &selectedTime);
-
-            HWND soundsLabel = CreateWindowW(L"STATIC", L"Hangok",
-                WS_CHILD | WS_VISIBLE | SS_LEFT, 18, 227, 144, 28, hWnd, nullptr, instance, nullptr);
-            SetControlFont(soundsLabel, g_hFontNormal);
-            CreateWindowW(L"STATIC", L"", WS_CHILD | WS_VISIBLE | SS_ETCHEDVERT,
-                170, 217, 2, 38, hWnd, nullptr, instance, nullptr);
-            state->soundsCheckbox = CreateWindowW(L"BUTTON", L"Engedélyezve",
-                WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_AUTOCHECKBOX,
-                184, 222, 190, 28, hWnd, (HMENU)(INT_PTR)IDC_SETTINGS_SOUNDS, instance, nullptr);
-            SendMessageW(state->soundsCheckbox, BM_SETCHECK,
-                g_store.sounds_enabled ? BST_CHECKED : BST_UNCHECKED, 0);
-            SetControlFont(state->soundsCheckbox, g_hFontNormal);
-
-            HWND timerAutoStartLabel = CreateWindowW(L"STATIC", L"Munkaidőzítő indítása a programmal",
-                WS_CHILD | WS_VISIBLE | SS_LEFT, 18, 261, 144, 40, hWnd, nullptr, instance, nullptr);
-            SetControlFont(timerAutoStartLabel, g_hFontNormal);
-            CreateWindowW(L"STATIC", L"", WS_CHILD | WS_VISIBLE | SS_ETCHEDVERT,
-                170, 258, 2, 40, hWnd, nullptr, instance, nullptr);
-            state->timerAutoStartCheckbox = CreateWindowW(L"BUTTON", L"Engedélyezve",
-                WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_AUTOCHECKBOX,
-                184, 264, 190, 28, hWnd,
-                (HMENU)(INT_PTR)IDC_SETTINGS_TIMER_AUTO_START, instance, nullptr);
-            SendMessageW(state->timerAutoStartCheckbox, BM_SETCHECK,
-                g_store.timer_start_with_app ? BST_CHECKED : BST_UNCHECKED, 0);
-            SetControlFont(state->timerAutoStartCheckbox, g_hFontNormal);
-
-            HWND excludedLabel = CreateWindowW(L"STATIC", L"Kizárt ablakcímek",
-                WS_CHILD | WS_VISIBLE | SS_LEFT | SS_NOTIFY, 18, 309, 144, 28, hWnd, nullptr, instance, nullptr);
-            SetControlFont(excludedLabel, g_hFontNormal);
-            CreateWindowW(L"STATIC", L"", WS_CHILD | WS_VISIBLE | SS_ETCHEDVERT,
-                170, 300, 2, 40, hWnd, nullptr, instance, nullptr);
-            state->excludedKeywordsEdit = CreateWindowExW(WS_EX_CLIENTEDGE, L"EDIT",
-                g_store.excluded_window_keywords.c_str(),
-                WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_AUTOHSCROLL,
-                184, 305, groupRight - 184, 28, hWnd,
-                (HMENU)(INT_PTR)IDC_SETTINGS_EXCLUDED_KEYWORDS, instance, nullptr);
-            SetControlFont(state->excludedKeywordsEdit, g_hFontNormal);
-            SendMessageW(state->excludedKeywordsEdit, EM_SETCUEBANNER, TRUE,
-                (LPARAM)L"pl. YouTube, Discord, Facebook");
-            if (state->syncTooltip) {
-                static constexpr wchar_t excludedHelp[] =
-                    L"Vesszővel elválasztott kulcsszavak. Ha az előtérben lévő ablak címe tartalmazza "
-                    L"valamelyiket, a munkaidő mérése szünetel. A kis- és nagybetű nem számít. "
-                    L"Fókusz módban a mérés ilyenkor is folytatódik.";
-                AddSyncTooltip(state->syncTooltip, hWnd, excludedLabel, excludedHelp);
-                AddSyncTooltip(state->syncTooltip, hWnd, state->excludedKeywordsEdit, excludedHelp);
-            }
-
-            HWND versionLabel = CreateWindowW(L"STATIC", APP_VERSION,
-                WS_CHILD | WS_VISIBLE | SS_LEFT, 18, 362, 120, 24, hWnd, nullptr, instance, nullptr);
-            SetControlFont(versionLabel, g_hFontSmall);
-
-            HWND okButton = CreateWindowW(L"BUTTON", L"OK",
-                WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_DEFPUSHBUTTON,
-                392, 356, 90, 30, hWnd, (HMENU)(INT_PTR)IDC_SETTINGS_OK, instance, nullptr);
-            SetControlFont(okButton, g_hFontNormal);
+        case WM_CREATE:
+            BuildControls(hWnd, state);
             SetFocus(state->themeCombo);
             return 0;
-        }
         case WM_ERASEBKGND: {
             RECT client{};
             GetClientRect(hWnd, &client);
@@ -306,41 +347,70 @@ namespace {
             SetBkMode(dc, OPAQUE);
             return (LRESULT)GetStockObject(WHITE_BRUSH);
         }
-        case WM_COMMAND:
-            if (LOWORD(wParam) == IDC_SETTINGS_BROWSE) {
-                BrowseSyncFile(hWnd, state);
-                return 0;
-            }
-            if (LOWORD(wParam) == IDC_SETTINGS_THEME && HIWORD(wParam) == CBN_SELCHANGE) {
+        case WM_COMMAND: {
+            const int id = LOWORD(wParam);
+            if (id == IDC_SETTINGS_THEME && HIWORD(wParam) == CBN_SELCHANGE) {
                 int selection = static_cast<int>(SendMessageW(state->themeCombo, CB_GETCURSEL, 0, 0));
                 if (selection >= 0 && selection <= static_cast<int>(ThemeMode::Pink)) {
                     ApplySelectedTheme(hWnd, state, static_cast<ThemeMode>(selection));
                 }
                 return 0;
             }
-            if (LOWORD(wParam) == IDCANCEL) {
+            if (id == IDCANCEL) {
                 DestroyWindow(hWnd);
                 return 0;
             }
-            if (LOWORD(wParam) == IDC_SETTINGS_OK || LOWORD(wParam) == IDOK) {
-                SYSTEMTIME selectedTime{};
-                if (DateTime_GetSystemtime(state->resetTime, &selectedTime) != GDT_VALID) return 0;
-                g_store.work_reset_hour = selectedTime.wHour;
-                g_store.work_reset_minute = selectedTime.wMinute;
-                g_store.sounds_enabled = SendMessageW(state->soundsCheckbox, BM_GETCHECK, 0, 0) == BST_CHECKED;
-                g_store.timer_start_with_app = SendMessageW(state->timerAutoStartCheckbox,
-                    BM_GETCHECK, 0, 0) == BST_CHECKED;
-                const int keywordsLength = GetWindowTextLengthW(state->excludedKeywordsEdit);
-                std::wstring keywords(static_cast<size_t>(keywordsLength) + 1, wchar_t());
-                GetWindowTextW(state->excludedKeywordsEdit, keywords.data(), keywordsLength + 1);
-                keywords.resize(static_cast<size_t>(keywordsLength));
-                g_store.excluded_window_keywords = ExcludedApps::Normalize(keywords);
+            if (id == IDC_SETTINGS_OK || id == IDOK) {
+                SaveAndClose(hWnd, state);
+                return 0;
+            }
+            if (state->building) return 0;
+            const int code = HIWORD(wParam);
+            if (id == IDC_SETTINGS_EXCLUDED_KEYWORDS && code == EN_CHANGE) {
+                state->excludedKeywords = ReadText(state->excludedKeywordsEdit);
+                g_store.excluded_window_keywords = ExcludedApps::Normalize(state->excludedKeywords);
                 g_store.SaveLocal();
-                g_store.CheckWorkReset();
-                DestroyWindow(hWnd);
+                return 0;
+            }
+            if ((id == IDC_SETTINGS_SOUNDS || id == IDC_SETTINGS_TIMER_AUTO_START) && code == BN_CLICKED) {
+                SnapshotControls(state);
+                g_store.sounds_enabled = state->soundsEnabled;
+                g_store.timer_start_with_app = state->timerAutoStart;
+                g_store.SaveLocal();
+                return 0;
+            }
+            if (SettingsSyncRows::OwnsControl(id) && (code == BN_CLICKED || code == EN_CHANGE)) {
+                SnapshotControls(state);
+                if (code == BN_CLICKED && SettingsSyncRows::HandleCommand(hWnd, id, state->syncRows)) {
+                    ApplySyncRows(state, true);
+                    // Rebuild after this click finishes; the clicked button is among the destroyed controls.
+                    PostMessageW(hWnd, WM_APP_REBUILD, 0, 0);
+                } else {
+                    ApplySyncRows(state, false); // Name typed or default flag toggled.
+                }
                 return 0;
             }
             break;
+        }
+        case WM_NOTIFY: {
+            auto* header = reinterpret_cast<NMHDR*>(lParam);
+            if (header && header->hwndFrom == state->resetTime && header->code == DTN_DATETIMECHANGE) {
+                UpdateResetDirty(state);
+                return 0;
+            }
+            break;
+        }
+        case WM_DRAWITEM: {
+            auto* item = reinterpret_cast<DRAWITEMSTRUCT*>(lParam);
+            if (item && item->CtlID == IDC_SETTINGS_OK) {
+                DrawOkButton(item, state);
+                return TRUE;
+            }
+            break;
+        }
+        case WM_APP_REBUILD:
+            RebuildControls(hWnd, state);
+            return 0;
         case WM_KEYDOWN:
             if (wParam == VK_ESCAPE) {
                 DestroyWindow(hWnd);
@@ -351,9 +421,9 @@ namespace {
             DestroyWindow(hWnd);
             return 0;
         case WM_DESTROY:
-            if (state->syncTooltip && IsWindow(state->syncTooltip)) {
-                DestroyWindow(state->syncTooltip);
-                state->syncTooltip = nullptr;
+            if (state->tooltip && IsWindow(state->tooltip)) {
+                DestroyWindow(state->tooltip);
+                state->tooltip = nullptr;
             }
             return 0;
         }
@@ -370,17 +440,19 @@ void ShowSettingsDialog(HWND owner) {
     if (!RegisterClassW(&dialogClass) && GetLastError() != ERROR_CLASS_ALREADY_EXISTS) return;
 
     DialogState state;
-    state.syncFilePath = g_store.syncFilePath;
+    state.syncRows = SettingsSyncRows::FromSources(g_store.syncSources);
     state.resetHour = g_store.work_reset_hour;
     state.resetMinute = g_store.work_reset_minute;
+    state.soundsEnabled = g_store.sounds_enabled;
+    state.timerAutoStart = g_store.timer_start_with_app;
+    state.excludedKeywords = g_store.excluded_window_keywords;
     state.owner = owner;
     state.backgroundBrush = CreateSolidBrush(SETTINGS_DIALOG_BG);
 
     g_inContextMenu = true;
     EnableWindow(owner, FALSE);
-    HWND dialog = CreateWindowExW(WS_EX_DLGMODALFRAME | WS_EX_TOPMOST | WS_EX_CONTROLPARENT,
-        DIALOG_CLASS, L"Beállítások", WS_POPUP | WS_CAPTION | WS_SYSMENU,
-        CW_USEDEFAULT, CW_USEDEFAULT, SETTINGS_DIALOG_WIDTH, SETTINGS_DIALOG_HEIGHT, owner, nullptr,
+    HWND dialog = CreateWindowExW(DIALOG_EX_STYLE, DIALOG_CLASS, L"Beállítások", DIALOG_STYLE,
+        CW_USEDEFAULT, CW_USEDEFAULT, SETTINGS_DIALOG_WIDTH, 400, owner, nullptr,
         GetModuleHandleW(nullptr), &state);
     if (!dialog) {
         EnableWindow(owner, TRUE);
@@ -393,11 +465,15 @@ void ShowSettingsDialog(HWND owner) {
     g_settingsOpen = true;
     if (g_hSettingsBtn) InvalidateRect(g_hSettingsBtn, nullptr, TRUE);
     RECT ownerRect{};
+    RECT dialogRect{};
     GetWindowRect(owner, &ownerRect);
+    GetWindowRect(dialog, &dialogRect);
+    const int dialogWidth = dialogRect.right - dialogRect.left;
+    const int dialogHeight = dialogRect.bottom - dialogRect.top;
     SetWindowPos(dialog, HWND_TOPMOST,
-        ownerRect.left + ((ownerRect.right - ownerRect.left) - SETTINGS_DIALOG_WIDTH) / 2,
-        ownerRect.top + ((ownerRect.bottom - ownerRect.top) - SETTINGS_DIALOG_HEIGHT) / 2,
-        SETTINGS_DIALOG_WIDTH, SETTINGS_DIALOG_HEIGHT, SWP_SHOWWINDOW);
+        ownerRect.left + ((ownerRect.right - ownerRect.left) - dialogWidth) / 2,
+        ownerRect.top + ((ownerRect.bottom - ownerRect.top) - dialogHeight) / 2,
+        0, 0, SWP_NOSIZE | SWP_SHOWWINDOW);
     SetForegroundWindow(dialog);
 
     MSG message{};

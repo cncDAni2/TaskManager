@@ -2,16 +2,24 @@
 
 #include "AppTypes.h"
 #include "ExcludedApps.h"
+#include "SyncFiles.h"
 #include "TaskUtils.h"
 #include "WorkHistory.h"
+#include <map>
 #include <string>
 #include <vector>
+
+// A synchronized change worth telling the user about.
+struct SyncNotice {
+    bool isNew = false;
+    std::wstring text;
+    std::wstring previousText;
+    std::wstring changedBy;
+};
 
 class TaskStore {
 public:
     std::vector<Task> tasks;
-    int next_id = 1;
-    int next_sync_id = 1000001;
     int work_seconds_today = 0;
     time_t last_reset_time = 0;
     int work_reset_hour = 9;
@@ -28,14 +36,16 @@ public:
     WorkHistory::Records work_history;
     WorkHistory::Records manual_work_history;
     std::wstring filePath;
-    std::wstring syncFilePath;
-    FILETIME lastSyncFileTime = { 0, 0 };
+    std::vector<SyncSource> syncSources;
+    int next_source_id = 1;
     std::vector<int> active_order;
+    std::vector<SyncNotice> pendingNotices;
 
     TaskStore();
 
     void CheckWorkReset();
-    void Add(const std::wstring& text, bool isSync = false);
+    // Returns the runtime id of the new task, or 0 when nothing was added.
+    int Add(const std::wstring& text, const std::vector<int>& sourceIds);
     void UpdateText(int id, const std::wstring& newText);
     void CycleMarker(int id);
     void ToggleCompleted(int id);
@@ -48,12 +58,29 @@ public:
     std::vector<WorkHistory::DisplayEntry> GetWorkHistory() const;
     void SetManualWork(const std::string& date, int seconds);
 
-    void SetSyncFilePath(const std::wstring& newPath);
+    // Sync (TaskSync.cpp)
+    void SetSyncSources(const std::vector<SyncSource>& sources);
+    const SyncSource* FindSource(int sourceId) const;
+    std::vector<int> DefaultSourceIds() const;
+    bool CheckSyncFilesChanged();
+    // Reads changed (or all) sync files, merges them, relays newer versions, and
+    // queues notices into `pendingNotices` unless `silent`.
+    void ReloadSync(bool forceAll, bool silent);
+
     void SaveLocal();
-    void SaveSync();
     void Save();
-    bool CheckSyncFileChanged();
-    bool LoadSync();
     void LoadLocal();
     void Load();
+
+private:
+    std::map<std::string, int> runtimeIds;
+    int nextRuntimeId = 1;
+    std::map<std::string, std::wstring> knownSyncTexts;
+    bool syncKnownInitialized = false;
+
+    int RuntimeIdFor(const std::string& uid);
+    void AddFirstRunSyncSource();
+    Task* FindTask(int id);
+    void PublishSyncTask(Task& task, bool deleted);
+    void RewriteSource(SyncSource& source, const SyncFiles::RecordMap* winners, const SyncRecord* upsert);
 };

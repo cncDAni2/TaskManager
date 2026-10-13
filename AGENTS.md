@@ -30,7 +30,10 @@ The application is modularized under `src/` into focused, single-responsibility 
 
 - [src/AppTypes.h](src/AppTypes.h): UI IDs, task/view/filter types, theme colors, display items, and scrollbar metrics.
 - [src/AppState.h](src/AppState.h) / [src/AppState.cpp](src/AppState.cpp): Centralized globals for the store, views, window modes, focus/session state, and rendering/input state.
-- [src/Task.h](src/Task.h) / [src/Task.cpp](src/Task.cpp): `TaskStore` for local persistence, OneDrive task sync, active-task ordering, work tracking, and settings.
+- [src/Task.h](src/Task.h) / [src/Task.cpp](src/Task.cpp): `TaskStore` core: task operations, runtime-id mapping, active-task ordering, work tracking, and settings. Split across [src/TaskLocalFile.cpp](src/TaskLocalFile.cpp) (local JSON load/save and legacy migration) and [src/TaskSync.cpp](src/TaskSync.cpp) (multi-file sync: read, merge, relay, notices).
+- [src/SyncFiles.h](src/SyncFiles.h) / [src/SyncFiles.cpp](src/SyncFiles.cpp): Shared sync-file records, safe read/write (truncated files are never overwritten), newest-wins merge, tombstone purge, and UID generation.
+- [src/JsonLite.h](src/JsonLite.h) / [src/JsonLite.cpp](src/JsonLite.cpp): String-aware readers for the app's hand-written JSON (object/scalar arrays and typed fields).
+- [src/SyncPicker.h](src/SyncPicker.h) / [src/SyncPicker.cpp](src/SyncPicker.cpp): New-task target selection (cloud button, checklist menu, count badges, dynamic tooltip).
 - [src/TaskUtils.h](src/TaskUtils.h) / [src/TaskUtils.cpp](src/TaskUtils.cpp): UTF-8/wide conversion, JSON escaping, date/time formatting, configurable work-reset cutoffs, and user/path helpers.
 - [src/AudioCue.h](src/AudioCue.h) / [src/AudioCue.cpp](src/AudioCue.cpp): Generated WAV cues and asynchronous playback.
 - [src/IntervalTimer.h](src/IntervalTimer.h) / [src/IntervalTimer.cpp](src/IntervalTimer.cpp): Work/rest cycles and the optional 20-20-20 reminder.
@@ -44,8 +47,9 @@ The application is modularized under `src/` into focused, single-responsibility 
 - [src/InlineEdit.h](src/InlineEdit.h) / [src/InlineEdit.cpp](src/InlineEdit.cpp): Task inline editing logic, input subclassing, commit/cancel lifecycle.
 - [src/Layout.h](src/Layout.h) / [src/Layout.cpp](src/Layout.cpp): Window geometry, mini-mode transitions, control visibility, and custom scrollbar metrics.
 - [src/Paint.h](src/Paint.h) / [src/Paint.cpp](src/Paint.cpp): Double-buffered GDI rendering for full/mini views and measured/manual work bars.
-- [src/PopupNotice.h](src/PopupNotice.h) / [src/PopupNotice.cpp](src/PopupNotice.cpp): Non-activating notices for newly added tasks.
-- [src/SettingsDialog.h](src/SettingsDialog.h) / [src/SettingsDialog.cpp](src/SettingsDialog.cpp): Settings UI for sync-file path, themes, sound, daily work-reset time, timer auto-start, and excluded window-title keywords.
+- [src/PopupNotice.h](src/PopupNotice.h) / [src/PopupNotice.cpp](src/PopupNotice.cpp): Non-activating notices: new tasks (stay until clicked) and changed tasks (auto-close countdown, paused on hover).
+- [src/SettingsDialog.h](src/SettingsDialog.h) / [src/SettingsDialog.cpp](src/SettingsDialog.cpp): Settings UI for themes, sound, daily work-reset time, timer auto-start, and excluded window-title keywords; rebuilt in place when sync rows change. Every setting applies and saves instantly except the work-reset time, which waits for the highlighted "Mentés" button (the OK button changes to it).
+- [src/SettingsSyncRows.h](src/SettingsSyncRows.h) / [src/SettingsSyncRows.cpp](src/SettingsSyncRows.cpp): Settings table of sync files (default flag, name, path, browse, remove, add).
 - [src/UIEventHandler.h](src/UIEventHandler.h) / [src/UIEventHandler.cpp](src/UIEventHandler.cpp): Keyboard/mouse handling, task reordering, commands, and tray interactions.
 - [src/WorkHistory.h](src/WorkHistory.h) / [src/WorkHistory.cpp](src/WorkHistory.cpp): Measured/manual work-history persistence and daily/weekly display aggregation.
 - [src/WorkTimeDialog.h](src/WorkTimeDialog.h) / [src/WorkTimeDialog.cpp](src/WorkTimeDialog.cpp): Date and duration input for manual work-history entries.
@@ -61,12 +65,14 @@ The application is modularized under `src/` into focused, single-responsibility 
 - **Performance**:
   - Preserve the event-driven, non-polling design. The README contains approximate resource-use estimates; do not present them as measured values without checking the running process.
   - The render path uses double-buffered GDI. Suppress `WM_ERASEBKGND` (`return 1`) and avoid unnecessary invalidation; use dirty rectangles for small indicator updates.
-  - The existing one-second `IDT_WORK_TIMER` drives work-time accrual, idle/excluded-app checks, and interval-timer ticks. Sync is checked every ten ticks and reloaded only when the file timestamp changes. Do not add unrelated periodic work.
+  - The existing one-second `IDT_WORK_TIMER` drives work-time accrual, idle/excluded-app checks, and interval-timer ticks. Sync is checked every ten ticks and only changed sync files are reloaded (by timestamp). Do not add unrelated periodic work.
 - **Character encoding**: Maintain UTF-8 encoding and compile flags (`/utf-8`, `UNICODE`, `_UNICODE`). Use `std::wstring` and wide-character Win32 API functions (`W` suffixes) throughout the UI. Font creation must use `DEFAULT_CHARSET` to properly render Hungarian accents.
 - **Single instance**: Controlled via named mutex `TaskManager_SingleInstance_Mutex_98741`. A second launch signals the existing window via `WM_HOTKEY` and exits immediately.
 - **Two-tier data persistence**:
-  - Local `tasks-local.json` stores local tasks, `next_id`, active ordering, current and historical work time (including manual entries), reset timestamp, theme, work-reset time, chosen `sync_file_path`, timer durations/repetitions, the 20-20-20 toggle, timer auto-start preference, sound preference, and excluded window-title keywords.
-  - OneDrive shared `tasks.json` stores only synchronized tasks (IDs in the 1,000,000+ range), creator (`author`), and assignee; keep local settings and work history out of the shared file.
+  - Every task has a persistent string `uid` (new tasks: GUID; legacy numeric ids are kept as their decimal string, sync ids normalized to 1,000,000+). `Task::id` is a runtime-only handle from `TaskStore::RuntimeIdFor`; never persist it.
+  - Local `tasks-local.json` stores local tasks, active ordering (as uids), current and historical work time (including manual entries), reset timestamp, theme, work-reset time, the `sync_files` list (local `source_id`, name, path, default flag), timer durations/repetitions, the 20-20-20 toggle, timer auto-start preference, sound preference, and excluded window-title keywords. A legacy `sync_file_path` is migrated to the first `sync_files` entry.
+  - Shared sync files store only synchronized tasks with `uid`, `updated_at`, `updated_by`, creator (`author`), assignee, and a `deleted` tombstone flag; keep local settings and work history out of them. Every change bumps `updated_at`, but `updated_by` names only who created or last rewrote the text (ticking, "ÉN" and deleting keep it); the merge relies on `updated_at` alone.
+  - Sync writes are always read → merge → write. The newest `updated_at` wins; relaying keeps the winner's original `updated_at`/`updated_by`. Changes are written only to files that already contain the uid. Tombstones are purged after 14 days. Files that fail to parse are never overwritten; own changes wait in `pendingWrites`.
   - JSON parsing is hand-written. Write operations must use binary/UTF-8 mode and escape strings with `TaskUtils::EscapeJsonString`.
 - **Work timer & focus mode**: Focus mode overrides idle/excluded-app pauses, but session lock always stops counting and disables focus mode; unlocking does not re-enable it. Keep `FocusMode` session-notification registration and unregistration paired.
 - **Work reset vs completed filter**: The daily work reset time is configurable in Settings (default 09:15); the completed-task recent filter has a separate yesterday-09:30 cutoff. Do not conflate these date boundaries.

@@ -77,7 +77,8 @@ enum class TaskMarker {
 };
 
 struct Task {
-    int id = 0;
+    int id = 0;            // Runtime-only handle; never persisted.
+    std::string uid;       // Persistent identity across local and shared files.
     std::wstring text;
     bool completed = false;
     time_t created_at = 0;
@@ -85,6 +86,9 @@ struct Task {
     bool is_sync = false;
     std::wstring author;
     std::wstring assignee;
+    time_t updated_at = 0;
+    std::wstring updated_by;
+    std::vector<int> sources; // Sync source ids whose file contains this task.
     TaskMarker marker = TaskMarker::None;
 };
 

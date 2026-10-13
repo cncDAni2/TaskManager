@@ -1,27 +1,6 @@
 #include "Task.h"
-#include <fstream>
-#include <sstream>
-#include <iomanip>
 #include <algorithm>
 #include <set>
-
-namespace {
-// Reads a top-level string value; returns false when the key is missing or malformed.
-bool ReadJsonString(const std::string& content, const std::string& key, std::wstring& value) {
-    size_t keyPos = content.find("\"" + key + "\":");
-    if (keyPos == std::string::npos) return false;
-    size_t strStart = content.find('"', keyPos + key.size() + 3);
-    if (strStart == std::string::npos) return false;
-    size_t strEnd = strStart + 1;
-    while (strEnd < content.size() && content[strEnd] != '"') {
-        strEnd += content[strEnd] == '\\' ? 2 : 1;
-    }
-    if (strEnd >= content.size()) return false;
-    std::string raw = content.substr(strStart + 1, strEnd - strStart - 1);
-    value = TaskUtils::Utf8ToWide(TaskUtils::UnescapeJsonString(raw));
-    return true;
-}
-}
 
 TaskStore::TaskStore() {
     wchar_t exePath[MAX_PATH];
@@ -33,7 +12,6 @@ TaskStore::TaskStore() {
     } else {
         filePath = L"tasks-local.json";
     }
-    syncFilePath = TaskUtils::GetDefaultSyncFilePath();
     Load();
     CheckWorkReset();
 }
@@ -52,113 +30,102 @@ void TaskStore::CheckWorkReset() {
     }
 }
 
-void TaskStore::Add(const std::wstring& text, bool isSync) {
-    if (text.empty()) return;
-    Task t;
-    t.text = text;
-    t.completed = false;
-    t.created_at = time(nullptr);
-    t.completed_at = 0;
-    t.is_sync = isSync;
+int TaskStore::RuntimeIdFor(const std::string& uid) {
+    auto it = runtimeIds.find(uid);
+    if (it != runtimeIds.end()) return it->second;
+    int id = nextRuntimeId++;
+    runtimeIds.emplace(uid, id);
+    return id;
+}
 
-    if (isSync) {
-        int maxSyncId = 1000000;
-        for (const auto& existing : tasks) {
-            if (existing.is_sync && existing.id > maxSyncId) {
-                maxSyncId = existing.id;
-            }
-        }
-        if (next_sync_id <= maxSyncId) {
-            next_sync_id = maxSyncId + 1;
-        }
-        t.id = next_sync_id++;
-        t.author = TaskUtils::GetCleanUserName();
-        tasks.push_back(t);
-        active_order.insert(active_order.begin(), t.id);
-        SaveSync();
-        SaveLocal();
-    } else {
-        t.id = next_id++;
-        t.author = L"";
-        tasks.push_back(t);
-        active_order.insert(active_order.begin(), t.id);
-        SaveLocal();
+Task* TaskStore::FindTask(int id) {
+    auto it = std::find_if(tasks.begin(), tasks.end(), [id](const Task& t) { return t.id == id; });
+    return it == tasks.end() ? nullptr : &*it;
+}
+
+int TaskStore::Add(const std::wstring& text, const std::vector<int>& sourceIds) {
+    if (text.empty()) return 0;
+    Task t;
+    t.uid = SyncFiles::NewUid();
+    t.id = RuntimeIdFor(t.uid);
+    t.text = text;
+    t.created_at = time(nullptr);
+
+    for (int sourceId : sourceIds) {
+        if (FindSource(sourceId)) t.sources.push_back(sourceId);
     }
+    t.is_sync = !t.sources.empty();
+    if (t.is_sync) {
+        t.author = TaskUtils::GetCleanUserName();
+        t.updated_by = t.author;
+    }
+    tasks.push_back(t);
+    active_order.insert(active_order.begin(), t.id);
+    const int id = t.id;
+    if (t.is_sync) PublishSyncTask(tasks.back(), false);
+    SaveLocal();
+    return id;
 }
 
 void TaskStore::UpdateText(int id, const std::wstring& newText) {
-    for (auto& t : tasks) {
-        if (t.id == id) {
-            t.text = newText;
-            if (t.is_sync) SaveSync();
-            else SaveLocal();
-            return;
-        }
+    Task* t = FindTask(id);
+    if (!t || t->text == newText) return;
+    t->text = newText;
+    if (t->is_sync) {
+        // Only creating or rewriting the text changes updated_by; ticking or "ÉN" keeps it.
+        t->updated_by = TaskUtils::GetCleanUserName();
+        PublishSyncTask(*t, false);
     }
+    else SaveLocal();
 }
 
 void TaskStore::CycleMarker(int id) {
-    for (auto& t : tasks) {
-        if (t.id == id && !t.is_sync) {
-            int nextMarker = (static_cast<int>(t.marker) + 1) % 4;
-            t.marker = static_cast<TaskMarker>(nextMarker);
-            SaveLocal();
-            return;
-        }
-    }
+    Task* t = FindTask(id);
+    if (!t || t->is_sync) return;
+    int nextMarker = (static_cast<int>(t->marker) + 1) % 4;
+    t->marker = static_cast<TaskMarker>(nextMarker);
+    SaveLocal();
 }
 
 void TaskStore::ToggleCompleted(int id) {
-    for (auto& t : tasks) {
-        if (t.id == id) {
-            t.completed = !t.completed;
-            if (t.completed) {
-                t.completed_at = time(nullptr);
-                auto it = std::find(active_order.begin(), active_order.end(), id);
-                if (it != active_order.end()) active_order.erase(it);
-            } else {
-                t.completed_at = 0;
-                if (std::find(active_order.begin(), active_order.end(), id) == active_order.end()) {
-                    active_order.push_back(id);
-                }
-            }
-            if (t.is_sync) SaveSync();
-            SaveLocal();
-            return;
+    Task* t = FindTask(id);
+    if (!t) return;
+    t->completed = !t->completed;
+    if (t->completed) {
+        t->completed_at = time(nullptr);
+        auto it = std::find(active_order.begin(), active_order.end(), id);
+        if (it != active_order.end()) active_order.erase(it);
+    } else {
+        t->completed_at = 0;
+        if (std::find(active_order.begin(), active_order.end(), id) == active_order.end()) {
+            active_order.push_back(id);
         }
     }
+    if (t->is_sync) PublishSyncTask(*t, false);
+    SaveLocal();
 }
 
 std::wstring TaskStore::ToggleAssignment(int id, const std::wstring& userName) {
-    if (!LoadSync()) return L"";
+    // Re-read first so a colleague's fresh assignment is not overwritten.
+    ReloadSync(false, false);
 
-    for (auto& t : tasks) {
-        if (t.id == id && t.is_sync) {
-            if (!t.assignee.empty() && t.assignee != userName) return t.assignee;
-            t.assignee = (t.assignee == userName) ? L"" : userName;
-            SaveSync();
-            return L"";
-        }
-    }
+    Task* t = FindTask(id);
+    if (!t || !t->is_sync) return L"";
+    if (!t->assignee.empty() && t->assignee != userName) return t->assignee;
+    t->assignee = (t->assignee == userName) ? L"" : userName;
+    PublishSyncTask(*t, false);
     return L"";
 }
 
 void TaskStore::Delete(int id) {
-    bool isSync = false;
-    auto it = std::remove_if(tasks.begin(), tasks.end(), [id, &isSync](const Task& t) {
-        if (t.id == id) {
-            isSync = t.is_sync;
-            return true;
-        }
-        return false;
-    });
-    if (it != tasks.end()) {
-        tasks.erase(it, tasks.end());
-        auto itOrder = std::find(active_order.begin(), active_order.end(), id);
-        if (itOrder != active_order.end()) active_order.erase(itOrder);
-        if (isSync) SaveSync();
-        SaveLocal();
-    }
+    Task* t = FindTask(id);
+    if (!t) return;
+    if (t->is_sync) PublishSyncTask(*t, true);
+    tasks.erase(std::remove_if(tasks.begin(), tasks.end(),
+        [id](const Task& task) { return task.id == id; }), tasks.end());
+    auto itOrder = std::find(active_order.begin(), active_order.end(), id);
+    if (itOrder != active_order.end()) active_order.erase(itOrder);
+    SaveLocal();
 }
 
 std::vector<Task> TaskStore::GetActiveTasks() const {
@@ -213,492 +180,23 @@ void TaskStore::SetManualWork(const std::string& date, int seconds) {
     SaveLocal();
 }
 
-void TaskStore::SetSyncFilePath(const std::wstring& newPath) {
-    if (newPath.empty() || newPath == syncFilePath) return;
-    syncFilePath = newPath;
-    SaveLocal();
-    LoadSync();
-}
-
-void TaskStore::SaveLocal() {
-    std::ofstream out(filePath, std::ios::out | std::ios::trunc | std::ios::binary);
-    if (!out.is_open()) return;
-
-    out << "{\n  \"next_id\": " << next_id << ",\n"
-        << "  \"work_seconds\": " << work_seconds_today << ",\n"
-        << "  \"last_reset\": " << (unsigned long long)last_reset_time << ",\n";
-    WorkHistory::WriteJson(out, work_history, manual_work_history);
-    const char* themeName = theme_mode == ThemeMode::Pink ? "pink"
-        : (theme_mode == ThemeMode::Light ? "light" : "dark");
-    out << "  \"dark_mode\": " << (theme_mode == ThemeMode::Dark ? "true" : "false") << ",\n"
-        << "  \"theme_mode\": \"" << themeName << "\",\n"
-        << "  \"work_reset_hour\": " << work_reset_hour << ",\n"
-        << "  \"work_reset_minute\": " << work_reset_minute << ",\n"
-        << "  \"timer_work_minutes\": " << timer_work_minutes << ",\n"
-        << "  \"timer_rest_minutes\": " << timer_rest_minutes << ",\n"
-        << "  \"timer_repetitions\": " << timer_repetitions << ",\n"
-        << "  \"timer_2020_enabled\": " << (timer_2020_enabled ? "true" : "false") << ",\n"
-        << "  \"timer_strict_mode\": " << (timer_strict_mode ? "true" : "false") << ",\n"
-        << "  \"timer_start_with_app\": " << (timer_start_with_app ? "true" : "false") << ",\n"
-        << "  \"sounds_enabled\": " << (sounds_enabled ? "true" : "false") << ",\n"
-        << "  \"excluded_window_keywords\": \"" << TaskUtils::EscapeJsonString(TaskUtils::WideToUtf8(excluded_window_keywords)) << "\",\n"
-        << "  \"sync_file_path\": \"" << TaskUtils::EscapeJsonString(TaskUtils::WideToUtf8(syncFilePath)) << "\",\n"
-        << "  \"active_order\": [";
-    for (size_t i = 0; i < active_order.size(); ++i) {
-        if (i > 0) out << ", ";
-        out << active_order[i];
-    }
-    out << "],\n"
-        << "  \"tasks\": [\n";
-    bool first = true;
-    for (const auto& t : tasks) {
-        if (t.is_sync) continue;
-        if (!first) out << ",\n";
-        first = false;
-        out << "    {\n";
-        out << "      \"id\": " << t.id << ",\n";
-        out << "      \"text\": \"" << TaskUtils::EscapeJsonString(TaskUtils::WideToUtf8(t.text)) << "\",\n";
-        out << "      \"completed\": " << (t.completed ? "true" : "false") << ",\n";
-        out << "      \"created_at\": " << t.created_at << ",\n";
-        out << "      \"completed_at\": " << t.completed_at << ",\n";
-        out << "      \"marker\": " << static_cast<int>(t.marker) << "\n";
-        out << "    }";
-    }
-    out << "\n  ]\n}\n";
-}
-
-void TaskStore::SaveSync() {
-    if (syncFilePath.empty()) return;
-    TaskUtils::EnsureParentDirectoryExists(syncFilePath);
-    std::ofstream out(syncFilePath, std::ios::out | std::ios::trunc | std::ios::binary);
-    if (!out.is_open()) return;
-
-    out << "{\n  \"tasks\": [\n";
-    bool first = true;
-    for (const auto& t : tasks) {
-        if (!t.is_sync) continue;
-        if (!first) out << ",\n";
-        first = false;
-        out << "    {\n";
-        out << "      \"id\": " << t.id << ",\n";
-        out << "      \"text\": \"" << TaskUtils::EscapeJsonString(TaskUtils::WideToUtf8(t.text)) << "\",\n";
-        out << "      \"completed\": " << (t.completed ? "true" : "false") << ",\n";
-        out << "      \"created_at\": " << t.created_at << ",\n";
-        out << "      \"completed_at\": " << t.completed_at << ",\n";
-        out << "      \"author\": \"" << TaskUtils::EscapeJsonString(TaskUtils::WideToUtf8(t.author)) << "\",\n";
-        out << "      \"assignee\": \"" << TaskUtils::EscapeJsonString(TaskUtils::WideToUtf8(t.assignee)) << "\"\n";
-        out << "    }";
-    }
-    out << "\n  ]\n}\n";
-    out.close();
-
-    HANDLE hFile = CreateFileW(syncFilePath.c_str(), GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
-    if (hFile != INVALID_HANDLE_VALUE) {
-        GetFileTime(hFile, nullptr, nullptr, &lastSyncFileTime);
-        CloseHandle(hFile);
-    }
-}
-
 void TaskStore::Save() {
     SaveLocal();
-}
-
-bool TaskStore::CheckSyncFileChanged() {
-    if (syncFilePath.empty()) return false;
-    WIN32_FILE_ATTRIBUTE_DATA fad;
-    if (GetFileAttributesExW(syncFilePath.c_str(), GetFileExInfoStandard, &fad)) {
-        if (fad.ftLastWriteTime.dwLowDateTime != lastSyncFileTime.dwLowDateTime ||
-            fad.ftLastWriteTime.dwHighDateTime != lastSyncFileTime.dwHighDateTime) {
-            return true;
-        }
-    }
-    return false;
-}
-
-bool TaskStore::LoadSync() {
-    if (syncFilePath.empty()) return false;
-
-    std::ifstream in(syncFilePath, std::ios::in | std::ios::binary);
-    if (!in.is_open()) return false;
-
-    std::string content((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
-    in.close();
-
-    WIN32_FILE_ATTRIBUTE_DATA fad;
-    if (GetFileAttributesExW(syncFilePath.c_str(), GetFileExInfoStandard, &fad)) {
-        lastSyncFileTime = fad.ftLastWriteTime;
-    }
-
-    tasks.erase(std::remove_if(tasks.begin(), tasks.end(), [](const Task& t) {
-        return t.is_sync;
-    }), tasks.end());
-
-    WorkHistory::LoadFromJson(content, work_history, manual_work_history);
-
-    size_t pos = 0;
-    int maxSyncId = 1000000;
-    while ((pos = content.find('{', pos)) != std::string::npos) {
-        size_t objEnd = content.find('}', pos);
-        if (objEnd == std::string::npos) break;
-
-        std::string objStr = content.substr(pos, objEnd - pos + 1);
-        pos = objEnd + 1;
-
-        if (objStr.find("\"id\":") != std::string::npos && objStr.find("\"text\":") != std::string::npos) {
-            Task t;
-            t.is_sync = true;
-            size_t p = objStr.find("\"id\":");
-            if (p != std::string::npos) {
-                size_t numStart = objStr.find_first_of("-0123456789", p + 5);
-                if (numStart != std::string::npos) {
-                    t.id = std::stoi(objStr.substr(numStart));
-                }
-            }
-            if (t.id < 1000000) {
-                t.id += 1000000;
-            }
-            p = objStr.find("\"text\":");
-            if (p != std::string::npos) {
-                size_t strStart = objStr.find('"', p + 7);
-                if (strStart != std::string::npos) {
-                    size_t strEnd = strStart + 1;
-                    while (strEnd < objStr.size()) {
-                        if (objStr[strEnd] == '"' && objStr[strEnd - 1] != '\\') break;
-                        strEnd++;
-                    }
-                    if (strEnd < objStr.size()) {
-                        std::string raw = objStr.substr(strStart + 1, strEnd - strStart - 1);
-                        t.text = TaskUtils::Utf8ToWide(TaskUtils::UnescapeJsonString(raw));
-                    }
-                }
-            }
-            p = objStr.find("\"completed\":");
-            if (p != std::string::npos) {
-                size_t bStart = objStr.find_first_not_of(" \t\r\n", p + 12);
-                if (bStart != std::string::npos) {
-                    t.completed = (objStr.substr(bStart, 4) == "true");
-                }
-            }
-            p = objStr.find("\"created_at\":");
-            if (p != std::string::npos) {
-                size_t numStart = objStr.find_first_of("0123456789", p + 13);
-                if (numStart != std::string::npos) {
-                    t.created_at = (time_t)std::stoull(objStr.substr(numStart));
-                }
-            }
-            p = objStr.find("\"completed_at\":");
-            if (p != std::string::npos) {
-                size_t numStart = objStr.find_first_of("0123456789", p + 15);
-                if (numStart != std::string::npos) {
-                    t.completed_at = (time_t)std::stoull(objStr.substr(numStart));
-                }
-            }
-            p = objStr.find("\"author\":");
-            if (p != std::string::npos) {
-                size_t strStart = objStr.find('"', p + 9);
-                if (strStart != std::string::npos) {
-                    size_t strEnd = strStart + 1;
-                    while (strEnd < objStr.size()) {
-                        if (objStr[strEnd] == '"' && objStr[strEnd - 1] != '\\') break;
-                        strEnd++;
-                    }
-                    if (strEnd < objStr.size()) {
-                        std::string raw = objStr.substr(strStart + 1, strEnd - strStart - 1);
-                        t.author = TaskUtils::Utf8ToWide(TaskUtils::UnescapeJsonString(raw));
-                    }
-                }
-            }
-            p = objStr.find("\"assignee\":");
-            if (p != std::string::npos) {
-                size_t strStart = objStr.find('"', p + 11);
-                if (strStart != std::string::npos) {
-                    size_t strEnd = strStart + 1;
-                    while (strEnd < objStr.size()) {
-                        if (objStr[strEnd] == '"' && objStr[strEnd - 1] != '\\') break;
-                        strEnd++;
-                    }
-                    if (strEnd < objStr.size()) {
-                        std::string raw = objStr.substr(strStart + 1, strEnd - strStart - 1);
-                        t.assignee = TaskUtils::Utf8ToWide(TaskUtils::UnescapeJsonString(raw));
-                    }
-                }
-            }
-
-            if (t.id > maxSyncId) maxSyncId = t.id;
-            tasks.push_back(t);
-        }
-    }
-    next_sync_id = maxSyncId + 1;
-    return true;
-}
-
-void TaskStore::LoadLocal() {
-    tasks.erase(std::remove_if(tasks.begin(), tasks.end(), [](const Task& t) {
-        return !t.is_sync;
-    }), tasks.end());
-
-    std::ifstream in(filePath, std::ios::in | std::ios::binary);
-    if (!in.is_open()) return;
-
-    std::string content((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
-    in.close();
-    WorkHistory::LoadFromJson(content, work_history, manual_work_history);
-
-    size_t nextIdPos = content.find("\"next_id\":");
-    if (nextIdPos != std::string::npos) {
-        size_t valStart = content.find_first_of("0123456789", nextIdPos);
-        if (valStart != std::string::npos) {
-            next_id = std::stoi(content.substr(valStart));
-        }
-    }
-
-    size_t wsPos = content.find("\"work_seconds\":");
-    if (wsPos != std::string::npos) {
-        size_t valStart = content.find_first_of("-0123456789", wsPos + 14);
-        if (valStart != std::string::npos) {
-            int sec = std::stoi(content.substr(valStart));
-            work_seconds_today = (sec > 0) ? sec : 0;
-        }
-    }
-
-    size_t lrPos = content.find("\"last_reset\":");
-    if (lrPos != std::string::npos) {
-        size_t valStart = content.find_first_of("0123456789", lrPos + 12);
-        if (valStart != std::string::npos) {
-            last_reset_time = (time_t)std::stoull(content.substr(valStart));
-        }
-    }
-
-    bool themeLoaded = false;
-    size_t themeModePos = content.find("\"theme_mode\":");
-    if (themeModePos != std::string::npos) {
-        size_t valueStart = content.find_first_not_of(" \t\r\n", themeModePos + 13);
-        if (valueStart != std::string::npos && content[valueStart] == '"') {
-            size_t valueEnd = content.find('"', valueStart + 1);
-            if (valueEnd != std::string::npos) {
-                std::string themeName = content.substr(valueStart + 1, valueEnd - valueStart - 1);
-                if (themeName == "pink") {
-                    theme_mode = ThemeMode::Pink;
-                    themeLoaded = true;
-                } else if (themeName == "light") {
-                    theme_mode = ThemeMode::Light;
-                    themeLoaded = true;
-                } else if (themeName == "dark") {
-                    theme_mode = ThemeMode::Dark;
-                    themeLoaded = true;
-                }
-            }
-        }
-    }
-    if (!themeLoaded) {
-        size_t darkModePos = content.find("\"dark_mode\":");
-        if (darkModePos != std::string::npos) {
-            size_t valueStart = content.find_first_not_of(" \t\r\n", darkModePos + 12);
-            if (valueStart != std::string::npos) {
-                theme_mode = content.compare(valueStart, 4, "true") == 0
-                    ? ThemeMode::Dark : ThemeMode::Light;
-            }
-        }
-    }
-
-    size_t resetHourPos = content.find("\"work_reset_hour\":");
-    if (resetHourPos != std::string::npos) {
-        size_t valueStart = content.find_first_of("0123456789", resetHourPos + 18);
-        if (valueStart != std::string::npos) {
-            work_reset_hour = (std::min)(23, std::stoi(content.substr(valueStart)));
-        }
-    }
-
-    size_t resetMinutePos = content.find("\"work_reset_minute\":");
-    if (resetMinutePos != std::string::npos) {
-        size_t valueStart = content.find_first_of("0123456789", resetMinutePos + 20);
-        if (valueStart != std::string::npos) {
-            work_reset_minute = (std::min)(59, std::stoi(content.substr(valueStart)));
-        }
-    }
-
-    const auto loadTimerMinutes = [&content](const char* key, double& value) {
-        size_t keyPos = content.find(key);
-        if (keyPos == std::string::npos) return;
-        size_t valueStart = content.find_first_of("0123456789", keyPos + strlen(key));
-        if (valueStart == std::string::npos) return;
-        try {
-            const double loaded = std::stod(content.substr(valueStart));
-            const double clamped = (std::max)(0.1, (std::min)(999.9, loaded));
-            value = static_cast<double>(static_cast<int>(clamped * 10.0 + 0.5)) / 10.0;
-        } catch (...) {
-        }
-    };
-    loadTimerMinutes("\"timer_work_minutes\":", timer_work_minutes);
-    loadTimerMinutes("\"timer_rest_minutes\":", timer_rest_minutes);
-
-    const auto loadTimerRepetitions = [&content](int& value) {
-        const char* key = "\"timer_repetitions\":";
-        size_t keyPos = content.find(key);
-        if (keyPos == std::string::npos) return;
-        size_t valueStart = content.find_first_of("0123456789", keyPos + strlen(key));
-        if (valueStart == std::string::npos) return;
-        value = (std::max)(1, (std::min)(99, std::stoi(content.substr(valueStart))));
-    };
-    loadTimerRepetitions(timer_repetitions);
-
-    size_t timer2020Pos = content.find("\"timer_2020_enabled\":");
-    if (timer2020Pos != std::string::npos) {
-        size_t valueStart = content.find_first_not_of(" \t\r\n", timer2020Pos + 21);
-        if (valueStart != std::string::npos) {
-            timer_2020_enabled = content.compare(valueStart, 4, "true") == 0;
-        }
-    }
-
-    size_t timerStrictPos = content.find("\"timer_strict_mode\":");
-    if (timerStrictPos != std::string::npos) {
-        const char* timerStrictKey = "\"timer_strict_mode\":";
-        size_t valueStart = content.find_first_not_of(" \t\r\n", timerStrictPos + strlen(timerStrictKey));
-        if (valueStart != std::string::npos) {
-            timer_strict_mode = content.compare(valueStart, 4, "true") == 0;
-        }
-    }
-
-    const char* timerStartKey = "\"timer_start_with_app\":";
-    size_t timerStartPos = content.find(timerStartKey);
-    if (timerStartPos != std::string::npos) {
-        size_t valueStart = content.find_first_not_of(" \t\r\n", timerStartPos + strlen(timerStartKey));
-        if (valueStart != std::string::npos) {
-            timer_start_with_app = content.compare(valueStart, 4, "true") == 0;
-        }
-    }
-
-    size_t soundsEnabledPos = content.find("\"sounds_enabled\":");
-    if (soundsEnabledPos != std::string::npos) {
-        size_t valueStart = content.find_first_not_of(" \t\r\n", soundsEnabledPos + 17);
-        if (valueStart != std::string::npos) {
-            sounds_enabled = content.compare(valueStart, 4, "true") == 0;
-        }
-    }
-
-    std::wstring parsedSyncPath;
-    if (ReadJsonString(content, "sync_file_path", parsedSyncPath) && !parsedSyncPath.empty()) {
-        syncFilePath = parsedSyncPath;
-    }
-
-    std::wstring parsedKeywords;
-    if (ReadJsonString(content, "excluded_window_keywords", parsedKeywords)) {
-        excluded_window_keywords = ExcludedApps::Normalize(parsedKeywords);
-    }
-
-    active_order.clear();
-    size_t orderPos = content.find("\"active_order\":");
-    if (orderPos != std::string::npos) {
-        size_t arrStart = content.find('[', orderPos);
-        size_t arrEnd = (arrStart != std::string::npos) ? content.find(']', arrStart) : std::string::npos;
-        if (arrStart != std::string::npos && arrEnd != std::string::npos) {
-            std::string arrStr = content.substr(arrStart + 1, arrEnd - arrStart - 1);
-            size_t p = 0;
-            while ((p = arrStr.find_first_of("0123456789", p)) != std::string::npos) {
-                size_t numEnd = arrStr.find_first_not_of("0123456789", p);
-                if (numEnd == std::string::npos) numEnd = arrStr.size();
-                active_order.push_back(std::stoi(arrStr.substr(p, numEnd - p)));
-                p = numEnd;
-            }
-        }
-    }
-
-    size_t pos = 0;
-    int maxId = 0;
-    while ((pos = content.find('{', pos)) != std::string::npos) {
-        size_t objEnd = content.find('}', pos);
-        if (objEnd == std::string::npos) break;
-
-        std::string objStr = content.substr(pos, objEnd - pos + 1);
-        pos = objEnd + 1;
-
-        if (objStr.find("\"id\":") != std::string::npos && objStr.find("\"text\":") != std::string::npos) {
-            Task t;
-            t.is_sync = false;
-            size_t p = objStr.find("\"id\":");
-            if (p != std::string::npos) {
-                size_t numStart = objStr.find_first_of("-0123456789", p + 5);
-                if (numStart != std::string::npos) {
-                    t.id = std::stoi(objStr.substr(numStart));
-                }
-            }
-            p = objStr.find("\"text\":");
-            if (p != std::string::npos) {
-                size_t strStart = objStr.find('"', p + 7);
-                if (strStart != std::string::npos) {
-                    size_t strEnd = strStart + 1;
-                    while (strEnd < objStr.size()) {
-                        if (objStr[strEnd] == '"' && objStr[strEnd - 1] != '\\') break;
-                        strEnd++;
-                    }
-                    if (strEnd < objStr.size()) {
-                        std::string raw = objStr.substr(strStart + 1, strEnd - strStart - 1);
-                        t.text = TaskUtils::Utf8ToWide(TaskUtils::UnescapeJsonString(raw));
-                    }
-                }
-            }
-            p = objStr.find("\"completed\":");
-            if (p != std::string::npos) {
-                size_t bStart = objStr.find_first_not_of(" \t\r\n", p + 12);
-                if (bStart != std::string::npos) {
-                    t.completed = (objStr.substr(bStart, 4) == "true");
-                }
-            }
-            p = objStr.find("\"created_at\":");
-            if (p != std::string::npos) {
-                size_t numStart = objStr.find_first_of("0123456789", p + 13);
-                if (numStart != std::string::npos) {
-                    t.created_at = (time_t)std::stoull(objStr.substr(numStart));
-                }
-            }
-            p = objStr.find("\"completed_at\":");
-            if (p != std::string::npos) {
-                size_t numStart = objStr.find_first_of("0123456789", p + 15);
-                if (numStart != std::string::npos) {
-                    t.completed_at = (time_t)std::stoull(objStr.substr(numStart));
-                }
-            }
-            p = objStr.find("\"marker\":");
-            if (p != std::string::npos) {
-                size_t numStart = objStr.find_first_of("0123456789", p + 9);
-                if (numStart != std::string::npos) {
-                    int markerValue = std::stoi(objStr.substr(numStart));
-                    markerValue = (std::min)(3, (std::max)(0, markerValue));
-                    t.marker = static_cast<TaskMarker>(markerValue);
-                }
-            }
-
-            if (t.id > maxId) maxId = t.id;
-            tasks.push_back(t);
-        }
-    }
-
-    if (next_id <= maxId) {
-        next_id = maxId + 1;
-    }
 }
 
 void TaskStore::Load() {
     tasks.clear();
     LoadLocal();
-    LoadSync();
+    ReloadSync(true, true);
 
     std::vector<int> reconciled;
     std::set<int> seen;
     for (int id : active_order) {
-        for (const auto& t : tasks) {
-            if (t.id == id && !t.completed) {
-                reconciled.push_back(id);
-                seen.insert(id);
-                break;
-            }
-        }
+        const Task* t = FindTask(id);
+        if (t && !t->completed && seen.insert(id).second) reconciled.push_back(id);
     }
     for (const auto& t : tasks) {
-        if (!t.completed && seen.find(t.id) == seen.end()) {
-            reconciled.push_back(t.id);
-            seen.insert(t.id);
-        }
+        if (!t.completed && seen.insert(t.id).second) reconciled.push_back(t.id);
     }
     active_order = reconciled;
     SaveLocal();

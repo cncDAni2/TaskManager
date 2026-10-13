@@ -37,7 +37,7 @@ extern TaskStore g_store;
 extern ViewMode g_viewMode;
 extern ThemeMode g_themeMode;
 extern bool g_darkMode;
-extern bool g_syncToggle;
+extern std::vector<int> g_syncSelection; // Sync source ids the next new task goes to.
 
 // Window Mode and Geometry
 extern bool g_pinMode;

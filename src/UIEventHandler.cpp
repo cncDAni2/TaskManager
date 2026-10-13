@@ -1,4 +1,5 @@
 #include "UIEventHandler.h"
+#include "SyncPicker.h"
 #include "AppState.h"
 #include "Drawing.h"
 #include "Layout.h"
@@ -297,6 +298,11 @@ bool HandleLButtonDown(HWND hWnd, LPARAM lParam) {
             }
         }
 
+        // Empty space below the top strip opens the main window; the strip itself still drags.
+        if (my > rcDragHandle.bottom + 2) {
+            ToggleWindow();
+            return true;
+        }
         ReleaseCapture();
         SendMessageW(hWnd, WM_NCLBUTTONDOWN, HTCAPTION, 0);
         return true;
@@ -617,10 +623,9 @@ bool HandleCommand(HWND hWnd, int id) {
             return true;
         }
 
-        g_store.Add(taskText, g_syncToggle);
-        g_syncToggle = false;
-        if (g_hSyncToggleBtn) InvalidateRect(g_hSyncToggleBtn, nullptr, TRUE);
-        g_sessionActiveTaskIds.insert(g_sessionActiveTaskIds.begin(), g_store.tasks.back().id);
+        const int newTaskId = g_store.Add(taskText, g_syncSelection);
+        SyncPicker::ResetSelection();
+        if (newTaskId != 0) g_sessionActiveTaskIds.insert(g_sessionActiveTaskIds.begin(), newTaskId);
         SetWindowTextW(g_hEdit, L"");
         g_scrollY = 0;
         g_selectedIndex = -1;
@@ -645,8 +650,7 @@ bool HandleCommand(HWND hWnd, int id) {
         FocusMode::Toggle();
         return true;
     } else if (id == IDC_SYNC_TOGGLE_BTN) {
-        g_syncToggle = !g_syncToggle;
-        if (g_hSyncToggleBtn) InvalidateRect(g_hSyncToggleBtn, nullptr, TRUE);
+        SyncPicker::HandleClick(hWnd, g_hSyncToggleBtn);
         SetFocus(g_hEdit);
         return true;
     } else if (id == IDC_SETTINGS_BTN) {
@@ -974,7 +978,8 @@ bool HandleDrawItem(HWND /*hWnd*/, DRAWITEMSTRUCT* pDIS) {
         COLORREF borderBtn;
         COLORREF cloudColor;
 
-        if (g_syncToggle) {
+        const int selectedCount = SyncPicker::SelectedCount();
+        if (selectedCount > 0) {
             bgBtn = RGB(30, 58, 138);
             borderBtn = RGB(30, 64, 175);
             cloudColor = RGB(255, 255, 255);
@@ -1005,6 +1010,9 @@ bool HandleDrawItem(HWND /*hWnd*/, DRAWITEMSTRUCT* pDIS) {
         RECT rcCloud = pDIS->rcItem;
         if (isSelected) OffsetRect(&rcCloud, 1, 1);
         DrawCloudIcon(pDIS->hDC, rcCloud, cloudColor, true);
+        if (SyncPicker::ShowCounts()) {
+            SyncPicker::DrawCloudCount(pDIS->hDC, rcCloud, selectedCount, RGB(0, 0, 0));
+        }
         return true;
     }
     return false;

@@ -181,16 +181,6 @@ std::wstring GetCleanUserName() {
     return L"Felhasználó";
 }
 
-std::wstring GetDefaultSyncFilePath() {
-    wchar_t userProfile[MAX_PATH] = { 0 };
-    if (GetEnvironmentVariableW(L"USERPROFILE", userProfile, MAX_PATH) > 0) {
-        std::wstring path = userProfile;
-        path += L"\\OneDrive - Siemens AG\\TaskManager\\tasks.json";
-        return path;
-    }
-    return L"tasks_sync.json";
-}
-
 void EnsureParentDirectoryExists(const std::wstring& path) {
     size_t lastSlash = path.find_last_of(L"\\/");
     if (lastSlash != std::wstring::npos) {

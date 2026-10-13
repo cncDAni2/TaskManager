@@ -16,6 +16,5 @@ namespace TaskUtils {
     std::string EscapeJsonString(const std::string& s);
     std::string UnescapeJsonString(const std::string& s);
     std::wstring GetCleanUserName();
-    std::wstring GetDefaultSyncFilePath();
     void EnsureParentDirectoryExists(const std::wstring& path);
 }

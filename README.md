@@ -21,7 +21,7 @@ A PIN nézet egy mini, kissé áttetsző lebegő ablak, amely mindig a képerny�
 
 ### Főablak nézet - alapértelmezett nézet
 
-A főablak megnyitásakor az új feladat hozzáadására szolgáló mező azonnal aktív. Mellette felhőikon található. A globális szinkronizáláshoz az új feladat létrehozása előtt kapcsold be a felhőikont.  
+A főablak megnyitásakor az új feladat hozzáadására szolgáló mező azonnal aktív. Ha van beállított szinkronizációs fájl, mellette felhőikon található: ezzel választhatod ki, hova kerüljön az új feladat (lásd: Szinkronizált feladatok).  
 A feladatokat szerkesztheted, törölheted, készre jelölheted, jelölőikonnal láthatod el (az ikonra kattintva válthatsz a jelölések között), és húzással rendezheted sorba.  
 Főablakban készre jelölve a feladat az ablak bezárásáig látható marad az aktív listában; újranyitáskor már csak az „Elkészült” nézetben szerepel.
 A kész feladatokat napi bontásban, a fenti „Elkészült” gombra kattintva láthatod.
@@ -38,17 +38,27 @@ A kész feladatokat napi bontásban, a fenti „Elkészült” gombra kattintva 
 
 ### Szinkronizált feladatok
 
-A beállításokban megadható a szinkronizálási fájl helye. A program nem tölti fel a fájlt a hálózatra: annak megosztott helyen kell lennie (például OneDrive- vagy Google Drive-mappában), a szinkronizálást pedig a tárhelyszolgáltató alkalmazása végzi.  
+A beállításokban több szinkronizációs fájl is felvehető (**+ Új fájl hozzáadása vagy létrehozása**), soronként rövid névvel (alapból a sorszáma, átírható). A beállítások azonnal mentődnek; egyedül a munkaidő kezdetének módosítását kell a **Mentés** gombbal jóváhagyni (az OK gomb ilyenkor kiemelt „Mentés” gombra vált). A fájlválasztóban meglévő fájlt is kiválaszthatsz, vagy új fájlnevet is megadhatsz: az új fájl azonnal létrejön. A ✕ gomb csak a listából veszi ki a fájlt, magát a fájlt nem törli.  
+Első indításkor, ha a felhasználói mappában van `OneDrive - Siemens AG` mappa, a program előre felveszi a `TaskManager\tasks.json` fájlt; ha nincs, nem állít be szinkronizációs fájlt. A program nem tölti fel a fájlt a hálózatra: annak megosztott helyen kell lennie (például OneDrive- vagy Google Drive-mappában), a szinkronizálást pedig a tárhelyszolgáltató alkalmazása végzi.  
 
-A szinkronizált fájl speciális:
+**Hova kerül az új feladat?**
 
-- Felhőikont kap.
-- Csak a megosztott helyen található fájlt használja.
-- Minden változtatás azonnal mentésre kerül a fájlba. Ha többen egyszerre módosítják, egy későbbi szinkronizálás felülírhatja a változtatásokat.
-- Nem jelölhető meg speciális ikonnal
-- Megjelenik, hogy ki vette fel a feladatot.
-- Az "ÉN" gombbal magadra veheted a feladatot. A többiek látják, ki vette fel, és a feladatot piros szín jelzi. Egy feladatot csak egy ember vehet fel; a többiek számára zárolva lesz.
+- Ha nincs szinkronizációs fájl, a felhőikon nem is látszik, és minden feladat helyi.
+- Egy fájlnál a felhőikon ki-be kapcsolja a szinkronizálást a megadott fájlba.
+- Több fájlnál a felhőikonra kattintva pipálhatod ki a célfájlokat a beállításokba megadott név alapján; az ikonon lévő szám mutatja, hány fájlba kerül a feladat.
+- A Beállításokban az **A.** (alapértelmezett) oszlopban kijelölt fájlok előre ki vannak választva, és feladat felvétele után erre áll vissza a kijelölés. Ha egy sincs, akkor a feladat helyi lesz.
+
+A szinkronizált feladatok speciálisak:
+
+- Felhőikont kapnak. Több fájl esetén az ikonon lévő szám mutatja, hány fájlban található meg a feladat; a tooltip felsorolja a fájlok nevét.
+- A dátum a legutóbbi módosítás ideje (a pipálás és az „ÉN” is ide számít). Mellette annak a neve látszik, aki a feladatot felvette, vagy utoljára átírta a szövegét; pipálás vagy „ÉN” ezt nem változtatja meg.
+- Minden módosítás (szöveg, kész, „ÉN”, törlés) bekerül minden olyan fájlba, amelyben a feladat szerepel. Ha más módosít egy feladatot egy olyan fájlban, amelyre te is fel vagy iratkozva, a programod a változást a többi közös fájlba is továbbítja. Mindig a legutóbb módosított változat érvényes.
+- Ha valaki más felvesz egy új feladatot, vagy átírja egy feladat szövegét, felugró ablak jelez. Az új feladatról szóló ablak kattintásig marad; a módosításról szóló kb. 10 másodperc után magától eltűnik (amíg fölötte az egér, megáll). Bárhová kattintva bezárul. Induláskor nincs külön értesítés.
+- A törölt feladat nem jelenik meg többé, de a fájlban 14 napig törlésjelöléssel megmarad, hogy más gépek ne hozhassák vissza.
+- Nem jelölhetők meg speciális ikonnal.
+- Az "ÉN" gombbal magadra veheted a feladatot. A többiek látják, ki vette fel, és a feladatot piros szín jelzi. Egy feladatot csak egy ember vehet fel; a többiek számára zárolva lesz. Ez minden fájlban közös, így olyan nevet is láthatsz, akivel nem osztasz közös fájlt.
 - A feladatok sorrendje módosítható, de csak nálad érvényes; mások nem látják.
+- Később nem lehet egy meglévő feladatot másik fájlhoz adni: ehhez töröld, és vedd fel újra.
 
 ## Időmérés
 

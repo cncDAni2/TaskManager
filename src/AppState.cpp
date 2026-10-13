@@ -33,7 +33,7 @@ TaskStore g_store;
 ViewMode g_viewMode = ViewMode::ActiveTasks;
 ThemeMode g_themeMode = ThemeMode::Dark;
 bool g_darkMode = true;
-bool g_syncToggle = false;
+std::vector<int> g_syncSelection;
 
 // Window Mode and Geometry
 bool g_pinMode = true;

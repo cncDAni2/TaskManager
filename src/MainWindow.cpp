@@ -14,6 +14,7 @@
 #include "TimerView.h"
 #include "MemoryTrim.h"
 #include "ExcludedApps.h"
+#include "SyncPicker.h"
 #include <windowsx.h>
 #include <commctrl.h>
 #include <algorithm>
@@ -22,22 +23,21 @@
 
 namespace {
 void ReloadSyncAndNotify() {
-    std::set<int> knownSyncIds;
     std::map<int, std::wstring> previousAssignees;
     for (const auto& task : g_store.tasks) {
-        if (task.is_sync) {
-            knownSyncIds.insert(task.id);
-            previousAssignees.emplace(task.id, task.assignee);
-        }
+        if (task.is_sync) previousAssignees.emplace(task.id, task.assignee);
     }
 
-    g_store.LoadSync();
+    g_store.ReloadSync(false, false);
+    for (const SyncNotice& notice : g_store.pendingNotices) {
+        if (notice.isNew) ShowNewTaskNotice(notice.text);
+        else ShowTaskChangedNotice(notice.text, notice.previousText, notice.changedBy);
+    }
+    g_store.pendingNotices.clear();
+
     const std::wstring currentUser = TaskUtils::GetCleanUserName();
     std::wstring conflictMessage;
     for (const auto& task : g_store.tasks) {
-        if (task.is_sync && knownSyncIds.find(task.id) == knownSyncIds.end()) {
-            ShowNewTaskNotice(task.text);
-        }
         if (!task.is_sync || task.assignee.empty() || task.assignee == currentUser) continue;
         auto previous = previousAssignees.find(task.id);
         if (previous != previousAssignees.end() && previous->second == currentUser) {
@@ -229,6 +229,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                 CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT,
                 hWnd, nullptr, hInst, nullptr);
             if (hTooltip) {
+                SendMessageW(hTooltip, TTM_SETMAXTIPWIDTH, 0, 320); // Enables multi-line tips.
                 TOOLINFOW tiSettings{};
                 tiSettings.cbSize = sizeof(TOOLINFOW);
                 tiSettings.uFlags = TTF_SUBCLASS | TTF_IDISHWND;
@@ -308,7 +309,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                 tiSyncToggle.uFlags = TTF_SUBCLASS | TTF_IDISHWND;
                 tiSyncToggle.hwnd = hWnd;
                 tiSyncToggle.uId = (UINT_PTR)g_hSyncToggleBtn;
-                tiSyncToggle.lpszText = (LPWSTR)L"Globális szinkronizált feladat (OneDrive)";
+                tiSyncToggle.lpszText = LPSTR_TEXTCALLBACKW; // Text depends on the selection (SyncPicker).
                 SendMessageW(hTooltip, TTM_ADDTOOL, 0, (LPARAM)&tiSyncToggle);
             }
 
@@ -328,6 +329,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             wcscpy_s(g_nid.szTip, L"Feladatkezelő (Ctrl+F1)");
             Shell_NotifyIconW(NIM_ADD, &g_nid);
 
+            SyncPicker::ResetSelection();
             UpdateControlsVisibility();
             RecalculateLayout();
             MemoryTrim::Request(hWnd);
@@ -483,7 +485,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                 s_syncTimer++;
                 if (s_syncTimer >= 10) {
                     s_syncTimer = 0;
-                    if (g_editingTaskId == -1 && g_store.CheckSyncFileChanged()) {
+                    if (g_editingTaskId == -1 && g_store.CheckSyncFilesChanged()) {
                         ReloadSyncAndNotify();
                         if (IsWindowVisible(hWnd)) {
                             RecalculateLayout();
@@ -580,6 +582,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 
         case WM_NOTIFY: {
             if (BarTooltips::HandleNotify(lParam)) return 0;
+            if (SyncPicker::HandleTooltipNotify(lParam, g_hSyncToggleBtn)) return 0;
             break;
         }
 
