@@ -286,19 +286,19 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 
             g_hEdit = CreateWindowExW(WS_EX_CLIENTEDGE, L"EDIT", L"",
                 WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_AUTOHSCROLL,
-                12, 56, 425, 28, hWnd, (HMENU)IDC_NEW_TASK_EDIT, hInst, nullptr);
+                12, 56, 461, 28, hWnd, (HMENU)IDC_NEW_TASK_EDIT, hInst, nullptr);
             SendMessageW(g_hEdit, WM_SETFONT, (WPARAM)g_hFontNormal, TRUE);
             SendMessageW(g_hEdit, EM_SETCUEBANNER, TRUE, (LPARAM)L"Új feladat hozzáadása... (Enter / Tab navigációhoz)");
             SetWindowSubclass(g_hEdit, EditSubclassProc, 0, 0);
 
             g_hAddBtn = CreateWindowW(L"BUTTON", L"+ Hozzáad",
                 WS_CHILD | WS_VISIBLE | BS_OWNERDRAW | WS_TABSTOP,
-                444, 56, 92, 28, hWnd, (HMENU)IDC_ADD_TASK_BTN, hInst, nullptr);
+                479, 56, 92, 28, hWnd, (HMENU)IDC_ADD_TASK_BTN, hInst, nullptr);
             SendMessageW(g_hAddBtn, WM_SETFONT, (WPARAM)g_hFontNormal, TRUE);
 
             g_hSyncToggleBtn = CreateWindowW(L"BUTTON", L"",
                 WS_CHILD | WS_VISIBLE | BS_OWNERDRAW | WS_TABSTOP,
-                542, 56, 31, 28, hWnd, (HMENU)IDC_SYNC_TOGGLE_BTN, hInst, nullptr);
+                577, 56, 31, 28, hWnd, (HMENU)IDC_SYNC_TOGGLE_BTN, hInst, nullptr);
 
             if (hTooltip) {
                 TOOLINFOW tiSyncToggle{};

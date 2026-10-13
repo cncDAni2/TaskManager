@@ -120,7 +120,7 @@ void ShowTaskOptionsMenu(HWND hWnd, int itemIndex) {
     enum : UINT { MenuDelete = 1, MenuEdit, MenuToggleCompleted };
     HMENU menu = CreatePopupMenu();
     if (!menu) return;
-    AppendMenuW(menu, MF_STRING, MenuDelete, L"Törlés");
+    AppendMenuW(menu, MF_STRING, MenuDelete, L"Törlés (Delete)");
     AppendMenuW(menu, MF_STRING, MenuEdit, L"Szerkesztés (Enter)");
     AppendMenuW(menu, MF_STRING, MenuToggleCompleted,
         task.completed ? L"Újra megnyitás (Space)" : L"Késznek jelölés (Space)");
