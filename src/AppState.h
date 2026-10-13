@@ -43,6 +43,7 @@ extern bool g_syncToggle;
 extern bool g_pinMode;
 extern bool g_isMiniMode;
 extern bool g_inContextMenu;
+extern bool g_settingsOpen;
 extern int g_fullWinX;
 extern int g_fullWinY;
 extern int g_fullWinW;

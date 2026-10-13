@@ -29,6 +29,11 @@ void DeletePreviousWord(HWND hEdit) {
 }
 
 LRESULT CALLBACK EditSubclassProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam, UINT_PTR /*uIdSubclass*/, DWORD_PTR /*dwRefData*/) {
+    if (uMsg == WM_SETFOCUS && g_selectedIndex != -1) {
+        g_selectedIndex = -1;
+        InvalidateRect(g_hWnd, nullptr, FALSE);
+    }
+
     if (uMsg == WM_CHAR && (wParam == VK_RETURN || wParam == VK_TAB || wParam == 0x7F)) {
         if (wParam == 0x7F) DeletePreviousWord(hWnd);
         return 0;

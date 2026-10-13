@@ -325,6 +325,10 @@ void EnterMiniMode() {
 
     UpdateControlsVisibility();
 
+    SetWindowLongPtrW(g_hWnd, GWL_STYLE, GetWindowLongPtrW(g_hWnd, GWL_STYLE) & ~WS_BORDER);
+    SetWindowPos(g_hWnd, nullptr, 0, 0, 0, 0,
+        SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
+
     LONG_PTR exStyle = GetWindowLongPtrW(g_hWnd, GWL_EXSTYLE);
     if (!(exStyle & WS_EX_LAYERED)) {
         SetWindowLongPtrW(g_hWnd, GWL_EXSTYLE, exStyle | WS_EX_LAYERED);
@@ -347,6 +351,9 @@ void ExitMiniMode(bool toHidden) {
     }
     g_isMiniMode = false;
     SetWindowRgn(g_hWnd, nullptr, TRUE);
+    SetWindowLongPtrW(g_hWnd, GWL_STYLE, GetWindowLongPtrW(g_hWnd, GWL_STYLE) | WS_BORDER);
+    SetWindowPos(g_hWnd, nullptr, 0, 0, 0, 0,
+        SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
 
     SetLayeredWindowAttributes(g_hWnd, 0, 255, LWA_ALPHA);
     LONG_PTR exStyle = GetWindowLongPtrW(g_hWnd, GWL_EXSTYLE);

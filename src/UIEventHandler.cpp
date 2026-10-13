@@ -736,12 +736,38 @@ bool HandleCommand(HWND hWnd, int id) {
     return false;
 }
 
+// Returns the color of the parent surface behind an owner-drawn button, so the
+// area outside the rounded corners blends in instead of showing stale pixels.
+static COLORREF GetButtonSurfaceColor(UINT ctlId, const ThemeColors& th) {
+    switch (ctlId) {
+    case IDC_ADD_TASK_BTN:
+    case IDC_SYNC_TOGGLE_BTN:
+        return th.bgSubBar;
+    case IDC_TIMER_START_BTN:
+    case IDC_TIMER_PAUSE_BTN:
+    case IDC_TIMER_NEXT_BTN:
+    case IDC_TIMER_2020_CHECK:
+    case IDC_TIMER_STRICT_CHECK:
+        return th.bgWindow;
+    default:
+        if (g_viewMode == ViewMode::WorkHistory) {
+            return g_themeMode == ThemeMode::Pink ? th.bgHeader : RGB(8, 25, 54);
+        }
+        return th.bgHeader;
+    }
+}
+
 bool HandleDrawItem(HWND /*hWnd*/, DRAWITEMSTRUCT* pDIS) {
     if (!pDIS) return false;
     ThemeColors th = GetThemeColors(g_themeMode);
     bool isSelected = (pDIS->itemState & ODS_SELECTED) != 0;
     bool isPink = g_themeMode == ThemeMode::Pink;
     COLORREF pinkButtonBg = RGB(183, 0, 99);
+    COLORREF restingBorder = g_themeMode == ThemeMode::Light ? RGB(148, 163, 184) : th.borderSep;
+
+    HBRUSH surfaceBrush = CreateSolidBrush(GetButtonSurfaceColor(pDIS->CtlID, th));
+    FillRect(pDIS->hDC, &pDIS->rcItem, surfaceBrush);
+    DeleteObject(surfaceBrush);
 
     if (pDIS->CtlID == IDC_TIMER_2020_CHECK || pDIS->CtlID == IDC_TIMER_STRICT_CHECK) {
         const bool isDisabled = (pDIS->itemState & ODS_DISABLED) != 0;
@@ -811,7 +837,7 @@ bool HandleDrawItem(HWND /*hWnd*/, DRAWITEMSTRUCT* pDIS) {
             : (isPink || isDark ? RGB(255, 255, 255) : th.textPrimary);
         COLORREF buttonBorder = isMeasurementStopped ? RGB(255, 255, 255)
             : (isPink ? (isSelected ? th.bgHeader : th.borderCard)
-                : (isDark ? RGB(82, 82, 82) : (isSelected ? th.borderCardHover : th.borderSep)));
+                : (isDark ? RGB(82, 82, 82) : (isSelected ? th.borderCardHover : restingBorder)));
         HBRUSH brush = CreateSolidBrush(buttonBg);
         HPEN pen = CreatePen(PS_SOLID, 1, buttonBorder);
         HGDIOBJ oldBrush = SelectObject(pDIS->hDC, brush);
@@ -848,7 +874,7 @@ bool HandleDrawItem(HWND /*hWnd*/, DRAWITEMSTRUCT* pDIS) {
         COLORREF bgBtn = g_focusMode ? RGB(30, 58, 138)
             : (isPink ? pinkButtonBg : (isSelected ? th.bgCardHover : th.bgHeader));
         COLORREF borderBtn = g_focusMode ? RGB(30, 64, 175)
-            : (isSelected ? th.borderCardHover : th.borderSep);
+            : (isSelected ? th.borderCardHover : restingBorder);
         COLORREF iconColor = isPink || g_focusMode ? RGB(255, 255, 255)
             : (isSelected ? th.textPrimary : th.textSecondary);
         HBRUSH hBr = CreateSolidBrush(bgBtn);
@@ -879,7 +905,7 @@ bool HandleDrawItem(HWND /*hWnd*/, DRAWITEMSTRUCT* pDIS) {
             pinColor = isPink ? RGB(255, 255, 255) : th.textPrimary;
         } else {
             bgBtn = isPink ? pinkButtonBg : th.bgHeader;
-            borderBtn = th.borderSep;
+            borderBtn = restingBorder;
             pinColor = isPink ? RGB(255, 255, 255) : th.textSecondary;
         }
 
@@ -899,10 +925,11 @@ bool HandleDrawItem(HWND /*hWnd*/, DRAWITEMSTRUCT* pDIS) {
         return true;
     } else if (pDIS->CtlID == IDC_TIMER_BTN) {
         const bool selected = g_viewMode == ViewMode::IntervalTimer;
-        COLORREF bgBtn = isPink ? pinkButtonBg
-            : (selected ? th.bgCardSelected : th.bgHeader);
-        COLORREF borderBtn = selected ? th.borderCardSelected : th.borderSep;
-        COLORREF iconColor = (isPink || selected) ? RGB(255, 255, 255) : th.textSecondary;
+        const bool isDarkTheme = g_themeMode == ThemeMode::Dark;
+        COLORREF bgBtn = selected ? RGB(30, 58, 138)
+            : (isPink ? pinkButtonBg : (isDarkTheme ? RGB(60, 60, 60) : th.bgHeader));
+        COLORREF borderBtn = selected ? RGB(30, 64, 175) : (isDarkTheme ? RGB(82, 82, 82) : restingBorder);
+        COLORREF iconColor = selected || isPink ? RGB(255, 255, 255) : th.textSecondary;
         HBRUSH brush = CreateSolidBrush(bgBtn);
         HPEN pen = CreatePen(PS_SOLID, 1, borderBtn);
         HGDIOBJ oldBrush = SelectObject(pDIS->hDC, brush);
@@ -918,9 +945,15 @@ bool HandleDrawItem(HWND /*hWnd*/, DRAWITEMSTRUCT* pDIS) {
         DrawTimerIcon(pDIS->hDC, iconRect, iconColor);
         return true;
     } else if (pDIS->CtlID == IDC_SETTINGS_BTN) {
-        COLORREF bgBtn = isSelected ? RGB(226, 232, 240) : RGB(248, 250, 252);
-        COLORREF borderBtn = RGB(203, 213, 225);
-        COLORREF iconColor = RGB(71, 85, 105);
+        const bool isDarkTheme = g_themeMode == ThemeMode::Dark;
+        const bool active = g_settingsOpen;
+        COLORREF bgBtn = active ? RGB(30, 58, 138)
+            : (isPink ? pinkButtonBg
+                : (isDarkTheme ? RGB(60, 60, 60) : (isSelected ? RGB(226, 232, 240) : RGB(248, 250, 252))));
+        COLORREF borderBtn = active ? RGB(30, 64, 175)
+            : (isDarkTheme ? RGB(82, 82, 82) : (isPink ? th.borderSep : restingBorder));
+        COLORREF iconColor = active || isPink ? RGB(255, 255, 255)
+            : (isDarkTheme ? th.textSecondary : RGB(71, 85, 105));
 
         HBRUSH hBr = CreateSolidBrush(bgBtn);
         HPEN hPen = CreatePen(PS_SOLID, 1, borderBtn);
@@ -955,7 +988,7 @@ bool HandleDrawItem(HWND /*hWnd*/, DRAWITEMSTRUCT* pDIS) {
             cloudColor = th.textPrimary;
         } else {
             bgBtn = th.bgCard;
-            borderBtn = th.borderSep;
+            borderBtn = restingBorder;
             cloudColor = th.textSecondary;
         }
 

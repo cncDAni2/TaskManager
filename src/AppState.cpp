@@ -39,6 +39,7 @@ bool g_syncToggle = false;
 bool g_pinMode = true;
 bool g_isMiniMode = false;
 bool g_inContextMenu = false;
+bool g_settingsOpen = false;
 int g_fullWinX = 0;
 int g_fullWinY = 0;
 int g_fullWinW = 620;

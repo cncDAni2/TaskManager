@@ -190,47 +190,47 @@ void DrawCloudIcon(HDC hdc, const RECT& rc, COLORREF color, bool filled) {
 }
 
 void DrawSettingsIcon(HDC hdc, const RECT& rc, COLORREF color, COLORREF backgroundColor) {
-    int cx = rc.left + (rc.right - rc.left) / 2;
-    int cy = rc.top + (rc.bottom - rc.top) / 2;
     constexpr int toothCount = 8;
-    constexpr double pi = 3.14159;
-    constexpr double angleOffsets[] = { -22.5, -14.0, -14.0, 14.0, 14.0, 22.5 };
+    constexpr int verticesPerTooth = 5;
+    constexpr double pi = 3.14159265358979323846;
+    // Angles are relative to each tooth center: root-start, tip-start, tip-end, root-end, gap midpoint.
+    constexpr double angleOffsets[verticesPerTooth] = { -19.0, -10.0, 10.0, 19.0, 22.5 };
+    constexpr double radiusFactors[verticesPerTooth] = { 0.7, 1.0, 1.0, 0.7, 0.7 };
+
+    const int cx = rc.left + (rc.right - rc.left) / 2;
+    const int cy = rc.top + (rc.bottom - rc.top) / 2;
     const int width = rc.right - rc.left;
     const int height = rc.bottom - rc.top;
     const int diameter = width < height ? width : height;
-    const double outerRadius = diameter / 2.0 - 3.0;
-    const double rootRadius = outerRadius * 0.72;
-    const double radii[] = { rootRadius, rootRadius, outerRadius, outerRadius, rootRadius, rootRadius };
-    POINT points[toothCount * 6]{};
+    const double outerRadius = diameter / 2.0 - 4.0;
 
+    POINT points[toothCount * verticesPerTooth]{};
     for (int tooth = 0; tooth < toothCount; ++tooth) {
-        const double centerAngle = (-90.0 + tooth * 360.0 / toothCount) * pi / 180.0;
-        for (int vertex = 0; vertex < 6; ++vertex) {
-            const double angle = centerAngle + angleOffsets[vertex] * pi / 180.0;
-            points[tooth * 6 + vertex] = {
-                static_cast<LONG>(cx + std::lround(std::cos(angle) * radii[vertex])),
-                static_cast<LONG>(cy + std::lround(std::sin(angle) * radii[vertex]))
+        const double centerAngle = -90.0 + tooth * 360.0 / toothCount;
+        for (int vertex = 0; vertex < verticesPerTooth; ++vertex) {
+            const double angle = (centerAngle + angleOffsets[vertex]) * pi / 180.0;
+            const double radius = outerRadius * radiusFactors[vertex];
+            points[tooth * verticesPerTooth + vertex] = {
+                static_cast<LONG>(cx + std::lround(std::cos(angle) * radius)),
+                static_cast<LONG>(cy + std::lround(std::sin(angle) * radius))
             };
         }
     }
 
-    HPEN hPen = CreatePen(PS_SOLID, 1, color);
     HBRUSH hBrush = CreateSolidBrush(color);
-    HGDIOBJ hOldPen = SelectObject(hdc, hPen);
+    HGDIOBJ hOldPen = SelectObject(hdc, GetStockObject(NULL_PEN));
     HGDIOBJ hOldBrush = SelectObject(hdc, hBrush);
     Polygon(hdc, points, _countof(points));
 
+    const int holeRadius = static_cast<int>(std::lround(outerRadius * 0.3));
     HBRUSH hHoleBrush = CreateSolidBrush(backgroundColor);
-    HGDIOBJ hGearBrush = SelectObject(hdc, hHoleBrush);
-    const int holeRadius = static_cast<int>(std::lround(rootRadius * 0.45));
+    SelectObject(hdc, hHoleBrush);
     Ellipse(hdc, cx - holeRadius, cy - holeRadius, cx + holeRadius + 1, cy + holeRadius + 1);
 
-    SelectObject(hdc, hGearBrush);
     SelectObject(hdc, hOldBrush);
     SelectObject(hdc, hOldPen);
-    SelectObject(hdc, hOldBrush);
-    SelectObject(hdc, hOldPen);
-    DeleteObject(hPen);
+    DeleteObject(hBrush);
+    DeleteObject(hHoleBrush);
 }
 
 void DrawTimerIcon(HDC hdc, const RECT& rc, COLORREF color) {

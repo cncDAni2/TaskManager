@@ -361,6 +361,8 @@ void ShowSettingsDialog(HWND owner) {
     }
 
     ApplyDarkModeTitleBar(dialog, false);
+    g_settingsOpen = true;
+    if (g_hSettingsBtn) InvalidateRect(g_hSettingsBtn, nullptr, TRUE);
     RECT ownerRect{};
     GetWindowRect(owner, &ownerRect);
     SetWindowPos(dialog, HWND_TOPMOST,
@@ -382,6 +384,8 @@ void ShowSettingsDialog(HWND owner) {
         }
     }
 
+    g_settingsOpen = false;
+    if (g_hSettingsBtn) InvalidateRect(g_hSettingsBtn, nullptr, TRUE);
     EnableWindow(owner, TRUE);
     SetForegroundWindow(owner);
     g_inContextMenu = false;

@@ -81,14 +81,6 @@ void PaintMiniWindow(HWND hWnd, HDC hdc) {
     FillRect(hdcMem, &rcClient, hBrushBg);
     DeleteObject(hBrushBg);
 
-    HPEN hPenBorder = CreatePen(PS_SOLID, 1, th.borderCard);
-    HGDIOBJ hOldPen = SelectObject(hdcMem, hPenBorder);
-    HGDIOBJ hOldBrush = SelectObject(hdcMem, GetStockObject(NULL_BRUSH));
-    Rectangle(hdcMem, 0, 0, clientW, clientH);
-    SelectObject(hdcMem, hOldPen);
-    SelectObject(hdcMem, hOldBrush);
-    DeleteObject(hPenBorder);
-
     RECT rcDragHandle = GetMiniDragHandleRect(clientW);
     HBRUSH hBrushGripDots = CreateSolidBrush(g_themeMode == ThemeMode::Pink
         ? RGB(0, 0, 0) : (g_darkMode ? RGB(212, 212, 216) : RGB(71, 85, 105)));
@@ -546,13 +538,13 @@ void PaintMainWindow(HWND hWnd, HDC hdc) {
             COLORREF cardBg = isBeingDragged ? th.bgCardSelected
                 : (isAssignedToOther ? (g_themeMode == ThemeMode::Pink ? RGB(108, 0, 54)
                     : (g_darkMode ? RGB(30, 58, 90) : RGB(219, 234, 254)))
-                    : (g_themeMode == ThemeMode::Pink ? RGB(183, 0, 99)
+                    : (g_themeMode == ThemeMode::Pink ? (isSelected ? RGB(226, 36, 130) : RGB(183, 0, 99))
                         : (isSelected ? th.bgCardSelected : (isHovered ? th.bgCardHover : th.bgCard))));
             COLORREF cardBorder = isBeingDragged ? th.borderCardSelected
                 : (isAssignedToOther
                     ? (g_themeMode == ThemeMode::Pink ? RGB(244, 114, 182)
                         : (g_darkMode ? RGB(59, 130, 246) : RGB(147, 197, 253)))
-                    : (isSelected && g_themeMode == ThemeMode::Pink ? RGB(108, 0, 54)
+                    : (isSelected && g_themeMode == ThemeMode::Pink ? RGB(255, 255, 255)
                         : (isSelected ? th.borderCardSelected : (isHovered ? th.borderCardHover : th.borderCard))));
 
             HBRUSH hCardBrush = CreateSolidBrush(cardBg);
