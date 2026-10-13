@@ -18,6 +18,7 @@ HWND g_strictCheck = nullptr;
 HWND g_timerTooltip = nullptr;
 bool g_viewVisible = false;
 bool g_initializing = false;
+bool g_manuallyStoppedAutoStartTimer = false;
 
 bool ReadValue(HWND edit, int minimum, int maximum, int& value) {
     const int length = GetWindowTextLengthW(edit);
@@ -265,6 +266,10 @@ void TimerView::RefreshRunState() {
     if (g_hWnd) Layout(g_hWnd);
 }
 
+bool TimerView::ShouldShowAutoStartWarning() {
+    return g_manuallyStoppedAutoStartTimer && g_store.timer_start_with_app;
+}
+
 void TimerView::HandlePhaseChange() {
     if (!g_store.timer_strict_mode) return;
     if (g_intervalTimer.IsWorkPhase()) {
@@ -275,6 +280,7 @@ void TimerView::HandlePhaseChange() {
 }
 
 void TimerView::StartConfiguredTimer() {
+    g_manuallyStoppedAutoStartTimer = false;
     const int workSeconds = static_cast<int>(g_store.timer_work_minutes * 60.0 + 0.5);
     const int restSeconds = static_cast<int>(g_store.timer_rest_minutes * 60.0 + 0.5);
     g_intervalTimer.Start(workSeconds, restSeconds, g_store.timer_repetitions,
@@ -321,11 +327,13 @@ void TimerView::Layout(HWND owner) {
     const int strictWidth = strictTextWidth + 30;
     const int checkGap = 8;
     const int checksLeft = (width - checkWidth - checkGap - strictWidth) / 2;
-    SetWindowPos(g_2020Check, nullptr, checksLeft, panel.bottom - 93,
+    const bool showAutoStartWarning = ShouldShowAutoStartWarning();
+    const int checksY = panel.bottom - (showAutoStartWarning ? 101 : 93);
+    SetWindowPos(g_2020Check, nullptr, checksLeft, checksY,
         checkWidth, 28, SWP_NOZORDER | SWP_NOACTIVATE);
     SetWindowPos(g_strictCheck, nullptr, checksLeft + checkWidth + checkGap,
-        panel.bottom - 93, strictWidth, 28, SWP_NOZORDER | SWP_NOACTIVATE);
-    const int buttonY = panel.bottom - 52;
+        checksY, strictWidth, 28, SWP_NOZORDER | SWP_NOACTIVATE);
+    const int buttonY = panel.bottom - (showAutoStartWarning ? 66 : 52);
     const bool active = g_intervalTimer.IsActive();
     const int startWidth = active ? 78 : 104;
     const int pauseWidth = 78;
@@ -375,6 +383,7 @@ bool TimerView::HandleCommand(HWND owner, WPARAM wParam) {
     }
     if (id == IDC_TIMER_START_BTN) {
         if (g_intervalTimer.IsActive()) {
+            g_manuallyStoppedAutoStartTimer = g_store.timer_start_with_app;
             g_intervalTimer.Stop();
         } else {
             int workSeconds = 0;
@@ -399,6 +408,7 @@ bool TimerView::HandleCommand(HWND owner, WPARAM wParam) {
             g_store.timer_rest_minutes = static_cast<double>(restSeconds) / 60.0;
             g_store.timer_repetitions = repetitions;
             g_store.SaveLocal();
+            g_manuallyStoppedAutoStartTimer = false;
             g_intervalTimer.Start(workSeconds, restSeconds, repetitions, g_store.timer_2020_enabled);
             if (g_store.timer_strict_mode) SetWorkMeasurementStopped(false);
         }

@@ -6,6 +6,7 @@
 #include "BarTooltips.h"
 #include "Marker.h"
 #include "IntervalTimer.h"
+#include "TimerView.h"
 
 namespace {
     constexpr int DAILY_WORK_TARGET_SECONDS = 6 * 3600 + 50 * 60;
@@ -492,11 +493,21 @@ void PaintMainWindow(HWND hWnd, HDC hdc) {
         DeleteObject(dividerPen);
 
         SelectObject(hdcMem, g_hFontSmall);
+        const bool showAutoStartWarning = TimerView::ShouldShowAutoStartWarning();
         SetTextColor(hdcMem, th.textSecondary);
         RECT rcTimerExplanation = { 20, 58, clientW - 20, 88 };
         DrawTextW(hdcMem,
             L"A munkaidő-mérésre nincs hatással; csak hang- és vizuális jelzést ad.",
             -1, &rcTimerExplanation, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+        if (showAutoStartWarning) {
+            RECT rcWarning = { panel.left + 32, panel.bottom - 26, panel.right - 32, panel.bottom - 8 };
+            HBRUSH warningBrush = CreateSolidBrush(RGB(255, 214, 10));
+            FillRect(hdcMem, &rcWarning, warningBrush);
+            DeleteObject(warningBrush);
+            SetTextColor(hdcMem, RGB(45, 35, 0));
+            DrawTextW(hdcMem, L"Következő indításkor újraindul", -1, &rcWarning,
+                DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS);
+        }
     } else if (g_displayItems.empty()) {
         SelectObject(hdcMem, g_hFontNormal);
         SetTextColor(hdcMem, th.textEmpty);
