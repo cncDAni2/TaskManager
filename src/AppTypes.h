@@ -34,6 +34,8 @@
 #define IDC_TIMER_2020_CHECK 2021
 #define IDC_TIMER_STRICT_CHECK 2022
 #define IDC_TIMER_NEXT_BTN 2023
+#define IDC_CLEANUP_EDIT    2024
+#define IDC_CLEANUP_BTN     2025
 
 // System Tray and Menu IDs
 #define IDM_TRAY_OPEN       3001
@@ -207,7 +209,7 @@ inline ThemeColors GetPinkTheme() {
     c.borderCardHover = RGB(181, 0, 90);
     c.borderCardSelected = RGB(144, 0, 72);
     c.borderSep = RGB(255, 141, 198);
-    c.textTitle = RGB(255, 255, 255);
+    c.textTitle = RGB(108, 0, 54);         // Dark pink
     c.textPrimary = RGB(79, 0, 72);
     c.textCompleted = RGB(159, 96, 134);
     c.textSecondary = RGB(108, 0, 54);
@@ -227,4 +229,34 @@ inline ThemeColors GetThemeColors(ThemeMode mode) {
     if (mode == ThemeMode::Dark) return GetDarkTheme();
     if (mode == ThemeMode::Pink) return GetPinkTheme();
     return GetLightTheme();
+}
+
+// Palette of the work-history ("Idők") view: navy in the dark theme, the theme's own surfaces otherwise.
+struct HistoryColors {
+    COLORREF background;  // List area and footer.
+    COLORREF header;      // Title bar.
+    COLORREF subBar;      // Cleanup bar.
+    COLORREF separator;
+    COLORREF title;
+    COLORREF tableHeader; // "Nap" / "Idő" column captions.
+    COLORREF text;
+    COLORREF barTrack;
+    COLORREF barBorder;   // Border of the bottom work-time bar.
+    COLORREF bottomBar;
+};
+
+inline HistoryColors GetHistoryColors(ThemeMode mode) {
+    const ThemeColors th = GetThemeColors(mode);
+    if (mode == ThemeMode::Dark) {
+        const COLORREF navy = RGB(8, 25, 54);
+        return { navy, navy, RGB(12, 33, 66), RGB(16, 43, 78), RGB(235, 242, 252), RGB(153, 183, 219),
+            RGB(235, 242, 252), RGB(16, 43, 78), RGB(104, 139, 181), navy };
+    }
+    if (mode == ThemeMode::Pink) {
+        const COLORREF darkPink = RGB(108, 0, 54);
+        return { th.bgHeader, th.bgHeader, th.bgSubBar, th.borderSep, darkPink, darkPink,
+            darkPink, th.bgCardSelected, th.bgCardHover, th.bgHeader };
+    }
+    return { th.bgWindow, th.bgHeader, th.bgSubBar, th.borderSep, th.textTitle, th.textSecondary,
+        th.textPrimary, th.borderSep, th.textSecondary, th.bgSubBar };
 }

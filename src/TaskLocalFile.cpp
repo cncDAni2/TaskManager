@@ -53,6 +53,8 @@ void TaskStore::SaveLocal() {
         << "  \"timer_start_with_app\": " << (timer_start_with_app ? "true" : "false") << ",\n"
         << "  \"sounds_enabled\": " << (sounds_enabled ? "true" : "false") << ",\n"
         << "  \"excluded_window_keywords\": " << Quote(excluded_window_keywords) << ",\n"
+        << "  \"cleanup_days\": " << cleanup_days << ",\n"
+        << "  \"cleanup_weeks\": " << cleanup_weeks << ",\n"
         << "  \"next_source_id\": " << next_source_id << ",\n"
         << "  \"sync_files\": [";
     for (size_t i = 0; i < syncSources.size(); ++i) {
@@ -231,6 +233,14 @@ void TaskStore::LoadLocal() {
     std::wstring parsedKeywords;
     if (JsonLite::GetWideString(content, "excluded_window_keywords", parsedKeywords)) {
         excluded_window_keywords = ExcludedApps::Normalize(parsedKeywords);
+    }
+
+    long long cleanupValue = 0;
+    if (JsonLite::GetInt64(content, "cleanup_days", cleanupValue) && cleanupValue > 0 && cleanupValue < 100) {
+        cleanup_days = static_cast<int>(cleanupValue);
+    }
+    if (JsonLite::GetInt64(content, "cleanup_weeks", cleanupValue) && cleanupValue > 0 && cleanupValue < 100) {
+        cleanup_weeks = static_cast<int>(cleanupValue);
     }
 
     syncSources.clear();

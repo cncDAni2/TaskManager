@@ -5,6 +5,7 @@
 #include "TimerView.h"
 #include "MemoryTrim.h"
 #include "SyncPicker.h"
+#include "Cleanup.h"
 #include <algorithm>
 #include <set>
 
@@ -12,6 +13,12 @@ static int MeasureTaskTextHeight(HDC hdc, const std::wstring& text, int width) {
     RECT rc = { 0, 0, width, 0 };
     DrawTextW(hdc, text.c_str(), -1, &rc, DT_LEFT | DT_WORDBREAK | DT_NOPREFIX | DT_CALCRECT);
     return std::max(20, (int)(rc.bottom - rc.top));
+}
+
+int GetListTop() {
+    if (g_viewMode == ViewMode::ActiveTasks) return 94;
+    if (g_viewMode == ViewMode::WorkHistory) return 48;
+    return 54;
 }
 
 int GetListBottom(int clientHeight) {
@@ -24,7 +31,7 @@ void EnsureVisible(int itemIndex) {
     if (itemIndex < 0 || itemIndex >= (int)g_displayItems.size()) return;
     RECT rcClient;
     GetClientRect(g_hWnd, &rcClient);
-    int topOffset = g_viewMode == ViewMode::ActiveTasks ? 94 : (g_viewMode == ViewMode::WorkHistory ? 48 : 54);
+    int topOffset = GetListTop();
     int listBottom = GetListBottom(rcClient.bottom);
     int viewableHeight = listBottom - topOffset;
 
@@ -50,7 +57,7 @@ ScrollbarMetrics GetScrollbarMetrics() {
     int clientW = rcClient.right - rcClient.left;
     int clientH = rcClient.bottom - rcClient.top;
 
-    int topOffset = g_viewMode == ViewMode::ActiveTasks ? 94 : (g_viewMode == ViewMode::WorkHistory ? 48 : 54);
+    int topOffset = GetListTop();
     int listBottom = GetListBottom(clientH);
     int viewableHeight = listBottom - topOffset;
 
@@ -130,6 +137,7 @@ void UpdateControlsVisibility() {
         ShowWindow(g_hCloseBtn, SW_HIDE);
         ShowWindow(g_hPinBtn, SW_HIDE);
         TimerView::UpdateVisibility(false);
+        Cleanup::UpdateVisibility(0);
         return;
     }
 
@@ -159,6 +167,11 @@ void UpdateControlsVisibility() {
     SetWindowPos(g_hToggleViewBtn, nullptr, isHistory ? 286 : 345, 10,
         isHistory ? 104 : 125, 28, SWP_NOZORDER | SWP_NOACTIVATE);
     ShowWindow(g_hManualWorkBtn, isHistory ? SW_SHOW : SW_HIDE);
+    {
+        RECT rcCleanup{};
+        GetClientRect(g_hWnd, &rcCleanup);
+        Cleanup::UpdateVisibility(rcCleanup.right);
+    }
     ShowWindow(g_hEdit, isActive ? SW_SHOW : SW_HIDE);
     ShowWindow(g_hAddBtn, isActive ? SW_SHOW : SW_HIDE);
     // Without sync files the cloud button disappears and the input row takes its place.
@@ -391,7 +404,7 @@ void RecalculateLayout() {
     GetClientRect(g_hWnd, &rcClient);
     int clientWidth = rcClient.right - rcClient.left;
 
-    int topOffset = g_viewMode == ViewMode::ActiveTasks ? 94 : (g_viewMode == ViewMode::WorkHistory ? 48 : 54);
+    int topOffset = GetListTop();
 
     if (g_viewMode == ViewMode::WorkHistory) {
         auto entries = g_store.GetWorkHistory();

@@ -24,7 +24,8 @@ A PIN nézet egy mini, kissé áttetsző lebegő ablak, amely mindig a képerny�
 A főablak megnyitásakor az új feladat hozzáadására szolgáló mező azonnal aktív. Ha van beállított szinkronizációs fájl, mellette felhőikon található: ezzel választhatod ki, hova kerüljön az új feladat (lásd: Szinkronizált feladatok).  
 A feladatokat szerkesztheted, törölheted, készre jelölheted, jelölőikonnal láthatod el (az ikonra kattintva válthatsz a jelölések között), és húzással rendezheted sorba.  
 Főablakban készre jelölve a feladat az ablak bezárásáig látható marad az aktív listában; újranyitáskor már csak az „Elkészült” nézetben szerepel.
-A kész feladatokat napi bontásban, a fenti „Elkészült” gombra kattintva láthatod.
+A kész feladatokat napi bontásban, a fenti „Elkészült” gombra kattintva láthatod.  
+**Takarítás:** az „Elkészült” nézet jobb felső sarkában megadhatod, hány napnál régebben elkészült feladatok törlődjenek (alapból 14), majd a gombbal törölheted őket. Törlés előtt a program megmutatja, hány feladat törlődik; a szinkronizált feladatok a többi felhasználónál is törlődnek. A beírt számot a program megjegyzi.
 
 **Gyorsbillentyűk** a főablak nézetben:
 
@@ -73,6 +74,7 @@ Nem ez a program fő funkciója, de hasznos a munkaidő nyomon követésére is.
 
 Az időmérés "munkanapot" mér. A munkaidő kezdete alapértelmezés szerint 9:15.  
 Az eddigi méréseket napi és heti bontásban is megtekintheted az "Idők" oldalon.  
+**Takarítás:** az „Idők” nézet jobb felső sarkában megadhatod, hány hétnél régebbi mért és kézi munkaidők törlődjenek (alapból 8); a mostani hét és az előtte lévő megadott számú hét megmarad. Törlés előtt megerősítést kér.  
 **Manuális** munkaidőmegadás: Az Idők nézetben kézzel is megadhatsz munkaidőt. Kiválaszthatsz egy napot, ahol módosíthatod a korábbi kézi bejegyzést. Alapból minden naphoz ez 0 óra. A kézi megadást az áttekintő nézetek más színnel jelzik.  
 A százalékos kijelző a 8 órás munkaidőhöz viszonyítva mutatja az eltelt aktív idő arányát. Ez törvényileg szabályozott módon 6 óra 50 perc-nél jelez 100%-ot, ugyanis a törvény egy 20 perces szünetet ír elő, valamint hogy a képernyő előtti munkavégzést óránként 10 percre szüneteltetni kell. (Fontos megjegyezni: Ez NEM munkaszünet, de a program a képernyőidőt méri, azt pedig szüneteltetni kell - így a program számára ez nem számolható mint munkaidő.)
 

@@ -128,6 +128,47 @@ void TaskStore::Delete(int id) {
     SaveLocal();
 }
 
+void TaskStore::DeleteMany(const std::vector<int>& ids) {
+    std::vector<SyncSource*> touched;
+    for (int id : ids) {
+        Task* t = FindTask(id);
+        if (!t || !t->is_sync) continue;
+        const SyncRecord record = MakeSyncRecord(*t, true);
+        for (int sourceId : t->sources) {
+            for (SyncSource& source : syncSources) {
+                if (source.id != sourceId) continue;
+                SyncFiles::Upsert(source.pendingWrites, record);
+                SyncFiles::Upsert(source.records, record);
+                if (std::find(touched.begin(), touched.end(), &source) == touched.end()) touched.push_back(&source);
+            }
+        }
+    }
+    for (SyncSource* source : touched) RewriteSource(*source, nullptr, nullptr);
+
+    tasks.erase(std::remove_if(tasks.begin(), tasks.end(), [&ids](const Task& task) {
+        return std::find(ids.begin(), ids.end(), task.id) != ids.end();
+    }), tasks.end());
+    active_order.erase(std::remove_if(active_order.begin(), active_order.end(), [&ids](int id) {
+        return std::find(ids.begin(), ids.end(), id) != ids.end();
+    }), active_order.end());
+    if (!touched.empty()) ReloadSync(false, false);
+    SaveLocal();
+}
+
+int TaskStore::CountWorkHistoryBefore(const std::string& dateKey) const {
+    std::set<std::string> dates;
+    for (const auto& entry : work_history) if (entry.first < dateKey) dates.insert(entry.first);
+    for (const auto& entry : manual_work_history) if (entry.first < dateKey) dates.insert(entry.first);
+    return static_cast<int>(dates.size());
+}
+
+void TaskStore::PurgeWorkHistoryBefore(const std::string& dateKey) {
+    // Keys are "YYYY-MM-DD", so string order is date order.
+    work_history.erase(work_history.begin(), work_history.lower_bound(dateKey));
+    manual_work_history.erase(manual_work_history.begin(), manual_work_history.lower_bound(dateKey));
+    SaveLocal();
+}
+
 std::vector<Task> TaskStore::GetActiveTasks() const {
     std::vector<Task> res;
     for (const auto& t : tasks) {

@@ -28,7 +28,7 @@ For feature overview and usage, see [README.md](README.md).
 
 The application is modularized under `src/` into focused, single-responsibility files. Keep new modules under 500 lines where practical; [src/MainWindow.cpp](src/MainWindow.cpp) is an existing oversized dispatcher, so put new behavior in its owning module instead of expanding it further.
 
-- [src/AppTypes.h](src/AppTypes.h): UI IDs, task/view/filter types, theme colors, display items, and scrollbar metrics.
+- [src/AppTypes.h](src/AppTypes.h): UI IDs, task/view/filter types, theme colors (plus `GetHistoryColors` for the work-history view in every theme), display items, and scrollbar metrics.
 - [src/AppState.h](src/AppState.h) / [src/AppState.cpp](src/AppState.cpp): Centralized globals for the store, views, window modes, focus/session state, and rendering/input state.
 - [src/Task.h](src/Task.h) / [src/Task.cpp](src/Task.cpp): `TaskStore` core: task operations, runtime-id mapping, active-task ordering, work tracking, and settings. Split across [src/TaskLocalFile.cpp](src/TaskLocalFile.cpp) (local JSON load/save and legacy migration) and [src/TaskSync.cpp](src/TaskSync.cpp) (multi-file sync: read, merge, relay, notices).
 - [src/SyncFiles.h](src/SyncFiles.h) / [src/SyncFiles.cpp](src/SyncFiles.cpp): Shared sync-file records, safe read/write (truncated files are never overwritten), newest-wins merge, tombstone purge, and UID generation.
@@ -39,13 +39,14 @@ The application is modularized under `src/` into focused, single-responsibility 
 - [src/IntervalTimer.h](src/IntervalTimer.h) / [src/IntervalTimer.cpp](src/IntervalTimer.cpp): Work/rest cycles and the optional 20-20-20 reminder.
 - [src/TimerView.h](src/TimerView.h) / [src/TimerView.cpp](src/TimerView.cpp): Interval timer controls and saved timer configuration.
 - [src/ExcludedApps.h](src/ExcludedApps.h) / [src/ExcludedApps.cpp](src/ExcludedApps.cpp): Configurable comma-separated window-title keywords that pause work-time counting; cached case-insensitive matching.
+- [src/Cleanup.h](src/Cleanup.h) / [src/Cleanup.cpp](src/Cleanup.cpp): Cleanup bar below the header in the completed (old tasks, days) and work-history (old work time, weeks) views, with confirmation; remembered values `cleanup_days` / `cleanup_weeks`.
 - [src/MemoryTrim.h](src/MemoryTrim.h) / [src/MemoryTrim.cpp](src/MemoryTrim.cpp): Debounced one-shot working-set trim after startup, entering mini mode, and hiding to tray.
 - [src/Marker.h](src/Marker.h) / [src/Marker.cpp](src/Marker.cpp): Task marker behavior and presentation.
 - [src/Drawing.h](src/Drawing.h) / [src/Drawing.cpp](src/Drawing.cpp): GDI icon rendering for task, settings, pin, and focus controls, plus DWM titlebar styling.
 - [src/BarTooltips.h](src/BarTooltips.h) / [src/BarTooltips.cpp](src/BarTooltips.cpp): Dynamic tooltip regions for work-history bars.
 - [src/FocusMode.h](src/FocusMode.h) / [src/FocusMode.cpp](src/FocusMode.cpp): Focus-mode toggling and Windows session lock/unlock notifications.
 - [src/InlineEdit.h](src/InlineEdit.h) / [src/InlineEdit.cpp](src/InlineEdit.cpp): Task inline editing logic, input subclassing, commit/cancel lifecycle.
-- [src/Layout.h](src/Layout.h) / [src/Layout.cpp](src/Layout.cpp): Window geometry, mini-mode transitions, control visibility, and custom scrollbar metrics.
+- [src/Layout.h](src/Layout.h) / [src/Layout.cpp](src/Layout.cpp): Window geometry, mini-mode transitions, control visibility, and custom scrollbar metrics. `GetListTop()` / `GetListBottom()` are the single source of the list area for every view.
 - [src/Paint.h](src/Paint.h) / [src/Paint.cpp](src/Paint.cpp): Double-buffered GDI rendering for full/mini views and measured/manual work bars.
 - [src/PopupNotice.h](src/PopupNotice.h) / [src/PopupNotice.cpp](src/PopupNotice.cpp): Non-activating notices: new tasks (stay until clicked) and changed tasks (auto-close countdown, paused on hover).
 - [src/SettingsDialog.h](src/SettingsDialog.h) / [src/SettingsDialog.cpp](src/SettingsDialog.cpp): Settings UI for themes, sound, daily work-reset time, timer auto-start, and excluded window-title keywords; rebuilt in place when sync rows change. Every setting applies and saves instantly except the work-reset time, which waits for the highlighted "Mentés" button (the OK button changes to it).

@@ -9,6 +9,7 @@ void ExitMiniMode(bool toHidden = false);
 void FinalizeCompletedTaskSession();
 void UpdateControlsVisibility();
 void EnsureVisible(int itemIndex);
+int GetListTop();
 int GetListBottom(int clientHeight);
 ScrollbarMetrics GetScrollbarMetrics();
 RECT GetMiniDragHandleRect(int clientWidth);

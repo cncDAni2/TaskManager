@@ -32,6 +32,8 @@ public:
     bool timer_start_with_app = false;
     bool sounds_enabled = true;
     std::wstring excluded_window_keywords = ExcludedApps::DEFAULT_KEYWORDS;
+    int cleanup_days = 14;
+    int cleanup_weeks = 8;
     ThemeMode theme_mode = ThemeMode::Dark;
     WorkHistory::Records work_history;
     WorkHistory::Records manual_work_history;
@@ -51,6 +53,10 @@ public:
     void ToggleCompleted(int id);
     std::wstring ToggleAssignment(int id, const std::wstring& userName);
     void Delete(int id);
+    // Deletes several tasks with one write per sync file.
+    void DeleteMany(const std::vector<int>& ids);
+    int CountWorkHistoryBefore(const std::string& dateKey) const;
+    void PurgeWorkHistoryBefore(const std::string& dateKey);
 
     std::vector<Task> GetActiveTasks() const;
     std::vector<Task> GetRecentCompletedTasks() const;
@@ -82,5 +88,6 @@ private:
     void AddFirstRunSyncSource();
     Task* FindTask(int id);
     void PublishSyncTask(Task& task, bool deleted);
+    SyncRecord MakeSyncRecord(Task& task, bool deleted);
     void RewriteSource(SyncSource& source, const SyncFiles::RecordMap* winners, const SyncRecord* upsert);
 };

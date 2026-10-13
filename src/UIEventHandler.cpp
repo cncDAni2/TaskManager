@@ -1,5 +1,6 @@
 #include "UIEventHandler.h"
 #include "SyncPicker.h"
+#include "Cleanup.h"
 #include "AppState.h"
 #include "Drawing.h"
 #include "Layout.h"
@@ -68,6 +69,22 @@ LRESULT CALLBACK CenterMessageBoxHook(int code, WPARAM wParam, LPARAM lParam) {
     return CallNextHookEx(nullptr, code, wParam, lParam);
 }
 
+} // namespace
+
+int ShowCenteredMessageBox(HWND owner, const std::wstring& text, const wchar_t* caption, UINT flags) {
+    if (!g_store.sounds_enabled) flags &= ~MB_ICONMASK; // Icons also play the system sound.
+    bool wasInContextMenu = g_inContextMenu;
+    g_inContextMenu = true;
+    g_messageBoxOwner = owner;
+    HHOOK messageBoxHook = SetWindowsHookExW(WH_CBT, CenterMessageBoxHook, nullptr, GetCurrentThreadId());
+    int answer = MessageBoxW(owner, text.c_str(), caption, flags);
+    if (messageBoxHook) UnhookWindowsHookEx(messageBoxHook);
+    g_messageBoxOwner = nullptr;
+    g_inContextMenu = wasInContextMenu;
+    return answer;
+}
+namespace {
+
 void DeleteTaskWithConfirmation(HWND hWnd, int taskId, const std::wstring& initialTaskName) {
     std::wstring taskName = initialTaskName;
     if (g_editingTaskId == taskId && g_hInlineEdit) {
@@ -78,15 +95,8 @@ void DeleteTaskWithConfirmation(HWND hWnd, int taskId, const std::wstring& initi
     }
 
     std::wstring confirmText = L"Biztos törli ezt a feladatot?\n" + taskName;
-    bool wasInContextMenu = g_inContextMenu;
-    g_inContextMenu = true;
-    g_messageBoxOwner = hWnd;
-    HHOOK messageBoxHook = SetWindowsHookExW(WH_CBT, CenterMessageBoxHook, nullptr, GetCurrentThreadId());
-    int answer = MessageBoxW(hWnd, confirmText.c_str(), L"Feladat törlése",
-        MB_YESNO | (g_store.sounds_enabled ? MB_ICONQUESTION : 0) | MB_DEFBUTTON2);
-    if (messageBoxHook) UnhookWindowsHookEx(messageBoxHook);
-    g_messageBoxOwner = nullptr;
-    g_inContextMenu = wasInContextMenu;
+    int answer = ShowCenteredMessageBox(hWnd, confirmText, L"Feladat törlése",
+        MB_YESNO | MB_ICONQUESTION | MB_DEFBUTTON2);
     if (answer != IDYES) return;
 
     CommitInlineEdit();
@@ -347,14 +357,14 @@ bool HandleLButtonDown(HWND hWnd, LPARAM lParam) {
             InvalidateRect(hWnd, nullptr, FALSE);
             return true;
         } else if (clickRawY < sm.rcThumb.top) {
-            int topOffset = g_viewMode == ViewMode::ActiveTasks ? 94 : (g_viewMode == ViewMode::WorkHistory ? 48 : 54);
+            int topOffset = GetListTop();
             int viewableHeight = GetListBottom(rcClient.bottom) - topOffset;
             g_scrollY = std::max(0, g_scrollY - viewableHeight);
             UpdateInlineEditPos();
             InvalidateRect(hWnd, nullptr, TRUE);
             return true;
         } else {
-            int topOffset = g_viewMode == ViewMode::ActiveTasks ? 94 : (g_viewMode == ViewMode::WorkHistory ? 48 : 54);
+            int topOffset = GetListTop();
             int viewableHeight = GetListBottom(rcClient.bottom) - topOffset;
             g_scrollY = std::min(sm.maxScroll, g_scrollY + viewableHeight);
             UpdateInlineEditPos();
@@ -747,6 +757,8 @@ static COLORREF GetButtonSurfaceColor(UINT ctlId, const ThemeColors& th) {
     case IDC_ADD_TASK_BTN:
     case IDC_SYNC_TOGGLE_BTN:
         return th.bgSubBar;
+    case IDC_CLEANUP_BTN:
+        return Cleanup::SurfaceColor();
     case IDC_TIMER_START_BTN:
     case IDC_TIMER_PAUSE_BTN:
     case IDC_TIMER_NEXT_BTN:
@@ -755,7 +767,8 @@ static COLORREF GetButtonSurfaceColor(UINT ctlId, const ThemeColors& th) {
         return th.bgWindow;
     default:
         if (g_viewMode == ViewMode::WorkHistory) {
-            return g_themeMode == ThemeMode::Pink ? th.bgHeader : RGB(8, 25, 54);
+            return ctlId == IDC_STOP_WORK_BTN ? GetHistoryColors(g_themeMode).background
+                : GetHistoryColors(g_themeMode).header;
         }
         return th.bgHeader;
     }
@@ -830,7 +843,7 @@ bool HandleDrawItem(HWND /*hWnd*/, DRAWITEMSTRUCT* pDIS) {
         pDIS->CtlID == IDC_TOGGLE_VIEW_BTN || pDIS->CtlID == IDC_TIMER_START_BTN ||
         pDIS->CtlID == IDC_TIMER_PAUSE_BTN || pDIS->CtlID == IDC_TIMER_NEXT_BTN ||
         pDIS->CtlID == IDC_CLOSE_BTN ||
-        pDIS->CtlID == IDC_ADD_TASK_BTN;
+        pDIS->CtlID == IDC_ADD_TASK_BTN || pDIS->CtlID == IDC_CLEANUP_BTN;
     if (isTextButton) {
         bool isDark = g_themeMode == ThemeMode::Dark;
         bool isMeasurementStopped = pDIS->CtlID == IDC_STOP_WORK_BTN && g_workMeasurementStopped;

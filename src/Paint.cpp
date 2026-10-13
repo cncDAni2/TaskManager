@@ -317,19 +317,19 @@ void PaintMainWindow(HWND hWnd, HDC hdc) {
     const bool isHistory = g_viewMode == ViewMode::WorkHistory;
     const bool isTimer = g_viewMode == ViewMode::IntervalTimer;
     std::vector<BarTooltips::Region> barToolRegions;
-    const COLORREF historyBg = g_themeMode == ThemeMode::Pink ? th.bgHeader : RGB(8, 25, 54);
-    HBRUSH hBrushBg = CreateSolidBrush(isHistory ? historyBg : th.bgWindow);
+    const HistoryColors hc = GetHistoryColors(g_themeMode);
+    HBRUSH hBrushBg = CreateSolidBrush(isHistory ? hc.background : th.bgWindow);
     FillRect(hdcMem, &rcClient, hBrushBg);
     DeleteObject(hBrushBg);
 
     // 1. Draw Header
     RECT rcHeader = { 0, 0, clientW, 48 };
-    HBRUSH hBrushHeader = CreateSolidBrush(isHistory ? historyBg : th.bgHeader);
+    HBRUSH hBrushHeader = CreateSolidBrush(isHistory ? hc.header : th.bgHeader);
     FillRect(hdcMem, &rcHeader, hBrushHeader);
     DeleteObject(hBrushHeader);
 
     SetBkMode(hdcMem, TRANSPARENT);
-    SetTextColor(hdcMem, isHistory ? RGB(235, 242, 252) : th.textTitle);
+    SetTextColor(hdcMem, isHistory ? hc.title : th.textTitle);
     SelectObject(hdcMem, g_hFontTitle);
     std::wstring title = g_viewMode == ViewMode::ActiveTasks ? L"Feladatok"
         : (isHistory ? L"Munkaidő" : (isTimer ? L"Időzítő" : L"Elkészült feladatok"));
@@ -351,7 +351,7 @@ void PaintMainWindow(HWND hWnd, HDC hdc) {
     }
 
     // 3. Draw items with clipping to list area
-    int topOffset = g_viewMode == ViewMode::ActiveTasks ? 94 : (isHistory ? 48 : 54);
+    int topOffset = GetListTop();
     int listBottom = GetListBottom(clientH);
     HRGN hRgnClip = CreateRectRgn(0, topOffset, clientW, listBottom);
     SelectClipRgn(hdcMem, hRgnClip);
@@ -363,8 +363,8 @@ void PaintMainWindow(HWND hWnd, HDC hdc) {
             if (!entry.isWeeklySummary) maxSeconds = std::max(maxSeconds, entry.seconds);
         }
 
-        SelectObject(hdcMem, g_hFontSmall);
-        SetTextColor(hdcMem, g_themeMode == ThemeMode::Pink ? th.bgCardHover : RGB(153, 183, 219));
+        SelectObject(hdcMem, g_hFontHeader); // Bold column captions.
+        SetTextColor(hdcMem, hc.tableHeader);
         RECT rcDayHeader = { 16, topOffset + 2 - g_scrollY, 64, topOffset + 22 - g_scrollY };
         RECT rcTimeHeader = { 68, topOffset + 2 - g_scrollY, 140, topOffset + 22 - g_scrollY };
         DrawTextW(hdcMem, L"Nap", -1, &rcDayHeader, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
@@ -378,7 +378,7 @@ void PaintMainWindow(HWND hWnd, HDC hdc) {
             if (rowTop + 18 < topOffset || rowTop > listBottom) continue;
 
             SelectObject(hdcMem, g_hFontNormal);
-            SetTextColor(hdcMem, RGB(235, 242, 252));
+            SetTextColor(hdcMem, hc.text);
             RECT rcDate = { 16, rowTop, entry.isWeeklySummary ? 82 : 64, rowTop + 18 };
             DrawTextW(hdcMem, entry.label.c_str(), -1, &rcDate, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
 
@@ -392,8 +392,7 @@ void PaintMainWindow(HWND hWnd, HDC hdc) {
                 ? RECT{ 145, rowTop + 5, clientW - 20, rowTop + 12 }
                 : RECT{ 145, rowTop + 7, clientW - 20, rowTop + 10 };
             const bool grayCurrentDay = g_workMeasurementStopped && entry.isCurrentDay;
-            HBRUSH hTrack = CreateSolidBrush(grayCurrentDay ? RGB(75, 85, 99)
-                : (g_themeMode == ThemeMode::Pink ? th.bgCardSelected : RGB(16, 43, 78)));
+            HBRUSH hTrack = CreateSolidBrush(grayCurrentDay ? RGB(75, 85, 99) : hc.barTrack);
             FillRect(hdcMem, &rcBar, hTrack);
             DeleteObject(hTrack);
             int barWidth = entry.isWeeklySummary
@@ -820,8 +819,7 @@ void PaintMainWindow(HWND hWnd, HDC hdc) {
         DrawTextW(hdcMem, timerStatus.c_str(), -1, &rcTimerLabel,
             DT_LEFT | DT_VCENTER | DT_SINGLELINE);
     }
-    COLORREF bgBottom = isHistory ? (g_themeMode == ThemeMode::Pink ? th.bgHeader : RGB(8, 25, 54))
-        : (g_darkMode ? RGB(18, 18, 22) : th.bgSubBar);
+    COLORREF bgBottom = isHistory ? hc.bottomBar : (g_darkMode ? RGB(18, 18, 22) : th.bgSubBar);
     HBRUSH hBrBottom = CreateSolidBrush(bgBottom);
     FillRect(hdcMem, &rcBottom, hBrBottom);
     DeleteObject(hBrBottom);
@@ -834,11 +832,9 @@ void PaintMainWindow(HWND hWnd, HDC hdc) {
 
     RECT rcTrack = { 10, rcBottom.top + 3, clientW - 10, rcBottom.bottom - 3 };
     COLORREF borderTrack = g_workMeasurementStopped ? RGB(107, 114, 128)
-        : (isHistory ? (g_themeMode == ThemeMode::Pink ? th.bgCardHover : RGB(104, 139, 181))
-            : (g_darkMode ? RGB(255, 255, 255) : th.textSecondary));
+        : (isHistory ? hc.barBorder : (g_darkMode ? RGB(255, 255, 255) : th.textSecondary));
     COLORREF bgTrack = g_workMeasurementStopped ? RGB(75, 85, 99)
-        : (isHistory ? (g_themeMode == ThemeMode::Pink ? th.bgCardSelected : RGB(16, 43, 78))
-            : (g_darkMode ? RGB(28, 28, 34) : th.borderSep));
+        : (isHistory ? hc.barTrack : (g_darkMode ? RGB(28, 28, 34) : th.borderSep));
 
     HBRUSH hBrTrack = CreateSolidBrush(bgTrack);
     HPEN hPenTrack = CreatePen(PS_SOLID, 1, borderTrack);
@@ -880,7 +876,7 @@ void PaintMainWindow(HWND hWnd, HDC hdc) {
 
     SelectObject(hdcMem, g_hFontSmall);
     SetBkMode(hdcMem, TRANSPARENT);
-    SetTextColor(hdcMem, isHistory ? RGB(235, 242, 252) : th.textPrimary);
+    SetTextColor(hdcMem, isHistory ? hc.text : th.textPrimary);
 
     std::wstring workStr = TaskUtils::FormatWorkDuration(totalWorkSec);
     double pct = ((double)totalWorkSec / (double)targetWorkSec) * 100.0;

@@ -15,6 +15,7 @@
 #include "MemoryTrim.h"
 #include "ExcludedApps.h"
 #include "SyncPicker.h"
+#include "Cleanup.h"
 #include <windowsx.h>
 #include <commctrl.h>
 #include <algorithm>
@@ -329,6 +330,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             wcscpy_s(g_nid.szTip, L"Feladatkezelő (Ctrl+F1)");
             Shell_NotifyIconW(NIM_ADD, &g_nid);
 
+            Cleanup::CreateControls(hWnd, hInst);
             SyncPicker::ResetSelection();
             UpdateControlsVisibility();
             RecalculateLayout();
@@ -588,6 +590,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 
         case WM_COMMAND: {
             if (TimerView::HandleCommand(hWnd, wParam)) return 0;
+            if (Cleanup::HandleCommand(hWnd, wParam)) return 0;
             if (HandleCommand(hWnd, LOWORD(wParam))) return 0;
             break;
         }
@@ -597,8 +600,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             g_scrollY -= (delta / WHEEL_DELTA) * 36;
             RECT rcClient;
             GetClientRect(hWnd, &rcClient);
-            int topOffset = g_viewMode == ViewMode::ActiveTasks ? 94
-                : (g_viewMode == ViewMode::WorkHistory ? 48 : 54);
+            int topOffset = GetListTop();
             int viewableHeight = GetListBottom(rcClient.bottom) - topOffset;
             int maxScroll = std::max(0, g_totalContentHeight - viewableHeight);
 

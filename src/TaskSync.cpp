@@ -177,7 +177,7 @@ void TaskStore::ReloadSync(bool forceAll, bool silent) {
     syncKnownInitialized = true;
 }
 
-void TaskStore::PublishSyncTask(Task& task, bool deleted) {
+SyncRecord TaskStore::MakeSyncRecord(Task& task, bool deleted) {
     SyncRecord record;
     record.uid = task.uid;
     record.text = task.text;
@@ -196,7 +196,11 @@ void TaskStore::PublishSyncTask(Task& task, bool deleted) {
     task.updated_at = record.updated_at;
     task.updated_by = record.updated_by;
     if (!deleted) knownSyncTexts[task.uid] = task.text;
+    return record;
+}
 
+void TaskStore::PublishSyncTask(Task& task, bool deleted) {
+    const SyncRecord record = MakeSyncRecord(task, deleted);
     const std::vector<int> targets = task.sources;
     for (int sourceId : targets) {
         for (SyncSource& source : syncSources) {
