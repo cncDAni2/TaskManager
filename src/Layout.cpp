@@ -3,6 +3,7 @@
 #include "InlineEdit.h"
 #include "IntervalTimer.h"
 #include "TimerView.h"
+#include "MemoryTrim.h"
 #include <algorithm>
 #include <set>
 
@@ -337,6 +338,7 @@ void EnterMiniMode() {
     SetLayeredWindowAttributes(g_hWnd, 0, miniOpacity, LWA_ALPHA);
 
     RecalculateMiniLayout();
+    MemoryTrim::Request(g_hWnd);
 }
 
 void ExitMiniMode(bool toHidden) {

@@ -12,6 +12,7 @@
 #include "TaskUtils.h"
 #include "IntervalTimer.h"
 #include "TimerView.h"
+#include "MemoryTrim.h"
 #include <windowsx.h>
 #include <commctrl.h>
 #include <algorithm>
@@ -149,7 +150,7 @@ void HideAppWindow() {
     }
     g_sessionActiveIdsInitialized = false;
     g_store.Save();
-    SetProcessWorkingSetSize(GetCurrentProcess(), (SIZE_T)-1, (SIZE_T)-1);
+    MemoryTrim::Request(g_hWnd);
 }
 
 LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
@@ -328,6 +329,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 
             UpdateControlsVisibility();
             RecalculateLayout();
+            MemoryTrim::Request(hWnd);
             return 0;
         }
 
@@ -364,6 +366,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         }
 
         case WM_TIMER: {
+            if (MemoryTrim::HandleTimer(hWnd, wParam)) return 0;
             if (wParam == IDT_MINI_TIMER_FLASH) {
                 if (!g_isMiniMode || !g_pinMode || !IsWindowVisible(hWnd)) {
                     g_miniTimerFlashStep = 0;
