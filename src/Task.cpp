@@ -5,6 +5,24 @@
 #include <algorithm>
 #include <set>
 
+namespace {
+// Reads a top-level string value; returns false when the key is missing or malformed.
+bool ReadJsonString(const std::string& content, const std::string& key, std::wstring& value) {
+    size_t keyPos = content.find("\"" + key + "\":");
+    if (keyPos == std::string::npos) return false;
+    size_t strStart = content.find('"', keyPos + key.size() + 3);
+    if (strStart == std::string::npos) return false;
+    size_t strEnd = strStart + 1;
+    while (strEnd < content.size() && content[strEnd] != '"') {
+        strEnd += content[strEnd] == '\\' ? 2 : 1;
+    }
+    if (strEnd >= content.size()) return false;
+    std::string raw = content.substr(strStart + 1, strEnd - strStart - 1);
+    value = TaskUtils::Utf8ToWide(TaskUtils::UnescapeJsonString(raw));
+    return true;
+}
+}
+
 TaskStore::TaskStore() {
     wchar_t exePath[MAX_PATH];
     GetModuleFileNameW(nullptr, exePath, MAX_PATH);
@@ -223,6 +241,7 @@ void TaskStore::SaveLocal() {
         << "  \"timer_strict_mode\": " << (timer_strict_mode ? "true" : "false") << ",\n"
         << "  \"timer_start_with_app\": " << (timer_start_with_app ? "true" : "false") << ",\n"
         << "  \"sounds_enabled\": " << (sounds_enabled ? "true" : "false") << ",\n"
+        << "  \"excluded_window_keywords\": \"" << TaskUtils::EscapeJsonString(TaskUtils::WideToUtf8(excluded_window_keywords)) << "\",\n"
         << "  \"sync_file_path\": \"" << TaskUtils::EscapeJsonString(TaskUtils::WideToUtf8(syncFilePath)) << "\",\n"
         << "  \"active_order\": [";
     for (size_t i = 0; i < active_order.size(); ++i) {
@@ -557,23 +576,14 @@ void TaskStore::LoadLocal() {
         }
     }
 
-    size_t sfpPos = content.find("\"sync_file_path\":");
-    if (sfpPos != std::string::npos) {
-        size_t strStart = content.find('"', sfpPos + 17);
-        if (strStart != std::string::npos) {
-            size_t strEnd = strStart + 1;
-            while (strEnd < content.size()) {
-                if (content[strEnd] == '"' && content[strEnd - 1] != '\\') break;
-                strEnd++;
-            }
-            if (strEnd < content.size()) {
-                std::string raw = content.substr(strStart + 1, strEnd - strStart - 1);
-                std::wstring parsed = TaskUtils::Utf8ToWide(TaskUtils::UnescapeJsonString(raw));
-                if (!parsed.empty()) {
-                    syncFilePath = parsed;
-                }
-            }
-        }
+    std::wstring parsedSyncPath;
+    if (ReadJsonString(content, "sync_file_path", parsedSyncPath) && !parsedSyncPath.empty()) {
+        syncFilePath = parsedSyncPath;
+    }
+
+    std::wstring parsedKeywords;
+    if (ReadJsonString(content, "excluded_window_keywords", parsedKeywords)) {
+        excluded_window_keywords = ExcludedApps::Normalize(parsedKeywords);
     }
 
     active_order.clear();

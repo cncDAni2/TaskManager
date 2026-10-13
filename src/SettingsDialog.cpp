@@ -1,6 +1,7 @@
 #include "SettingsDialog.h"
 #include "AppState.h"
 #include "Drawing.h"
+#include "ExcludedApps.h"
 #include "Layout.h"
 #include "Version.h"
 #include <commctrl.h>
@@ -20,6 +21,9 @@ namespace {
     constexpr int IDC_SETTINGS_SOUNDS = 5106;
     constexpr int IDC_SETTINGS_TIMER_AUTO_START = 5107;
     constexpr int IDC_SETTINGS_SYNC_NAME = 5108;
+    constexpr int IDC_SETTINGS_EXCLUDED_KEYWORDS = 5109;
+    constexpr int SETTINGS_DIALOG_WIDTH = 500;
+    constexpr int SETTINGS_DIALOG_HEIGHT = 427;
     constexpr wchar_t APP_VERSION[] = L"v"
         TASK_MANAGER_WIDEN(TASK_MANAGER_STRINGIFY(TASK_MANAGER_VERSION_MAJOR)) L"."
         TASK_MANAGER_WIDEN(TASK_MANAGER_STRINGIFY(TASK_MANAGER_VERSION_MINOR)) L"."
@@ -37,6 +41,7 @@ namespace {
         HWND resetTime = nullptr;
         HWND soundsCheckbox = nullptr;
         HWND timerAutoStartCheckbox = nullptr;
+        HWND excludedKeywordsEdit = nullptr;
         HBRUSH backgroundBrush = nullptr;
         std::wstring syncFilePath;
         int resetHour = 9;
@@ -244,13 +249,35 @@ namespace {
                 g_store.timer_start_with_app ? BST_CHECKED : BST_UNCHECKED, 0);
             SetControlFont(state->timerAutoStartCheckbox, g_hFontNormal);
 
+            HWND excludedLabel = CreateWindowW(L"STATIC", L"Kizárt ablakcímek",
+                WS_CHILD | WS_VISIBLE | SS_LEFT | SS_NOTIFY, 18, 309, 144, 28, hWnd, nullptr, instance, nullptr);
+            SetControlFont(excludedLabel, g_hFontNormal);
+            CreateWindowW(L"STATIC", L"", WS_CHILD | WS_VISIBLE | SS_ETCHEDVERT,
+                170, 300, 2, 40, hWnd, nullptr, instance, nullptr);
+            state->excludedKeywordsEdit = CreateWindowExW(WS_EX_CLIENTEDGE, L"EDIT",
+                g_store.excluded_window_keywords.c_str(),
+                WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_AUTOHSCROLL,
+                184, 305, groupRight - 184, 28, hWnd,
+                (HMENU)(INT_PTR)IDC_SETTINGS_EXCLUDED_KEYWORDS, instance, nullptr);
+            SetControlFont(state->excludedKeywordsEdit, g_hFontNormal);
+            SendMessageW(state->excludedKeywordsEdit, EM_SETCUEBANNER, TRUE,
+                (LPARAM)L"pl. YouTube, Discord, Facebook");
+            if (state->syncTooltip) {
+                static constexpr wchar_t excludedHelp[] =
+                    L"Vesszővel elválasztott kulcsszavak. Ha az előtérben lévő ablak címe tartalmazza "
+                    L"valamelyiket, a munkaidő mérése szünetel. A kis- és nagybetű nem számít. "
+                    L"Fókusz módban a mérés ilyenkor is folytatódik.";
+                AddSyncTooltip(state->syncTooltip, hWnd, excludedLabel, excludedHelp);
+                AddSyncTooltip(state->syncTooltip, hWnd, state->excludedKeywordsEdit, excludedHelp);
+            }
+
             HWND versionLabel = CreateWindowW(L"STATIC", APP_VERSION,
-                WS_CHILD | WS_VISIBLE | SS_LEFT, 18, 318, 120, 24, hWnd, nullptr, instance, nullptr);
+                WS_CHILD | WS_VISIBLE | SS_LEFT, 18, 362, 120, 24, hWnd, nullptr, instance, nullptr);
             SetControlFont(versionLabel, g_hFontSmall);
 
             HWND okButton = CreateWindowW(L"BUTTON", L"OK",
                 WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_DEFPUSHBUTTON,
-                392, 312, 90, 30, hWnd, (HMENU)(INT_PTR)IDC_SETTINGS_OK, instance, nullptr);
+                392, 356, 90, 30, hWnd, (HMENU)(INT_PTR)IDC_SETTINGS_OK, instance, nullptr);
             SetControlFont(okButton, g_hFontNormal);
             SetFocus(state->themeCombo);
             return 0;
@@ -264,23 +291,20 @@ namespace {
         case WM_CTLCOLORSTATIC:
         case WM_CTLCOLORBTN: {
             HDC dc = (HDC)wParam;
+            // Labels and checkboxes sit directly on the dialog surface, so they get its solid color.
             SetTextColor(dc, SETTINGS_DIALOG_TEXT);
+            SetBkColor(dc, SETTINGS_DIALOG_BG);
             SetBkMode(dc, TRANSPARENT);
-            return (LRESULT)GetStockObject(HOLLOW_BRUSH);
-        }
-        case WM_CTLCOLORLISTBOX: {
-            HDC dc = (HDC)wParam;
-            SetTextColor(dc, SETTINGS_DIALOG_TEXT);
-            SetBkColor(dc, SETTINGS_DIALOG_BG);
-            SetBkMode(dc, OPAQUE);
             return (LRESULT)state->backgroundBrush;
         }
+        case WM_CTLCOLORLISTBOX:
         case WM_CTLCOLOREDIT: {
+            // Editable fields stay white so they do not look read-only.
             HDC dc = (HDC)wParam;
             SetTextColor(dc, SETTINGS_DIALOG_TEXT);
-            SetBkColor(dc, SETTINGS_DIALOG_BG);
+            SetBkColor(dc, RGB(255, 255, 255));
             SetBkMode(dc, OPAQUE);
-            return (LRESULT)state->backgroundBrush;
+            return (LRESULT)GetStockObject(WHITE_BRUSH);
         }
         case WM_COMMAND:
             if (LOWORD(wParam) == IDC_SETTINGS_BROWSE) {
@@ -306,6 +330,11 @@ namespace {
                 g_store.sounds_enabled = SendMessageW(state->soundsCheckbox, BM_GETCHECK, 0, 0) == BST_CHECKED;
                 g_store.timer_start_with_app = SendMessageW(state->timerAutoStartCheckbox,
                     BM_GETCHECK, 0, 0) == BST_CHECKED;
+                const int keywordsLength = GetWindowTextLengthW(state->excludedKeywordsEdit);
+                std::wstring keywords(static_cast<size_t>(keywordsLength) + 1, wchar_t());
+                GetWindowTextW(state->excludedKeywordsEdit, keywords.data(), keywordsLength + 1);
+                keywords.resize(static_cast<size_t>(keywordsLength));
+                g_store.excluded_window_keywords = ExcludedApps::Normalize(keywords);
                 g_store.SaveLocal();
                 g_store.CheckWorkReset();
                 DestroyWindow(hWnd);
@@ -351,7 +380,7 @@ void ShowSettingsDialog(HWND owner) {
     EnableWindow(owner, FALSE);
     HWND dialog = CreateWindowExW(WS_EX_DLGMODALFRAME | WS_EX_TOPMOST | WS_EX_CONTROLPARENT,
         DIALOG_CLASS, L"Beállítások", WS_POPUP | WS_CAPTION | WS_SYSMENU,
-        CW_USEDEFAULT, CW_USEDEFAULT, 500, 383, owner, nullptr,
+        CW_USEDEFAULT, CW_USEDEFAULT, SETTINGS_DIALOG_WIDTH, SETTINGS_DIALOG_HEIGHT, owner, nullptr,
         GetModuleHandleW(nullptr), &state);
     if (!dialog) {
         EnableWindow(owner, TRUE);
@@ -366,9 +395,9 @@ void ShowSettingsDialog(HWND owner) {
     RECT ownerRect{};
     GetWindowRect(owner, &ownerRect);
     SetWindowPos(dialog, HWND_TOPMOST,
-        ownerRect.left + ((ownerRect.right - ownerRect.left) - 500) / 2,
-        ownerRect.top + ((ownerRect.bottom - ownerRect.top) - 383) / 2,
-        500, 383, SWP_SHOWWINDOW);
+        ownerRect.left + ((ownerRect.right - ownerRect.left) - SETTINGS_DIALOG_WIDTH) / 2,
+        ownerRect.top + ((ownerRect.bottom - ownerRect.top) - SETTINGS_DIALOG_HEIGHT) / 2,
+        SETTINGS_DIALOG_WIDTH, SETTINGS_DIALOG_HEIGHT, SWP_SHOWWINDOW);
     SetForegroundWindow(dialog);
 
     MSG message{};

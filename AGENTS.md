@@ -35,6 +35,8 @@ The application is modularized under `src/` into focused, single-responsibility 
 - [src/AudioCue.h](src/AudioCue.h) / [src/AudioCue.cpp](src/AudioCue.cpp): Generated WAV cues and asynchronous playback.
 - [src/IntervalTimer.h](src/IntervalTimer.h) / [src/IntervalTimer.cpp](src/IntervalTimer.cpp): Work/rest cycles and the optional 20-20-20 reminder.
 - [src/TimerView.h](src/TimerView.h) / [src/TimerView.cpp](src/TimerView.cpp): Interval timer controls and saved timer configuration.
+- [src/ExcludedApps.h](src/ExcludedApps.h) / [src/ExcludedApps.cpp](src/ExcludedApps.cpp): Configurable comma-separated window-title keywords that pause work-time counting; cached case-insensitive matching.
+- [src/MemoryTrim.h](src/MemoryTrim.h) / [src/MemoryTrim.cpp](src/MemoryTrim.cpp): Debounced one-shot working-set trim after startup, entering mini mode, and hiding to tray.
 - [src/Marker.h](src/Marker.h) / [src/Marker.cpp](src/Marker.cpp): Task marker behavior and presentation.
 - [src/Drawing.h](src/Drawing.h) / [src/Drawing.cpp](src/Drawing.cpp): GDI icon rendering for task, settings, pin, and focus controls, plus DWM titlebar styling.
 - [src/BarTooltips.h](src/BarTooltips.h) / [src/BarTooltips.cpp](src/BarTooltips.cpp): Dynamic tooltip regions for work-history bars.
@@ -43,7 +45,7 @@ The application is modularized under `src/` into focused, single-responsibility 
 - [src/Layout.h](src/Layout.h) / [src/Layout.cpp](src/Layout.cpp): Window geometry, mini-mode transitions, control visibility, and custom scrollbar metrics.
 - [src/Paint.h](src/Paint.h) / [src/Paint.cpp](src/Paint.cpp): Double-buffered GDI rendering for full/mini views and measured/manual work bars.
 - [src/PopupNotice.h](src/PopupNotice.h) / [src/PopupNotice.cpp](src/PopupNotice.cpp): Non-activating notices for newly added tasks.
-- [src/SettingsDialog.h](src/SettingsDialog.h) / [src/SettingsDialog.cpp](src/SettingsDialog.cpp): Settings UI for sync-file path, themes, sound, daily work-reset time, and timer auto-start.
+- [src/SettingsDialog.h](src/SettingsDialog.h) / [src/SettingsDialog.cpp](src/SettingsDialog.cpp): Settings UI for sync-file path, themes, sound, daily work-reset time, timer auto-start, and excluded window-title keywords.
 - [src/UIEventHandler.h](src/UIEventHandler.h) / [src/UIEventHandler.cpp](src/UIEventHandler.cpp): Keyboard/mouse handling, task reordering, commands, and tray interactions.
 - [src/WorkHistory.h](src/WorkHistory.h) / [src/WorkHistory.cpp](src/WorkHistory.cpp): Measured/manual work-history persistence and daily/weekly display aggregation.
 - [src/WorkTimeDialog.h](src/WorkTimeDialog.h) / [src/WorkTimeDialog.cpp](src/WorkTimeDialog.cpp): Date and duration input for manual work-history entries.
@@ -63,7 +65,7 @@ The application is modularized under `src/` into focused, single-responsibility 
 - **Character encoding**: Maintain UTF-8 encoding and compile flags (`/utf-8`, `UNICODE`, `_UNICODE`). Use `std::wstring` and wide-character Win32 API functions (`W` suffixes) throughout the UI. Font creation must use `DEFAULT_CHARSET` to properly render Hungarian accents.
 - **Single instance**: Controlled via named mutex `TaskManager_SingleInstance_Mutex_98741`. A second launch signals the existing window via `WM_HOTKEY` and exits immediately.
 - **Two-tier data persistence**:
-  - Local `tasks-local.json` stores local tasks, `next_id`, active ordering, current and historical work time (including manual entries), reset timestamp, theme, work-reset time, chosen `sync_file_path`, timer durations/repetitions, the 20-20-20 toggle, timer auto-start preference, and sound preference.
+  - Local `tasks-local.json` stores local tasks, `next_id`, active ordering, current and historical work time (including manual entries), reset timestamp, theme, work-reset time, chosen `sync_file_path`, timer durations/repetitions, the 20-20-20 toggle, timer auto-start preference, sound preference, and excluded window-title keywords.
   - OneDrive shared `tasks.json` stores only synchronized tasks (IDs in the 1,000,000+ range), creator (`author`), and assignee; keep local settings and work history out of the shared file.
   - JSON parsing is hand-written. Write operations must use binary/UTF-8 mode and escape strings with `TaskUtils::EscapeJsonString`.
 - **Work timer & focus mode**: Focus mode overrides idle/excluded-app pauses, but session lock always stops counting and disables focus mode; unlocking does not re-enable it. Keep `FocusMode` session-notification registration and unregistration paired.

@@ -874,18 +874,21 @@ void PaintMainWindow(HWND hWnd, HDC hdc) {
 
     std::wstring workStr = TaskUtils::FormatWorkDuration(totalWorkSec);
     double pct = ((double)totalWorkSec / (double)targetWorkSec) * 100.0;
-    wchar_t labelBuf[128];
+    std::wstring label;
     if (g_workMeasurementStopped) {
-        wcscpy_s(labelBuf, _countof(labelBuf), L"Idő mérése szünetel");
+        label = L"Idő mérése szünetel";
     } else if (g_isWorkActive) {
-        swprintf_s(labelBuf, L"Munkaidő: %s (%.0f%%)", workStr.c_str(), pct);
+        wchar_t pctBuf[16];
+        swprintf_s(pctBuf, L"%.0f%%", pct);
+        label = L"Munkaidő: " + workStr + L" (" + pctBuf + L")";
     } else if (g_isExcludedApp) {
-        swprintf_s(labelBuf, L"Munkaidő: %s (Szüneteltetve: %s megnyitva)", workStr.c_str(), g_excludedAppName.c_str());
+        label = L"Munkaidő: " + workStr + L" (Szüneteltetve: " + g_excludedAppName + L" megnyitva)";
     } else {
-        swprintf_s(labelBuf, L"Munkaidő: %s (Szüneteltetve: inaktív)", workStr.c_str());
+        label = L"Munkaidő: " + workStr + L" (Szüneteltetve: inaktív)";
     }
     RECT rcLabel = { dotX + 10, rcTrack.top, rcTrack.right - 10, rcTrack.bottom };
-    DrawTextW(hdcMem, labelBuf, -1, &rcLabel, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
+    DrawTextW(hdcMem, label.c_str(), -1, &rcLabel,
+        DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS | DT_NOPREFIX);
 
     BarTooltips::Update(hWnd, barToolRegions);
     BitBlt(hdc, 0, 0, clientW, clientH, hdcMem, 0, 0, SRCCOPY);

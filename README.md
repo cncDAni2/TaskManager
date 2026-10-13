@@ -57,7 +57,7 @@ Nem ez a program fő funkciója, de hasznos a munkaidő nyomon követésére is.
 - Két perce nem volt billentyű- vagy egéraktivitás.
 - A rendszer zárolva van.
 - Manuálisan szüneteltetted az időmérést
-- Az előtérben lévő ablak címe tartalmazza a Discord, YouTube vagy Facebook nevek egyikét.
+- Az előtérben lévő ablak címe tartalmazza a **Kizárt ablakcímek** egyikét. Ezeket a Beállításokban, vesszővel elválasztva adhatod meg (alapértelmezés: YouTube, Discord, Facebook). A kis- és nagybetű nem számít; fókusz módban a mérés ilyenkor is folytatódik.
 - Bezártad a programot.
 - Az időzítő "STRICT MODE"-ban van, és éppen pihenőidőt mér.
 
@@ -72,7 +72,7 @@ Az időzítő funkció segít az előző részben leírt munka- és pihenőciklu
 
 STRICT MODE: Ha ezt is bepipálod, akkor az időzítő kihatással lesz a munkaidő mérésre, és automatikusan szünetelteti a munkaidő mérést a pihenőidő alatt.
 
-20-20-20 szabály: A szem egészségének megőrzése érdekében minden 20 perc képernyőnézés után nézz 20 másodpercig 20 láb (kb. 6 méter) távolságra. A szabály a munkaidő-méréstől és az intervallum-időzítőtől függetlenül működik, YouTube, Discord és Facebook használata közben is. Két perc billentyű- vagy egérinaktivitás után szünetel, kivéve fókusz módban; a gép zárolásakor mindig szünetel. Rövid hangjelzéssel emlékeztet a program, amikor ideje szünetet tartani (2 csippanás), és mikor vissza kell térni(1 csippanás). A PIN ablakban a számláló szem ikonra vált a szem-pihenő alatt.
+20-20-20 szabály: A szem egészségének megőrzése érdekében minden 20 perc képernyőnézés után nézz 20 másodpercig 20 láb (kb. 6 méter) távolságra. A szabály a munkaidő-méréstől és az intervallum-időzítőtől függetlenül működik, kizárt ablakok (pl. YouTube) használata közben is. Két perc billentyű- vagy egérinaktivitás után szünetel, kivéve fókusz módban; a gép zárolásakor mindig szünetel. Rövid hangjelzéssel emlékeztet a program, amikor ideje szünetet tartani (2 csippanás), és mikor vissza kell térni(1 csippanás). A PIN ablakban a számláló szem ikonra vált a szem-pihenő alatt.
 
 ### Fókusz mód
 

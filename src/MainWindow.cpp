@@ -13,6 +13,7 @@
 #include "IntervalTimer.h"
 #include "TimerView.h"
 #include "MemoryTrim.h"
+#include "ExcludedApps.h"
 #include <windowsx.h>
 #include <commctrl.h>
 #include <algorithm>
@@ -449,18 +450,8 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                 if (hFore) {
                     wchar_t titleBuf[512] = { 0 };
                     GetWindowTextW(hFore, titleBuf, 512);
-                    std::wstring lower = titleBuf;
-                    std::transform(lower.begin(), lower.end(), lower.begin(), ::towlower);
-                    if (lower.find(L"youtube") != std::wstring::npos) {
-                        g_isExcludedApp = true;
-                        g_excludedAppName = L"Youtube";
-                    } else if (lower.find(L"discord") != std::wstring::npos) {
-                        g_isExcludedApp = true;
-                        g_excludedAppName = L"Discord";
-                    } else if (lower.find(L"facebook") != std::wstring::npos) {
-                        g_isExcludedApp = true;
-                        g_excludedAppName = L"Facebook";
-                    }
+                    g_excludedAppName = ExcludedApps::FindMatch(g_store.excluded_window_keywords, titleBuf);
+                    g_isExcludedApp = !g_excludedAppName.empty();
                 }
 
                 bool countWork = !g_workMeasurementStopped && !g_isSessionLocked &&

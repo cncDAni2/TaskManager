@@ -1,6 +1,7 @@
 #pragma once
 
 #include "AppTypes.h"
+#include "ExcludedApps.h"
 #include "TaskUtils.h"
 #include "WorkHistory.h"
 #include <string>
@@ -22,6 +23,7 @@ public:
     bool timer_strict_mode = false;
     bool timer_start_with_app = false;
     bool sounds_enabled = true;
+    std::wstring excluded_window_keywords = ExcludedApps::DEFAULT_KEYWORDS;
     ThemeMode theme_mode = ThemeMode::Dark;
     WorkHistory::Records work_history;
     WorkHistory::Records manual_work_history;
