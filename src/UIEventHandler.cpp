@@ -1,4 +1,5 @@
 #include "UIEventHandler.h"
+#include "TimerHold.h"
 #include "SyncPicker.h"
 #include "Cleanup.h"
 #include "AppState.h"
@@ -887,6 +888,14 @@ bool HandleDrawItem(HWND /*hWnd*/, DRAWITEMSTRUCT* pDIS) {
         return true;
     }
 
+    if (pDIS->CtlID == IDC_TIMER_HOLD_BTN) {
+        TimerHold::DrawButton(pDIS,
+            isPink ? pinkButtonBg : (isSelected ? th.bgCardHover : th.bgHeader),
+            isSelected ? th.borderCardHover : restingBorder,
+            isPink ? RGB(255, 255, 255) : (isSelected ? th.textPrimary : th.textSecondary));
+        return true;
+    }
+
     if (pDIS->CtlID == IDC_FOCUS_MODE_BTN) {
         COLORREF bgBtn = g_focusMode ? RGB(30, 58, 138)
             : (isPink ? pinkButtonBg : (isSelected ? th.bgCardHover : th.bgHeader));
@@ -1048,11 +1057,14 @@ bool HandleAppTray(HWND hWnd, LPARAM lParam) {
         UINT uPinCheck = g_pinMode ? MF_CHECKED : MF_UNCHECKED;
         InsertMenuW(hMenu, 4, MF_BYPOSITION | MF_STRING | uPinCheck, IDM_TRAY_PIN, L"PIN mód (Ctrl+F2)");
 
-        UINT uCheck = IsAutoRunEnabled() ? MF_CHECKED : MF_UNCHECKED;
-        InsertMenuW(hMenu, 5, MF_BYPOSITION | MF_STRING | uCheck, IDM_TRAY_AUTORUN, L"Indítás a Windows-zal");
+        UINT uHoldCheck = TimerHold::IsActive() ? MF_CHECKED : MF_UNCHECKED;
+        InsertMenuW(hMenu, 5, MF_BYPOSITION | MF_STRING | uHoldCheck, IDM_TRAY_HOLD, TimerHold::MenuLabel());
 
-        InsertMenuW(hMenu, 6, MF_BYPOSITION | MF_SEPARATOR, 0, nullptr);
-        InsertMenuW(hMenu, 7, MF_BYPOSITION | MF_STRING, IDM_TRAY_EXIT, L"Kilépés");
+        UINT uCheck = IsAutoRunEnabled() ? MF_CHECKED : MF_UNCHECKED;
+        InsertMenuW(hMenu, 6, MF_BYPOSITION | MF_STRING | uCheck, IDM_TRAY_AUTORUN, L"Indítás a Windows-zal");
+
+        InsertMenuW(hMenu, 7, MF_BYPOSITION | MF_SEPARATOR, 0, nullptr);
+        InsertMenuW(hMenu, 8, MF_BYPOSITION | MF_STRING, IDM_TRAY_EXIT, L"Kilépés");
 
         SetForegroundWindow(hWnd);
         TrackPopupMenu(hMenu, TPM_RIGHTALIGN | TPM_BOTTOMALIGN, pt.x, pt.y, 0, hWnd, nullptr);

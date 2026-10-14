@@ -7,6 +7,7 @@
 #include "BarTooltips.h"
 #include "Marker.h"
 #include "IntervalTimer.h"
+#include "TimerHold.h"
 #include "TimerView.h"
 
 namespace {
@@ -121,8 +122,9 @@ void PaintMiniWindow(HWND hWnd, HDC hdc) {
     if (g_intervalTimer.IsActive() || g_intervalTimer.IsVisionBreakActive()) {
         const RECT rcTimer = GetMiniTimerTextRect(clientW);
         const bool workPhase = g_intervalTimer.IsWorkPhase();
-        const COLORREF timerColor = workPhase ? RGB(220, 38, 38) : RGB(37, 99, 235);
-        const COLORREF timerBorder = workPhase ? RGB(185, 28, 28) : RGB(29, 78, 216);
+        const bool held = TimerHold::IsActive();
+        const COLORREF timerColor = held ? RGB(107, 114, 128) : (workPhase ? RGB(220, 38, 38) : RGB(37, 99, 235));
+        const COLORREF timerBorder = held ? RGB(75, 85, 99) : (workPhase ? RGB(185, 28, 28) : RGB(29, 78, 216));
         HBRUSH timerBrush = CreateSolidBrush(timerColor);
         HPEN timerPen = CreatePen(PS_SOLID, 1, timerBorder);
         HGDIOBJ oldTimerBrush = SelectObject(hdcMem, timerBrush);
@@ -265,7 +267,8 @@ void PaintMiniWindow(HWND hWnd, HDC hdc) {
     }
 
     RECT rcTrackBg = { 0, clientH - 3, clientW, clientH };
-    COLORREF bgTrack = g_workMeasurementStopped ? RGB(75, 85, 99)
+    const bool miniWorkGray = g_workMeasurementStopped || TimerHold::IsActive();
+    COLORREF bgTrack = miniWorkGray ? RGB(75, 85, 99)
         : (g_themeMode == ThemeMode::Pink ? RGB(217, 0, 108) : th.borderSep);
     HBRUSH hBrTrackBg = CreateSolidBrush(bgTrack);
     FillRect(hdcMem, &rcTrackBg, hBrTrackBg);
@@ -275,10 +278,10 @@ void PaintMiniWindow(HWND hWnd, HDC hdc) {
     const int targetWorkSec = DAILY_WORK_TARGET_SECONDS;
     int manualSec = CurrentManualWorkSeconds();
     RECT rcMiniBar = { 0, clientH - 3, clientW, clientH };
-    COLORREF miniBarFill = g_workMeasurementStopped ? RGB(156, 163, 175)
+    COLORREF miniBarFill = miniWorkGray ? RGB(156, 163, 175)
         : (g_isWorkActive ? RGB(34, 197, 94) : RGB(239, 68, 68));
     DrawBarSegments(hdcMem, rcMiniBar, workSec, manualSec, targetWorkSec,
-        miniBarFill, g_workMeasurementStopped ? miniBarFill : RGB(245, 158, 11));
+        miniBarFill, miniWorkGray ? miniBarFill : RGB(245, 158, 11));
     std::vector<BarTooltips::Region> barToolRegions = {
         { rcMiniBar, BuildWorkTooltip(workSec, manualSec) }
     };
@@ -391,7 +394,8 @@ void PaintMainWindow(HWND hWnd, HDC hdc) {
             RECT rcBar = entry.isWeeklySummary
                 ? RECT{ 145, rowTop + 5, clientW - 20, rowTop + 12 }
                 : RECT{ 145, rowTop + 7, clientW - 20, rowTop + 10 };
-            const bool grayCurrentDay = g_workMeasurementStopped && entry.isCurrentDay;
+            const bool grayCurrentDay = (g_workMeasurementStopped || TimerHold::IsActive()) &&
+                entry.isCurrentDay;
             HBRUSH hTrack = CreateSolidBrush(grayCurrentDay ? RGB(75, 85, 99) : hc.barTrack);
             FillRect(hdcMem, &rcBar, hTrack);
             DeleteObject(hTrack);
@@ -488,9 +492,20 @@ void PaintMainWindow(HWND hWnd, HDC hdc) {
         const bool showAutoStartWarning = TimerView::ShouldShowAutoStartWarning();
         SetTextColor(hdcMem, th.textSecondary);
         RECT rcTimerExplanation = { 20, 58, clientW - 20, 88 };
-        DrawTextW(hdcMem,
-            L"A munkaidő-mérésre nincs hatással; csak hang- és vizuális jelzést ad.",
-            -1, &rcTimerExplanation, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+        if (TimerHold::IsActive()) {
+            RECT rcHoldWarning = { 20, 62, clientW - 20, 84 };
+            HBRUSH holdBrush = CreateSolidBrush(RGB(255, 214, 10));
+            FillRect(hdcMem, &rcHoldWarning, holdBrush);
+            DeleteObject(holdBrush);
+            SetTextColor(hdcMem, RGB(45, 35, 0));
+            DrawTextW(hdcMem, L"Időstop aktív: a visszaszámlálás csak folytatáskor indul (Ctrl+F3)",
+                -1, &rcHoldWarning, DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS);
+            SetTextColor(hdcMem, th.textSecondary);
+        } else {
+            DrawTextW(hdcMem,
+                L"A munkaidő-mérésre nincs hatással; csak hang- és vizuális jelzést ad.",
+                -1, &rcTimerExplanation, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+        }
         if (showAutoStartWarning) {
             RECT rcWarning = { panel.left + 32, panel.bottom - 26, panel.right - 32, panel.bottom - 8 };
             HBRUSH warningBrush = CreateSolidBrush(RGB(255, 214, 10));
@@ -809,8 +824,11 @@ void PaintMainWindow(HWND hWnd, HDC hdc) {
         SelectObject(hdcMem, g_hFontSmall);
         SetBkMode(hdcMem, TRANSPARENT);
         SetTextColor(hdcMem, g_themeMode == ThemeMode::Dark ? RGB(255, 255, 255) : RGB(0, 0, 0));
-        const std::wstring timerStatus = (g_intervalTimer.IsPaused()
-            ? L"Szüneteltetve...    " : (workPhase ? L"Munka    " : L"Pihenés    ")) +
+        const std::wstring timerStatus = std::wstring(TimerHold::IsActive() ? L"Időstop · " : L"") +
+            (g_intervalTimer.IsPaused()
+            ? L"Szüneteltetve...    "
+            : g_intervalTimer.IsAwaitingActivity() ? L"Munka (aktivitásra vár)    "
+            : (workPhase ? L"Munka    " : L"Pihenés    ")) +
             FormatTimerTime(secondsRemaining) + L" (" +
             std::to_wstring(g_intervalTimer.CurrentRepetition()) + L"/" +
             std::to_wstring(g_intervalTimer.RepetitionCount()) + L")";
@@ -831,9 +849,10 @@ void PaintMainWindow(HWND hWnd, HDC hdc) {
     DeleteObject(hPenBotBorder);
 
     RECT rcTrack = { 10, rcBottom.top + 3, clientW - 10, rcBottom.bottom - 3 };
-    COLORREF borderTrack = g_workMeasurementStopped ? RGB(107, 114, 128)
+    const bool workGray = g_workMeasurementStopped || TimerHold::IsActive();
+    COLORREF borderTrack = workGray ? RGB(107, 114, 128)
         : (isHistory ? hc.barBorder : (g_darkMode ? RGB(255, 255, 255) : th.textSecondary));
-    COLORREF bgTrack = g_workMeasurementStopped ? RGB(75, 85, 99)
+    COLORREF bgTrack = workGray ? RGB(75, 85, 99)
         : (isHistory ? hc.barTrack : (g_darkMode ? RGB(28, 28, 34) : th.borderSep));
 
     HBRUSH hBrTrack = CreateSolidBrush(bgTrack);
@@ -849,16 +868,16 @@ void PaintMainWindow(HWND hWnd, HDC hdc) {
     int totalWorkSec = workSec + manualSec;
     const int targetWorkSec = DAILY_WORK_TARGET_SECONDS;
     RECT rcFill = { rcTrack.left + 1, rcTrack.top + 1, rcTrack.right - 1, rcTrack.bottom - 1 };
-    COLORREF measuredColor = g_workMeasurementStopped ? RGB(156, 163, 175)
+    COLORREF measuredColor = workGray ? RGB(156, 163, 175)
         : (g_isWorkActive ? RGB(59, 130, 246) : RGB(71, 85, 105));
-    COLORREF manualColor = g_workMeasurementStopped ? measuredColor : RGB(245, 158, 11);
+    COLORREF manualColor = workGray ? measuredColor : RGB(245, 158, 11);
     DrawBarSegments(hdcMem, rcFill, workSec, manualSec, targetWorkSec, measuredColor, manualColor);
     barToolRegions.push_back({ rcTrack, BuildWorkTooltip(workSec, manualSec) });
 
     int dotY = rcTrack.top + (rcTrack.bottom - rcTrack.top) / 2;
     int dotX = rcTrack.left + 10;
     COLORREF dotCol = RGB(156, 163, 175);
-    if (g_workMeasurementStopped) {
+    if (workGray) {
         dotCol = RGB(156, 163, 175);
     } else if (g_isWorkActive) {
         dotCol = RGB(34, 197, 94);
@@ -881,7 +900,9 @@ void PaintMainWindow(HWND hWnd, HDC hdc) {
     std::wstring workStr = TaskUtils::FormatWorkDuration(totalWorkSec);
     double pct = ((double)totalWorkSec / (double)targetWorkSec) * 100.0;
     std::wstring label;
-    if (g_workMeasurementStopped) {
+    if (TimerHold::IsActive()) {
+        label = L"Időstop: a munkaidő-mérés áll (Ctrl+F3)";
+    } else if (g_workMeasurementStopped) {
         label = L"Idő mérése szünetel";
     } else if (g_isWorkActive) {
         wchar_t pctBuf[16];

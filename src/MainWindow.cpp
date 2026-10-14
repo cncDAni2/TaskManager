@@ -11,6 +11,7 @@
 #include "SettingsDialog.h"
 #include "TaskUtils.h"
 #include "IntervalTimer.h"
+#include "TimerHold.h"
 #include "TimerView.h"
 #include "MemoryTrim.h"
 #include "ExcludedApps.h"
@@ -194,6 +195,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             g_hFocusModeBtn = CreateWindowW(L"BUTTON", L"",
                 WS_CHILD | WS_VISIBLE | BS_OWNERDRAW | WS_TABSTOP,
                 252, 10, 28, 28, hWnd, (HMENU)IDC_FOCUS_MODE_BTN, hInst, nullptr);
+            TimerHold::CreateButton(hWnd, hInst);
 
             g_hManualWorkBtn = CreateWindowW(L"BUTTON", L"Manuális",
                 WS_CHILD | BS_OWNERDRAW | WS_TABSTOP,
@@ -316,6 +318,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 
             RegisterHotKey(hWnd, ID_HOTKEY_TOGGLE, MOD_CONTROL, VK_F1);
             RegisterHotKey(hWnd, ID_HOTKEY_UNPIN, MOD_CONTROL, VK_F2);
+            RegisterHotKey(hWnd, ID_HOTKEY_HOLD, MOD_CONTROL, VK_F3);
             FocusMode::RegisterSessionNotifications(hWnd);
 
             SetTimer(hWnd, IDT_WORK_TIMER, 1000, nullptr);
@@ -458,7 +461,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                     g_isExcludedApp = !g_excludedAppName.empty();
                 }
 
-                bool countWork = !g_workMeasurementStopped && !g_isSessionLocked &&
+                bool countWork = !g_workMeasurementStopped && !TimerHold::IsActive() && !g_isSessionLocked &&
                     (g_focusMode || (!g_isIdlePaused && !g_isExcludedApp));
                 g_isWorkActive = countWork;
 
@@ -480,8 +483,13 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                         (g_isIdlePaused && !g_focusMode));
                 if (shouldPauseStrictWorkTimer) g_intervalTimer.PauseForMeasurement();
                 else g_intervalTimer.ResumeFromMeasurement();
-                g_intervalTimer.SetVisionBreakScreenActive(!g_isSessionLocked &&
-                    (g_focusMode || !g_isIdlePaused));
+                const bool userActive = !g_isSessionLocked && (g_focusMode || !g_isIdlePaused);
+                g_intervalTimer.SetVisionBreakScreenActive(userActive);
+                const bool timerWasAwaiting = g_intervalTimer.IsAwaitingActivity();
+                g_intervalTimer.SetUserActive(userActive);
+                if (timerWasAwaiting && !g_intervalTimer.IsAwaitingActivity() && IsWindowVisible(hWnd)) {
+                    InvalidateRect(hWnd, nullptr, FALSE);
+                }
 
                 static int s_syncTimer = 0;
                 s_syncTimer++;
@@ -529,6 +537,8 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         case WM_HOTKEY: {
             if (wParam == ID_HOTKEY_TOGGLE) {
                 ToggleWindow();
+            } else if (wParam == ID_HOTKEY_HOLD) {
+                TimerHold::Toggle();
             } else if (wParam == ID_HOTKEY_UNPIN) {
                 if (IsWindowVisible(hWnd)) {
                     g_pinMode = false;
@@ -591,6 +601,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         case WM_COMMAND: {
             if (TimerView::HandleCommand(hWnd, wParam)) return 0;
             if (Cleanup::HandleCommand(hWnd, wParam)) return 0;
+            if (TimerHold::HandleCommand(LOWORD(wParam))) return 0;
             if (HandleCommand(hWnd, LOWORD(wParam))) return 0;
             break;
         }
@@ -734,6 +745,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             FocusMode::UnregisterSessionNotifications(hWnd);
             UnregisterHotKey(hWnd, ID_HOTKEY_TOGGLE);
             UnregisterHotKey(hWnd, ID_HOTKEY_UNPIN);
+            UnregisterHotKey(hWnd, ID_HOTKEY_HOLD);
             Shell_NotifyIconW(NIM_DELETE, &g_nid);
             if (g_hIcon) DestroyIcon(g_hIcon);
             if (g_hEditBrush) DeleteObject(g_hEditBrush);

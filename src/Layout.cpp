@@ -1,4 +1,5 @@
 #include "Layout.h"
+#include "TimerHold.h"
 #include "AppState.h"
 #include "InlineEdit.h"
 #include "IntervalTimer.h"
@@ -133,6 +134,7 @@ void UpdateControlsVisibility() {
         ShowWindow(g_hTimeHistoryBtn, SW_HIDE);
         ShowWindow(g_hWorkMeasureBtn, SW_HIDE);
         ShowWindow(g_hFocusModeBtn, SW_HIDE);
+        TimerHold::UpdateVisibility(false);
         ShowWindow(g_hManualWorkBtn, SW_HIDE);
         ShowWindow(g_hCloseBtn, SW_HIDE);
         ShowWindow(g_hPinBtn, SW_HIDE);
@@ -144,6 +146,7 @@ void UpdateControlsVisibility() {
     ShowWindow(g_hCloseBtn, SW_SHOW);
     ShowWindow(g_hPinBtn, SW_SHOW);
     ShowWindow(g_hFocusModeBtn, SW_SHOW);
+    TimerHold::UpdateVisibility(true);
     ShowWindow(g_hSettingsBtn, SW_SHOW);
     ShowWindow(g_hTimerBtn, SW_SHOW);
     ShowWindow(g_hToggleViewBtn, SW_SHOW);

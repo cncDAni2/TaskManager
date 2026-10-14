@@ -36,6 +36,7 @@
 #define IDC_TIMER_NEXT_BTN 2023
 #define IDC_CLEANUP_EDIT    2024
 #define IDC_CLEANUP_BTN     2025
+#define IDC_TIMER_HOLD_BTN  2026
 
 // System Tray and Menu IDs
 #define IDM_TRAY_OPEN       3001
@@ -44,10 +45,12 @@
 #define IDM_TRAY_AUTORUN    3004
 #define IDM_TRAY_TIMER      3005
 #define IDM_TRAY_EXIT       3006
+#define IDM_TRAY_HOLD       3007
 
 // Hotkey IDs
 #define ID_HOTKEY_TOGGLE    1001
 #define ID_HOTKEY_UNPIN     1002
+#define ID_HOTKEY_HOLD      1003
 
 // Custom Messages and Timers
 #define WM_APP_TRAY         (WM_APP + 100)

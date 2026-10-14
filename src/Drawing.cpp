@@ -1,6 +1,7 @@
 #include "Drawing.h"
 #include <dwmapi.h>
 #include <cmath>
+#include <utility>
 
 #ifndef DWMWA_USE_IMMERSIVE_DARK_MODE
 #define DWMWA_USE_IMMERSIVE_DARK_MODE 20
@@ -9,6 +10,95 @@
 void ApplyDarkModeTitleBar(HWND hWnd, bool dark) {
     BOOL useDark = dark ? TRUE : FALSE;
     DwmSetWindowAttribute(hWnd, DWMWA_USE_IMMERSIVE_DARK_MODE, &useDark, sizeof(useDark));
+}
+
+void DrawHandIcon(HDC hdc, const RECT& rc, COLORREF color) {
+    // GDI has no anti-aliasing: draw the shape 4x larger, shrink it with HALFTONE
+    // averaging, and use the result as coverage to blend the color over the button.
+    constexpr int kSize = 20;
+    constexpr int kScale = 4;
+    constexpr int kBig = kSize * kScale;
+    const int left = rc.left + (rc.right - rc.left - kSize) / 2;
+    const int top = rc.top + (rc.bottom - rc.top - kSize) / 2;
+
+    auto createDib = [hdc](int size, HDC& dc, DWORD*& bits) {
+        BITMAPINFO bi{};
+        bi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+        bi.bmiHeader.biWidth = size;
+        bi.bmiHeader.biHeight = -size;
+        bi.bmiHeader.biPlanes = 1;
+        bi.bmiHeader.biBitCount = 32;
+        bi.bmiHeader.biCompression = BI_RGB;
+        void* raw = nullptr;
+        HBITMAP bmp = CreateDIBSection(hdc, &bi, DIB_RGB_COLORS, &raw, nullptr, 0);
+        dc = CreateCompatibleDC(hdc);
+        bits = static_cast<DWORD*>(raw);
+        return std::make_pair(bmp, SelectObject(dc, bmp));
+    };
+
+    HDC bigDc = nullptr, maskDc = nullptr, destDc = nullptr;
+    DWORD* bigBits = nullptr;
+    DWORD* maskBits = nullptr;
+    DWORD* destBits = nullptr;
+    auto big = createDib(kBig, bigDc, bigBits);
+    auto mask = createDib(kSize, maskDc, maskBits);
+    auto dest = createDib(kSize, destDc, destBits);
+
+    if (bigBits && maskBits && destBits) {
+        LOGBRUSH lb{ BS_SOLID, RGB(255, 255, 255), 0 };
+        HPEN fingerPen = ExtCreatePen(PS_GEOMETRIC | PS_SOLID | PS_ENDCAP_ROUND, 11, &lb, 0, nullptr);
+        HGDIOBJ oldPen = SelectObject(bigDc, fingerPen);
+        const POINT fingers[4][2] = {
+            { { 12, 30 }, { 12, 52 } }, { { 28, 14 }, { 28, 52 } },
+            { { 44, 11 }, { 44, 52 } }, { { 60, 18 }, { 60, 52 } } };
+        for (const auto& finger : fingers) {
+            MoveToEx(bigDc, finger[0].x, finger[0].y, nullptr);
+            LineTo(bigDc, finger[1].x, finger[1].y);
+        }
+        MoveToEx(bigDc, 56, 64, nullptr);
+        LineTo(bigDc, 73, 43);
+        SelectObject(bigDc, GetStockObject(NULL_PEN));
+        HBRUSH white = CreateSolidBrush(RGB(255, 255, 255));
+        HGDIOBJ oldBrush = SelectObject(bigDc, white);
+        RoundRect(bigDc, 6, 40, 67, 79, 30, 30);
+        Rectangle(bigDc, 6, 40, 67, 60);
+        // Straight edge from the thumb's underside, tangent to the palm's rounded corner.
+        const POINT thumbBase[] = { { 73, 43 }, { 77, 47 }, { 66, 71 }, { 52, 64 } };
+        Polygon(bigDc, thumbBase, 4);
+        SelectObject(bigDc, oldBrush);
+        SelectObject(bigDc, oldPen);
+        DeleteObject(white);
+        DeleteObject(fingerPen);
+
+        SetStretchBltMode(maskDc, HALFTONE);
+        SetBrushOrgEx(maskDc, 0, 0, nullptr);
+        StretchBlt(maskDc, 0, 0, kSize, kSize, bigDc, 0, 0, kBig, kBig, SRCCOPY);
+        GdiFlush();
+        BitBlt(destDc, 0, 0, kSize, kSize, hdc, left, top, SRCCOPY);
+        GdiFlush();
+
+        const int r = GetRValue(color), g = GetGValue(color), b = GetBValue(color);
+        for (int i = 0; i < kSize * kSize; ++i) {
+            const int a = maskBits[i] & 0xFF;
+            if (a == 0) continue;
+            const DWORD px = destBits[i];
+            const int db = px & 0xFF, dg = (px >> 8) & 0xFF, dr = (px >> 16) & 0xFF;
+            destBits[i] = static_cast<DWORD>(((dr * (255 - a) + r * a) / 255) << 16 |
+                ((dg * (255 - a) + g * a) / 255) << 8 | ((db * (255 - a) + b * a) / 255));
+        }
+        BitBlt(hdc, left, top, kSize, kSize, destDc, 0, 0, SRCCOPY);
+    }
+
+    auto release = [](HDC dc, const std::pair<HBITMAP, HGDIOBJ>& dib) {
+        if (dc) {
+            SelectObject(dc, dib.second);
+            DeleteDC(dc);
+        }
+        if (dib.first) DeleteObject(dib.first);
+    };
+    release(bigDc, big);
+    release(maskDc, mask);
+    release(destDc, dest);
 }
 
 HICON GenerateAppIcon() {

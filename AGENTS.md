@@ -37,6 +37,7 @@ The application is modularized under `src/` into focused, single-responsibility 
 - [src/TaskUtils.h](src/TaskUtils.h) / [src/TaskUtils.cpp](src/TaskUtils.cpp): UTF-8/wide conversion, JSON escaping, date/time formatting, configurable work-reset cutoffs, and user/path helpers.
 - [src/AudioCue.h](src/AudioCue.h) / [src/AudioCue.cpp](src/AudioCue.cpp): Generated WAV cues and asynchronous playback.
 - [src/IntervalTimer.h](src/IntervalTimer.h) / [src/IntervalTimer.cpp](src/IntervalTimer.cpp): Work/rest cycles and the optional 20-20-20 reminder.
+- [src/TimerHold.h](src/TimerHold.h) / [src/TimerHold.cpp](src/TimerHold.cpp): "Időstop" toggle (Ctrl+F3, tray item, hand button) that freezes work-time measurement, the interval timer and the 20-20-20 reminder; runtime-only, the 20-20-20 cycle restarts on release.
 - [src/TimerView.h](src/TimerView.h) / [src/TimerView.cpp](src/TimerView.cpp): Interval timer controls and saved timer configuration.
 - [src/ExcludedApps.h](src/ExcludedApps.h) / [src/ExcludedApps.cpp](src/ExcludedApps.cpp): Configurable comma-separated window-title keywords that pause work-time counting; cached case-insensitive matching.
 - [src/Cleanup.h](src/Cleanup.h) / [src/Cleanup.cpp](src/Cleanup.cpp): Cleanup bar below the header in the completed (old tasks, days) and work-history (old work time, weeks) views, with confirmation; remembered values `cleanup_days` / `cleanup_weeks`.

@@ -273,7 +273,9 @@ bool TimerView::ShouldShowAutoStartWarning() {
 void TimerView::HandlePhaseChange() {
     if (!g_store.timer_strict_mode) return;
     if (g_intervalTimer.IsWorkPhase()) {
-        if (g_intervalTimer.IsRunning()) SetWorkMeasurementStopped(false);
+        if (g_intervalTimer.IsRunning() || g_intervalTimer.IsAwaitingActivity()) {
+            SetWorkMeasurementStopped(false);
+        }
     } else {
         SetWorkMeasurementStopped(true);
     }

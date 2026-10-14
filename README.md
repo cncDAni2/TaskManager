@@ -6,6 +6,7 @@ Az alkalmazás elsősorban a teendők gyors és egyszerű kezelésére szolgál,
 
 - Ctrl+F1: Feladatkezelő főablak megnyitása
 - Ctrl+F2: PIN mód bekapcsolása / kikapcsolása
+- Ctrl+F3: Időzítők megállítása / folytatása (Időstop)
 
 A főablak megnyitásakor az új feladat felvételére szolgáló mező azonnal fókuszt kap. Nyomd meg a Ctrl+F1 billentyűkombinációt, írd be az új feladatot, majd nyomj Entert.  
 Ha folyamatosan látni szeretnéd a feladataidat, a Ctrl+F2 billentyűkombinációval mini nézetet jeleníthetsz meg. Újabb Ctrl+F2-re a nézet eltűnik.  
@@ -80,15 +81,21 @@ A százalékos kijelző a 8 órás munkaidőhöz viszonyítva mutatja az eltelt 
 
 ### Időzítő: Munka/pihenés
 
-Az időzítő funkció segít az előző részben leírt munka- és pihenőciklusok betartásában. Kattints a főablakban a stopperóra ikonra. Itt beállíthatod a munka- és pihenőidő hosszát. A Start és a Pause gombbal elindíthatod, illetve szüneteltetheted az időzítőt; a Következő gombbal pedig azonnal továbbléphetsz a következő szakaszra. A program hangjelzéssel és a PIN ablak rövid villogtatásával jelzi a váltást.
+Az időzítő funkció segít az előző részben leírt munka- és pihenőciklusok betartásában. Kattints a főablakban a stopperóra ikonra. Itt beállíthatod a munka- és pihenőidő hosszát. A Start és a Pause gombbal elindíthatod, illetve szüneteltetheted az időzítőt; a Következő gombbal pedig azonnal továbbléphetsz a következő szakaszra. A program hangjelzéssel és a PIN ablak rövid villogtatásával jelzi a váltást. Ha a pihenőidő végén a gép zárolva van, vagy két perce nincs billentyű- vagy egéraktivitás (fókusz módban csak a zárolás számít), akkor a munkaszakasz hangjelzéssel elindul, de a visszaszámlálás csak az első aktivitásnál kezdődik ("Munka (aktivitásra vár)").
 
 STRICT MODE: Ha ezt is bepipálod, akkor az időzítő kihatással lesz a munkaidő mérésre, és automatikusan szünetelteti a munkaidő mérést a pihenőidő alatt.
 
-20-20-20 szabály: A szem egészségének megőrzése érdekében minden 20 perc képernyőnézés után nézz 20 másodpercig 20 láb (kb. 6 méter) távolságra. A szabály a munkaidő-méréstől és az intervallum-időzítőtől függetlenül működik, kizárt ablakok (pl. YouTube) használata közben is. Két perc billentyű- vagy egérinaktivitás után szünetel, kivéve fókusz módban; a gép zárolásakor mindig szünetel. Rövid hangjelzéssel emlékeztet a program, amikor ideje szünetet tartani (2 csippanás), és mikor vissza kell térni(1 csippanás). A PIN ablakban a számláló szem ikonra vált a szem-pihenő alatt.
+20-20-20 szabály: A szem egészségének megőrzése érdekében minden 20 perc képernyőnézés után nézz 20 másodpercig 20 láb (kb. 6 méter) távolságra. A szabály a munkaidő-méréstől és az intervallum-időzítőtől függetlenül működik, kizárt ablakok (pl. YouTube) használata közben is. Két perc billentyű- vagy egérinaktivitás után szünetel, kivéve fókusz módban; a gép zárolásakor mindig szünetel. Rövid hangjelzéssel emlékeztet a program, amikor ideje szünetet tartani (2 csippanás), és mikor vissza kell térni (1 csippanás). A következő 20 perc csak a szünet utáni első billentyű- vagy egéraktivitással kezd el telni. A PIN ablakban a számláló szem ikonra vált a szem-pihenő alatt.
 
 ### Fókusz mód
 
 Fókusz mód a főablakban és a PIN ablakban is elérhető (célkereszt ikon). Bekapcsolásakor a program az inaktivitás és a kizárt alkalmazások ellenére is méri az időt, amíg a gépet le nem zárolod, vagy ki nem kapcsolod a fókusz módot. A bekapcsolt mód ikonja kék.
+
+### Időstop (időzítők megállítása)
+
+Egy különleges állapot, amely egyszerre megállít mindent, ami az időt számolja: a munkaidő-mérést, a munka/pihenés időzítőt és a 20-20-20 szabályt. Bekapcsolható a Ctrl+F3 billentyűkombinációval, a főablak tenyér ikonjával (a fókusz mód gombja mellett) vagy a tálca helyi menüjéből („Időzítők megállítása” / „Időzítők folytatása”). Bekapcsolva a gomb kék hátteret kap, a munkaidő-sáv szürke és „Időstop” feliratot mutat.
+
+Ez nem azonos a gombok egyenkénti leállításával: az időzítő és a mérés saját állapota megmarad. Az időzítő gombjai Időstop alatt is használhatók, de a visszaszámlálás csak folytatáskor indul. Folytatáskor a munkaidő-mérés újraindul (ha nem állítottad le kézzel), az időzítő onnan folytatódik, ahol megállt, a 20-20-20 szabály pedig újrakezdődik egy teljes 20 perces képernyőidővel. Az állapot nem mentődik: újraindításkor az alkalmazás normál állapotban indul.
 
 ## Erőforrásigény és fordítás
 
@@ -97,7 +104,7 @@ Közel 0 erőforrásigény:
 - Elsődleges cél a minimális erőforrásigény biztosítása.
 - Tiszta Win32 C++ (nincs keretrendszer, nincs háttérben pörgő felesleges szál vagy timer).
 - Eseményvezérelt `GetMessage` üzenetciklus (0% CPU tétlen állapotban).
-- Minimális memóriahasználat: 800KB - 2MB.
+- Minimális memóriahasználat (0.5MB - 1.5MB)
 - Elrejtéskor a rendszer automatikusan kiüríti a memóriát (`SetProcessWorkingSetSize`), így az alkalmazás minimális memóriát foglal.
 - Nincsenek külső hangfájlok: az alkalmazás memóriában generálja a hangokat.
 
@@ -107,4 +114,4 @@ A mellékelt `build.bat` parancsfájl azonnal lefordítja az alkalmazást:
 build.bat
 ```
 
-A generált futtatható fájl: `TaskManager.exe` (~550 KB méretű önálló natív exe). A fordítás köztes fájljai a `dist/` mappába kerülnek.
+A generált futtatható fájl: `TaskManager.exe` (~650 KB méretű önálló natív exe)
