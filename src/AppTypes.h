@@ -37,6 +37,7 @@
 #define IDC_CLEANUP_EDIT    2024
 #define IDC_CLEANUP_BTN     2025
 #define IDC_TIMER_HOLD_BTN  2026
+#define IDC_WORK_TRACKING_BTN 2027
 
 // System Tray and Menu IDs
 #define IDM_TRAY_OPEN       3001

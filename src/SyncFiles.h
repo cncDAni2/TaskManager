@@ -1,6 +1,7 @@
 #pragma once
 
 #include <windows.h>
+#include "JsonLite.h"
 #include <ctime>
 #include <map>
 #include <string>
@@ -19,6 +20,15 @@ struct SyncRecord {
     std::wstring author;
     std::wstring assignee;
     bool deleted = false;
+    // Members this version does not know (written by a newer one); kept and written back unchanged.
+    std::vector<JsonLite::Member> extras;
+};
+
+// File-level data besides the tasks.
+struct SyncFileInfo {
+    std::string appVersion; // Version of the app that last wrote the file; empty for older writers.
+    std::vector<JsonLite::Member> extras; // Unknown top-level members, written back unchanged.
+    std::vector<std::string> unknownKeys; // Unknown member names anywhere in the file (for the version hint).
 };
 
 // A configured shared file. `id` is a local, never-reused identifier.
@@ -38,8 +48,11 @@ namespace SyncFiles {
     enum class ReadResult { Ok, Missing, Error };
 
     // Error means the file exists but is unreadable or truncated; callers must not overwrite it.
-    ReadResult Read(const std::wstring& path, std::vector<SyncRecord>& records, FILETIME& writeTime);
-    bool Write(const std::wstring& path, const std::vector<SyncRecord>& records, FILETIME& writeTime);
+    ReadResult Read(const std::wstring& path, std::vector<SyncRecord>& records, SyncFileInfo& info,
+        FILETIME& writeTime);
+    // Stamps the file with this app's version; unknown members in `info` and the records are kept.
+    bool Write(const std::wstring& path, const std::vector<SyncRecord>& records, const SyncFileInfo& info,
+        FILETIME& writeTime);
     bool GetWriteTime(const std::wstring& path, FILETIME& writeTime);
 
     // Keeps the most recently updated version of every uid.

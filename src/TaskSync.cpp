@@ -29,7 +29,7 @@ void TaskStore::SetSyncSources(const std::vector<SyncSource>& sources) {
         // A newly named file is created right away, so it can be shared before the first task.
         if (GetFileAttributesW(copy.path.c_str()) == INVALID_FILE_ATTRIBUTES &&
             GetLastError() == ERROR_FILE_NOT_FOUND) {
-            SyncFiles::Write(copy.path, {}, copy.lastWrite);
+            SyncFiles::Write(copy.path, {}, SyncFileInfo(), copy.lastWrite);
             copy.lastWrite = { 0, 0 }; // Still read it on the reload below.
         }
         syncSources.push_back(copy);
@@ -74,8 +74,10 @@ void TaskStore::RewriteSource(SyncSource& source, const SyncFiles::RecordMap* wi
 
     // Read -> merge -> write, so changes made by others since our last read are kept.
     std::vector<SyncRecord> fresh;
+    SyncFileInfo info;
     FILETIME writeTime{};
-    if (SyncFiles::Read(source.path, fresh, writeTime) == SyncFiles::ReadResult::Error) return;
+    if (SyncFiles::Read(source.path, fresh, info, writeTime) == SyncFiles::ReadResult::Error) return;
+    NoteVersionHint(source, info);
 
     bool changed = false;
     if (winners) changed |= SyncFiles::ApplyNewer(fresh, *winners);
@@ -85,11 +87,18 @@ void TaskStore::RewriteSource(SyncSource& source, const SyncFiles::RecordMap* wi
     changed |= SyncFiles::PurgeTombstones(fresh, time(nullptr));
 
     if (changed) {
-        if (!SyncFiles::Write(source.path, fresh, writeTime)) return;
+        if (!SyncFiles::Write(source.path, fresh, info, writeTime)) return;
         source.lastWrite = writeTime;
     }
     source.pendingWrites.clear();
     source.records = std::move(fresh);
+}
+
+void TaskStore::NoteVersionHint(const SyncSource& source, const SyncFileInfo& info) {
+    VersionNotice notice;
+    if (!VersionHint::Describe(source.name, info, notice)) return;
+    if (!shownVersionHints.insert(source.path + L"|" + notice.heading + L"|" + notice.body).second) return;
+    pendingVersionNotices.push_back(notice);
 }
 
 void TaskStore::ReloadSync(bool forceAll, bool silent) {
@@ -102,9 +111,11 @@ void TaskStore::ReloadSync(bool forceAll, bool silent) {
         }
 
         std::vector<SyncRecord> records;
+        SyncFileInfo info;
         FILETIME writeTime{};
-        switch (SyncFiles::Read(source.path, records, writeTime)) {
+        switch (SyncFiles::Read(source.path, records, info, writeTime)) {
         case SyncFiles::ReadResult::Ok:
+            NoteVersionHint(source, info);
             for (const SyncRecord& pending : source.pendingWrites) SyncFiles::Upsert(records, pending);
             source.records = std::move(records);
             source.lastWrite = writeTime;
@@ -187,6 +198,14 @@ SyncRecord TaskStore::MakeSyncRecord(Task& task, bool deleted) {
     record.author = task.author;
     record.assignee = task.assignee;
     record.deleted = deleted;
+    // Keep what a newer version stored with this task, taken from the newest copy we know.
+    const SyncRecord* known = nullptr;
+    for (const SyncSource& source : syncSources) {
+        for (const SyncRecord& candidate : source.records) {
+            if (candidate.uid == task.uid && (!known || candidate.updated_at > known->updated_at)) known = &candidate;
+        }
+    }
+    if (known) record.extras = known->extras;
     // Always strictly newer than the version we started from, even with a lagging clock.
     record.updated_at = (std::max)(time(nullptr), task.updated_at + 1);
     // updated_by names who created or last rewrote the text (set by Add/UpdateText); ticking,

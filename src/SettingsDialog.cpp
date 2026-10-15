@@ -6,6 +6,7 @@
 #include "SettingsSyncRows.h"
 #include "SyncPicker.h"
 #include "Version.h"
+#include "WorkTracking.h"
 #include <commctrl.h>
 #include <string>
 #include <vector>
@@ -20,6 +21,7 @@ namespace {
     constexpr int IDC_SETTINGS_SOUNDS = 5106;
     constexpr int IDC_SETTINGS_TIMER_AUTO_START = 5107;
     constexpr int IDC_SETTINGS_EXCLUDED_KEYWORDS = 5109;
+    constexpr int IDC_SETTINGS_WORK_TRACKING = 5110;
     constexpr int SETTINGS_DIALOG_WIDTH = 560;
     constexpr UINT WM_APP_REBUILD = WM_APP + 1;
     constexpr DWORD DIALOG_STYLE = WS_POPUP | WS_CAPTION | WS_SYSMENU;
@@ -40,6 +42,7 @@ namespace {
         HWND resetTime = nullptr;
         HWND soundsCheckbox = nullptr;
         HWND timerAutoStartCheckbox = nullptr;
+        HWND workTrackingCheckbox = nullptr;
         HWND excludedKeywordsEdit = nullptr;
         HWND okButton = nullptr;
         HBRUSH backgroundBrush = nullptr;
@@ -171,6 +174,16 @@ namespace {
         state->soundsCheckbox = CreateChild(hWnd, L"BUTTON", L"Engedélyezve",
             WS_TABSTOP | BS_AUTOCHECKBOX, 184, controlY(ROW), 190, 28, IDC_SETTINGS_SOUNDS, g_hFontNormal);
         SendMessageW(state->soundsCheckbox, BM_SETCHECK, state->soundsEnabled ? BST_CHECKED : BST_UNCHECKED, 0);
+        top += ROW;
+
+        CreateRow(hWnd, L"Munkaidő mérése", top, ROW, false);
+        state->workTrackingCheckbox = CreateChild(hWnd, L"BUTTON", L"Engedélyezve",
+            WS_TABSTOP | BS_AUTOCHECKBOX, 184, controlY(ROW), 190, 28, IDC_SETTINGS_WORK_TRACKING, g_hFontNormal);
+        SendMessageW(state->workTrackingCheckbox, BM_SETCHECK,
+            g_store.work_tracking_enabled ? BST_CHECKED : BST_UNCHECKED, 0);
+        AddTooltip(state->tooltip, hWnd, state->workTrackingCheckbox,
+            L"Kikapcsolva nem méri a munkaidőt, és nem látszik a munkaidő-sáv (a kitűzött nézetben sem). "
+            L"A korábbi idők megmaradnak. Az Idők nézetben is átállítható.");
         top += ROW;
 
         CreateRow(hWnd, L"Munkaidőzítő indítása a programmal", top, TALL_ROW, false);
@@ -370,6 +383,10 @@ namespace {
                 state->excludedKeywords = ReadText(state->excludedKeywordsEdit);
                 g_store.excluded_window_keywords = ExcludedApps::Normalize(state->excludedKeywords);
                 g_store.SaveLocal();
+                return 0;
+            }
+            if (id == IDC_SETTINGS_WORK_TRACKING && code == BN_CLICKED) {
+                WorkTracking::SetEnabled(SendMessageW(state->workTrackingCheckbox, BM_GETCHECK, 0, 0) == BST_CHECKED);
                 return 0;
             }
             if ((id == IDC_SETTINGS_SOUNDS || id == IDC_SETTINGS_TIMER_AUTO_START) && code == BN_CLICKED) {

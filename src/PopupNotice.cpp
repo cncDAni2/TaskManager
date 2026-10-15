@@ -226,3 +226,11 @@ void ShowTaskChangedNotice(const std::wstring& newText, const std::wstring& prev
     notice->autoClose = true;
     ShowNotice(notice, L"Módosított feladat");
 }
+
+void ShowVersionNotice(const std::wstring& heading, const std::wstring& body, const std::wstring& footer) {
+    auto* notice = new Notice();
+    notice->heading = heading;
+    notice->body = body;
+    notice->footer = footer;
+    ShowNotice(notice, L"Eltérő verzió");
+}

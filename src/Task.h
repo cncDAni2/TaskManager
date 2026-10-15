@@ -4,8 +4,10 @@
 #include "ExcludedApps.h"
 #include "SyncFiles.h"
 #include "TaskUtils.h"
+#include "VersionHint.h"
 #include "WorkHistory.h"
 #include <map>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -31,6 +33,7 @@ public:
     bool timer_strict_mode = false;
     bool timer_start_with_app = false;
     bool sounds_enabled = true;
+    bool work_tracking_enabled = true; // Off: no work-time measurement and no work bar; history is kept.
     std::wstring excluded_window_keywords = ExcludedApps::DEFAULT_KEYWORDS;
     int cleanup_days = 14;
     int cleanup_weeks = 8;
@@ -42,6 +45,7 @@ public:
     int next_source_id = 1;
     std::vector<int> active_order;
     std::vector<SyncNotice> pendingNotices;
+    std::vector<VersionNotice> pendingVersionNotices; // Queued even when reloading silently.
 
     TaskStore();
 
@@ -83,6 +87,7 @@ private:
     int nextRuntimeId = 1;
     std::map<std::string, std::wstring> knownSyncTexts;
     bool syncKnownInitialized = false;
+    std::set<std::wstring> shownVersionHints; // Each hint is shown once per run.
 
     int RuntimeIdFor(const std::string& uid);
     void AddFirstRunSyncSource();
@@ -90,4 +95,5 @@ private:
     void PublishSyncTask(Task& task, bool deleted);
     SyncRecord MakeSyncRecord(Task& task, bool deleted);
     void RewriteSource(SyncSource& source, const SyncFiles::RecordMap* winners, const SyncRecord* upsert);
+    void NoteVersionHint(const SyncSource& source, const SyncFileInfo& info);
 };

@@ -17,6 +17,7 @@
 #include "ExcludedApps.h"
 #include "SyncPicker.h"
 #include "Cleanup.h"
+#include "WorkTracking.h"
 #include <windowsx.h>
 #include <commctrl.h>
 #include <algorithm>
@@ -36,6 +37,10 @@ void ReloadSyncAndNotify() {
         else ShowTaskChangedNotice(notice.text, notice.previousText, notice.changedBy);
     }
     g_store.pendingNotices.clear();
+    for (const VersionNotice& notice : g_store.pendingVersionNotices) {
+        ShowVersionNotice(notice.heading, notice.body, notice.footer);
+    }
+    g_store.pendingVersionNotices.clear();
 
     const std::wstring currentUser = TaskUtils::GetCleanUserName();
     std::wstring conflictMessage;
@@ -191,6 +196,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                 WS_CHILD | BS_OWNERDRAW | WS_TABSTOP,
                 128, 10, 152, 28, hWnd, (HMENU)IDC_STOP_WORK_BTN, hInst, nullptr);
             SendMessageW(g_hWorkMeasureBtn, WM_SETFONT, (WPARAM)g_hFontSmall, TRUE);
+            WorkTracking::CreateButton(hWnd, hInst);
 
             g_hFocusModeBtn = CreateWindowW(L"BUTTON", L"",
                 WS_CHILD | WS_VISIBLE | BS_OWNERDRAW | WS_TABSTOP,
@@ -453,7 +459,8 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 
                 g_isExcludedApp = false;
                 g_excludedAppName = L"";
-                HWND hFore = GetForegroundWindow();
+                const bool tracking = WorkTracking::IsEnabled();
+                HWND hFore = tracking ? GetForegroundWindow() : nullptr;
                 if (hFore) {
                     wchar_t titleBuf[512] = { 0 };
                     GetWindowTextW(hFore, titleBuf, 512);
@@ -461,7 +468,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                     g_isExcludedApp = !g_excludedAppName.empty();
                 }
 
-                bool countWork = !g_workMeasurementStopped && !TimerHold::IsActive() && !g_isSessionLocked &&
+                bool countWork = tracking && !g_workMeasurementStopped && !TimerHold::IsActive() && !g_isSessionLocked &&
                     (g_focusMode || (!g_isIdlePaused && !g_isExcludedApp));
                 g_isWorkActive = countWork;
 
@@ -477,7 +484,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                     }
                 }
 
-                const bool shouldPauseStrictWorkTimer = g_store.timer_strict_mode &&
+                const bool shouldPauseStrictWorkTimer = tracking && g_store.timer_strict_mode &&
                     g_intervalTimer.IsActive() && g_intervalTimer.IsWorkPhase() &&
                     (g_workMeasurementStopped || g_isSessionLocked ||
                         (g_isIdlePaused && !g_focusMode));
@@ -508,19 +515,21 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                     RECT rcClient;
                     GetClientRect(hWnd, &rcClient);
                     if (g_isMiniMode) {
-                        RECT rcMiniBottom = { 0, rcClient.bottom - 3, rcClient.right, rcClient.bottom };
-                        InvalidateRect(hWnd, &rcMiniBottom, FALSE);
+                        RECT rcMiniBottom = { 0, rcClient.bottom - WorkTracking::MiniBarHeight(),
+                            rcClient.right, rcClient.bottom };
+                        if (tracking) InvalidateRect(hWnd, &rcMiniBottom, FALSE);
                         if (visionBreakWasActive != g_intervalTimer.IsVisionBreakActive() ||
                             g_intervalTimer.IsVisionBreakActive()) {
                             RedrawWindow(hWnd, nullptr, nullptr,
                                 RDW_INVALIDATE | RDW_ERASE | RDW_UPDATENOW | RDW_ALLCHILDREN);
                         }
                     } else {
-                        RECT rcBottom = { 0, rcClient.bottom - BOTTOM_BAR_HEIGHT, rcClient.right, rcClient.bottom };
-                        InvalidateRect(hWnd, &rcBottom, FALSE);
+                        const int barHeight = WorkTracking::BottomBarHeight();
+                        RECT rcBottom = { 0, rcClient.bottom - barHeight, rcClient.right, rcClient.bottom };
+                        if (tracking) InvalidateRect(hWnd, &rcBottom, FALSE);
                         if (timerWasRunning || g_intervalTimer.IsRunning()) {
                             RECT rcTimerStatus = { 0,
-                                rcClient.bottom - BOTTOM_BAR_HEIGHT - TIMER_STATUS_HEIGHT,
+                                rcClient.bottom - barHeight - TIMER_STATUS_HEIGHT,
                                 rcClient.right, rcClient.bottom };
                             InvalidateRect(hWnd, &rcTimerStatus, FALSE);
                             if (g_viewMode == ViewMode::IntervalTimer) {

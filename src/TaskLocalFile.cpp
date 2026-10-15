@@ -52,6 +52,7 @@ void TaskStore::SaveLocal() {
         << "  \"timer_strict_mode\": " << (timer_strict_mode ? "true" : "false") << ",\n"
         << "  \"timer_start_with_app\": " << (timer_start_with_app ? "true" : "false") << ",\n"
         << "  \"sounds_enabled\": " << (sounds_enabled ? "true" : "false") << ",\n"
+        << "  \"work_tracking_enabled\": " << (work_tracking_enabled ? "true" : "false") << ",\n"
         << "  \"excluded_window_keywords\": " << Quote(excluded_window_keywords) << ",\n"
         << "  \"cleanup_days\": " << cleanup_days << ",\n"
         << "  \"cleanup_weeks\": " << cleanup_weeks << ",\n"
@@ -221,6 +222,8 @@ void TaskStore::LoadLocal() {
             timer_start_with_app = content.compare(valueStart, 4, "true") == 0;
         }
     }
+
+    JsonLite::GetBool(content, "work_tracking_enabled", work_tracking_enabled);
 
     size_t soundsEnabledPos = content.find("\"sounds_enabled\":");
     if (soundsEnabledPos != std::string::npos) {

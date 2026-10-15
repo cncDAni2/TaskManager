@@ -11,6 +11,7 @@
 #include "SettingsDialog.h"
 #include "FocusMode.h"
 #include "IntervalTimer.h"
+#include "WorkTracking.h"
 #include <windowsx.h>
 #include <algorithm>
 #include <cwctype>
@@ -329,8 +330,8 @@ bool HandleLButtonDown(HWND hWnd, LPARAM lParam) {
 
     RECT rcClient;
     GetClientRect(hWnd, &rcClient);
-    const int timerStatusTop = rcClient.bottom - BOTTOM_BAR_HEIGHT - TIMER_STATUS_HEIGHT;
-    const int workStatusTop = rcClient.bottom - BOTTOM_BAR_HEIGHT;
+    const int workStatusTop = rcClient.bottom - WorkTracking::BottomBarHeight();
+    const int timerStatusTop = workStatusTop - TIMER_STATUS_HEIGHT;
     if (g_intervalTimer.IsActive() && clickRawY >= timerStatusTop && clickRawY < workStatusTop) {
         CommitInlineEdit();
         g_viewMode = ViewMode::IntervalTimer;
@@ -341,7 +342,7 @@ bool HandleLButtonDown(HWND hWnd, LPARAM lParam) {
         InvalidateRect(hWnd, nullptr, TRUE);
         return true;
     }
-    if (clickRawY >= workStatusTop) {
+    if (WorkTracking::IsEnabled() && clickRawY >= workStatusTop) {
         ShowWorkHistory(hWnd);
         return true;
     }
@@ -680,6 +681,8 @@ bool HandleCommand(HWND hWnd, int id) {
         if (g_hTimerBtn) InvalidateRect(g_hTimerBtn, nullptr, TRUE);
         InvalidateRect(hWnd, nullptr, TRUE);
         return true;
+    } else if (WorkTracking::HandleCommand(static_cast<WORD>(id))) {
+        return true;
     } else if (id == IDC_STOP_WORK_BTN) {
         SetWorkMeasurementStopped(!g_workMeasurementStopped);
         return true;
@@ -768,7 +771,8 @@ static COLORREF GetButtonSurfaceColor(UINT ctlId, const ThemeColors& th) {
         return th.bgWindow;
     default:
         if (g_viewMode == ViewMode::WorkHistory) {
-            return ctlId == IDC_STOP_WORK_BTN ? GetHistoryColors(g_themeMode).background
+            return (ctlId == IDC_STOP_WORK_BTN || ctlId == IDC_WORK_TRACKING_BTN)
+                ? GetHistoryColors(g_themeMode).background
                 : GetHistoryColors(g_themeMode).header;
         }
         return th.bgHeader;
@@ -840,7 +844,7 @@ bool HandleDrawItem(HWND /*hWnd*/, DRAWITEMSTRUCT* pDIS) {
     }
 
     bool isTextButton = pDIS->CtlID == IDC_TIME_HISTORY_BTN || pDIS->CtlID == IDC_MANUAL_WORK_BTN ||
-        pDIS->CtlID == IDC_STOP_WORK_BTN ||
+        pDIS->CtlID == IDC_STOP_WORK_BTN || pDIS->CtlID == IDC_WORK_TRACKING_BTN ||
         pDIS->CtlID == IDC_TOGGLE_VIEW_BTN || pDIS->CtlID == IDC_TIMER_START_BTN ||
         pDIS->CtlID == IDC_TIMER_PAUSE_BTN || pDIS->CtlID == IDC_TIMER_NEXT_BTN ||
         pDIS->CtlID == IDC_CLOSE_BTN ||

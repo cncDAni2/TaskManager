@@ -7,6 +7,7 @@
 #include "MemoryTrim.h"
 #include "SyncPicker.h"
 #include "Cleanup.h"
+#include "WorkTracking.h"
 #include <algorithm>
 #include <set>
 
@@ -25,7 +26,7 @@ int GetListTop() {
 int GetListBottom(int clientHeight) {
     int footerHeight = g_viewMode == ViewMode::WorkHistory ? WORK_MEASURE_FOOTER_HEIGHT : 0;
     int timerStatusHeight = g_intervalTimer.IsActive() ? TIMER_STATUS_HEIGHT : 0;
-    return clientHeight - BOTTOM_BAR_HEIGHT - footerHeight - timerStatusHeight;
+    return clientHeight - WorkTracking::BottomBarHeight() - footerHeight - timerStatusHeight;
 }
 
 void EnsureVisible(int itemIndex) {
@@ -155,18 +156,7 @@ void UpdateControlsVisibility() {
     bool isHistory = (g_viewMode == ViewMode::WorkHistory);
     bool isTimer = (g_viewMode == ViewMode::IntervalTimer);
     ShowWindow(g_hTimeHistoryBtn, isHistory ? SW_HIDE : SW_SHOW);
-    if (isHistory) {
-        RECT rcClient{};
-        GetClientRect(g_hWnd, &rcClient);
-        constexpr int buttonWidth = 132;
-        constexpr int buttonHeight = 26;
-        int buttonX = (rcClient.right - buttonWidth) / 2;
-        int buttonY = GetListBottom(rcClient.bottom) +
-            (WORK_MEASURE_FOOTER_HEIGHT - buttonHeight) / 2;
-        SetWindowPos(g_hWorkMeasureBtn, nullptr, buttonX, buttonY, buttonWidth, buttonHeight,
-            SWP_NOZORDER | SWP_NOACTIVATE);
-    }
-    ShowWindow(g_hWorkMeasureBtn, isHistory ? SW_SHOW : SW_HIDE);
+    WorkTracking::LayoutFooter(isHistory);
     SetWindowPos(g_hToggleViewBtn, nullptr, isHistory ? 286 : 345, 10,
         isHistory ? 104 : 125, 28, SWP_NOZORDER | SWP_NOACTIVATE);
     ShowWindow(g_hManualWorkBtn, isHistory ? SW_SHOW : SW_HIDE);
@@ -257,9 +247,9 @@ void RecalculateMiniLayout() {
 
     int totalH = 0;
     if (activeCount == 0) {
-        totalH = 70 + 3;
+        totalH = 70 + WorkTracking::MiniBarHeight();
     } else {
-        totalH = curY - spacing + 6 + 3;
+        totalH = curY - spacing + 6 + WorkTracking::MiniBarHeight();
     }
 
     RECT rcWork;

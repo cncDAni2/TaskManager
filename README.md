@@ -6,7 +6,7 @@ Az alkalmazás elsősorban a teendők gyors és egyszerű kezelésére szolgál,
 
 - Ctrl+F1: Feladatkezelő főablak megnyitása
 - Ctrl+F2: PIN mód bekapcsolása / kikapcsolása
-- Ctrl+F3: Időzítők megállítása / folytatása (Időstop)
+- Ctrl+F3: Összes időzítő megállítása / folytatása (Időstop)
 
 A főablak megnyitásakor az új feladat felvételére szolgáló mező azonnal fókuszt kap. Nyomd meg a Ctrl+F1 billentyűkombinációt, írd be az új feladatot, majd nyomj Entert.  
 Ha folyamatosan látni szeretnéd a feladataidat, a Ctrl+F2 billentyűkombinációval mini nézetet jeleníthetsz meg. Újabb Ctrl+F2-re a nézet eltűnik.  
@@ -62,6 +62,8 @@ A szinkronizált feladatok speciálisak:
 - A feladatok sorrendje módosítható, de csak nálad érvényes; mások nem látják.
 - Később nem lehet egy meglévő feladatot másik fájlhoz adni: ehhez töröld, és vedd fel újra.
 
+Ha egy közös fájlt valaki más programverzióval használ, felugró ablak jelzi; az újabb verzió által írt adatokat a program érintetlenül hagyja.
+
 ## Időmérés
 
 Nem ez a program fő funkciója, de hasznos a munkaidő nyomon követésére is. A képernyő előtt töltött aktív időt méri. A mérés szünetel, ha:
@@ -77,6 +79,7 @@ Az időmérés "munkanapot" mér. A munkaidő kezdete alapértelmezés szerint 9
 Az eddigi méréseket napi és heti bontásban is megtekintheted az "Idők" oldalon.  
 **Takarítás:** az „Idők” nézet jobb felső sarkában megadhatod, hány hétnél régebbi mért és kézi munkaidők törlődjenek (alapból 8); a mostani hét és az előtte lévő megadott számú hét megmarad. Törlés előtt megerősítést kér.  
 **Manuális** munkaidőmegadás: Az Idők nézetben kézzel is megadhatsz munkaidőt. Kiválaszthatsz egy napot, ahol módosíthatod a korábbi kézi bejegyzést. Alapból minden naphoz ez 0 óra. A kézi megadást az áttekintő nézetek más színnel jelzik.  
+**Kikapcsolás:** az Idők nézetben vagy a Beállításokban az időmérés teljesen kikapcsolható; ilyenkor a munkaidő-sáv sem látszik.  
 A százalékos kijelző a 8 órás munkaidőhöz viszonyítva mutatja az eltelt aktív idő arányát. Ez törvényileg szabályozott módon 6 óra 50 perc-nél jelez 100%-ot, ugyanis a törvény egy 20 perces szünetet ír elő, valamint hogy a képernyő előtti munkavégzést óránként 10 percre szüneteltetni kell. (Fontos megjegyezni: Ez NEM munkaszünet, de a program a képernyőidőt méri, azt pedig szüneteltetni kell - így a program számára ez nem számolható mint munkaidő.)
 
 ### Időzítő: Munka/pihenés
@@ -85,7 +88,7 @@ Az időzítő funkció segít az előző részben leírt munka- és pihenőciklu
 
 STRICT MODE: Ha ezt is bepipálod, akkor az időzítő kihatással lesz a munkaidő mérésre, és automatikusan szünetelteti a munkaidő mérést a pihenőidő alatt.
 
-20-20-20 szabály: A szem egészségének megőrzése érdekében minden 20 perc képernyőnézés után nézz 20 másodpercig 20 láb (kb. 6 méter) távolságra. A szabály a munkaidő-méréstől és az intervallum-időzítőtől függetlenül működik, kizárt ablakok (pl. YouTube) használata közben is. Két perc billentyű- vagy egérinaktivitás után szünetel, kivéve fókusz módban; a gép zárolásakor mindig szünetel. Rövid hangjelzéssel emlékeztet a program, amikor ideje szünetet tartani (2 csippanás), és mikor vissza kell térni (1 csippanás). A következő 20 perc csak a szünet utáni első billentyű- vagy egéraktivitással kezd el telni. A PIN ablakban a számláló szem ikonra vált a szem-pihenő alatt.
+20-20-20 szabály: A szem egészségének megőrzése érdekében minden 20 perc képernyőnézés után nézz 20 másodpercig 20 láb (kb. 6 méter) távolságra. A program hangjelzéssel emlékeztet, amikor ideje szünetet tartani (2 csippanás), és mikor vissza kell térni (1 csippanás). A PIN ablakban a számláló szem ikonra vált a szem-pihenő alatt.
 
 ### Fókusz mód
 
@@ -114,4 +117,4 @@ A mellékelt `build.bat` parancsfájl azonnal lefordítja az alkalmazást:
 build.bat
 ```
 
-A generált futtatható fájl: `TaskManager.exe` (~650 KB méretű önálló natív exe)
+A generált futtatható fájl: `TaskManager.exe` (~670 KB méretű önálló natív exe)

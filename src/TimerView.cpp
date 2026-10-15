@@ -3,6 +3,7 @@
 #include "IntervalTimer.h"
 #include "Layout.h"
 #include "UIEventHandler.h"
+#include "WorkTracking.h"
 #include <commctrl.h>
 #include <string>
 
@@ -19,6 +20,11 @@ HWND g_timerTooltip = nullptr;
 bool g_viewVisible = false;
 bool g_initializing = false;
 bool g_manuallyStoppedAutoStartTimer = false;
+
+// STRICT MODE drives the work-time measurement, so it is hidden and ignored while that is off.
+bool StrictModeActive() {
+    return g_store.timer_strict_mode && WorkTracking::IsEnabled();
+}
 
 bool ReadValue(HWND edit, int minimum, int maximum, int& value) {
     const int length = GetWindowTextLengthW(edit);
@@ -247,7 +253,7 @@ void TimerView::UpdateVisibility(bool visible) {
     ShowWindow(g_restEdit, show);
     ShowWindow(g_repetitionsEdit, show);
     ShowWindow(g_2020Check, show);
-    ShowWindow(g_strictCheck, show);
+    ShowWindow(g_strictCheck, g_viewVisible && WorkTracking::IsEnabled() ? SW_SHOW : SW_HIDE);
     ShowWindow(g_startButton, show);
     ShowWindow(g_pauseButton, g_viewVisible && g_intervalTimer.IsActive() ? SW_SHOW : SW_HIDE);
     ShowWindow(g_nextButton, g_viewVisible && g_intervalTimer.IsActive() ? SW_SHOW : SW_HIDE);
@@ -271,7 +277,7 @@ bool TimerView::ShouldShowAutoStartWarning() {
 }
 
 void TimerView::HandlePhaseChange() {
-    if (!g_store.timer_strict_mode) return;
+    if (!StrictModeActive()) return;
     if (g_intervalTimer.IsWorkPhase()) {
         if (g_intervalTimer.IsRunning() || g_intervalTimer.IsAwaitingActivity()) {
             SetWorkMeasurementStopped(false);
@@ -287,7 +293,7 @@ void TimerView::StartConfiguredTimer() {
     const int restSeconds = static_cast<int>(g_store.timer_rest_minutes * 60.0 + 0.5);
     g_intervalTimer.Start(workSeconds, restSeconds, g_store.timer_repetitions,
         g_store.timer_2020_enabled);
-    if (g_store.timer_strict_mode) SetWorkMeasurementStopped(false);
+    if (StrictModeActive()) SetWorkMeasurementStopped(false);
     RefreshRunState();
 }
 
@@ -328,7 +334,9 @@ void TimerView::Layout(HWND owner) {
     const int checkWidth = checkTextWidth + 30;
     const int strictWidth = strictTextWidth + 30;
     const int checkGap = 8;
-    const int checksLeft = (width - checkWidth - checkGap - strictWidth) / 2;
+    const bool showStrict = WorkTracking::IsEnabled();
+    const int checksLeft = showStrict ? (width - checkWidth - checkGap - strictWidth) / 2
+        : (width - checkWidth) / 2;
     const bool showAutoStartWarning = ShouldShowAutoStartWarning();
     const int checksY = panel.bottom - (showAutoStartWarning ? 101 : 93);
     SetWindowPos(g_2020Check, nullptr, checksLeft, checksY,
@@ -412,7 +420,7 @@ bool TimerView::HandleCommand(HWND owner, WPARAM wParam) {
             g_store.SaveLocal();
             g_manuallyStoppedAutoStartTimer = false;
             g_intervalTimer.Start(workSeconds, restSeconds, repetitions, g_store.timer_2020_enabled);
-            if (g_store.timer_strict_mode) SetWorkMeasurementStopped(false);
+            if (StrictModeActive()) SetWorkMeasurementStopped(false);
         }
     } else if (id == IDC_TIMER_PAUSE_BTN) {
         if (g_intervalTimer.IsPaused()) {

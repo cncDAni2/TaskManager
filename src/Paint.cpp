@@ -8,6 +8,7 @@
 #include "Marker.h"
 #include "IntervalTimer.h"
 #include "TimerHold.h"
+#include "WorkTracking.h"
 #include "TimerView.h"
 
 namespace {
@@ -137,8 +138,8 @@ void PaintMiniWindow(HWND hWnd, HDC hdc) {
         SelectObject(hdcMem, g_hFontMiniTimer);
         SetTextColor(hdcMem, RGB(255, 255, 255));
         SetBkMode(hdcMem, TRANSPARENT);
-        const std::wstring remaining = g_intervalTimer.IsVisionBreakActive()
-            ? L"👁️" : FormatTimerTime(g_intervalTimer.SecondsRemaining());
+        const std::wstring remaining = held ? L"ÁLL"
+            : (g_intervalTimer.IsVisionBreakActive() ? L"👁️" : FormatTimerTime(g_intervalTimer.SecondsRemaining()));
         DrawTextW(hdcMem, remaining.c_str(), -1, (LPRECT)&rcTimer,
             DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
     }
@@ -266,26 +267,30 @@ void PaintMiniWindow(HWND hWnd, HDC hdc) {
         }
     }
 
-    RECT rcTrackBg = { 0, clientH - 3, clientW, clientH };
-    const bool miniWorkGray = g_workMeasurementStopped || TimerHold::IsActive();
-    COLORREF bgTrack = miniWorkGray ? RGB(75, 85, 99)
-        : (g_themeMode == ThemeMode::Pink ? RGB(217, 0, 108) : th.borderSep);
-    HBRUSH hBrTrackBg = CreateSolidBrush(bgTrack);
-    FillRect(hdcMem, &rcTrackBg, hBrTrackBg);
-    DeleteObject(hBrTrackBg);
+    if (WorkTracking::IsEnabled()) {
+        RECT rcTrackBg = { 0, clientH - 3, clientW, clientH };
+        const bool miniWorkGray = g_workMeasurementStopped || TimerHold::IsActive();
+        COLORREF bgTrack = miniWorkGray ? RGB(75, 85, 99)
+            : (g_themeMode == ThemeMode::Pink ? RGB(217, 0, 108) : th.borderSep);
+        HBRUSH hBrTrackBg = CreateSolidBrush(bgTrack);
+        FillRect(hdcMem, &rcTrackBg, hBrTrackBg);
+        DeleteObject(hBrTrackBg);
 
-    int workSec = g_store.work_seconds_today;
-    const int targetWorkSec = DAILY_WORK_TARGET_SECONDS;
-    int manualSec = CurrentManualWorkSeconds();
-    RECT rcMiniBar = { 0, clientH - 3, clientW, clientH };
-    COLORREF miniBarFill = miniWorkGray ? RGB(156, 163, 175)
-        : (g_isWorkActive ? RGB(34, 197, 94) : RGB(239, 68, 68));
-    DrawBarSegments(hdcMem, rcMiniBar, workSec, manualSec, targetWorkSec,
-        miniBarFill, miniWorkGray ? miniBarFill : RGB(245, 158, 11));
-    std::vector<BarTooltips::Region> barToolRegions = {
-        { rcMiniBar, BuildWorkTooltip(workSec, manualSec) }
-    };
-    BarTooltips::Update(hWnd, barToolRegions);
+        int workSec = g_store.work_seconds_today;
+        const int targetWorkSec = DAILY_WORK_TARGET_SECONDS;
+        int manualSec = CurrentManualWorkSeconds();
+        RECT rcMiniBar = { 0, clientH - 3, clientW, clientH };
+        COLORREF miniBarFill = miniWorkGray ? RGB(156, 163, 175)
+            : (g_isWorkActive ? RGB(34, 197, 94) : RGB(239, 68, 68));
+        DrawBarSegments(hdcMem, rcMiniBar, workSec, manualSec, targetWorkSec,
+            miniBarFill, miniWorkGray ? miniBarFill : RGB(245, 158, 11));
+        std::vector<BarTooltips::Region> barToolRegions = {
+            { rcMiniBar, BuildWorkTooltip(workSec, manualSec) }
+        };
+        BarTooltips::Update(hWnd, barToolRegions);
+    } else {
+        BarTooltips::Update(hWnd, {});
+    }
 
     if (g_miniTimerFlashStep > 0 && g_miniTimerFlashStep % 2 == 1) {
         const COLORREF flashColor = g_miniTimerFlashWorkPhase ? RGB(220, 38, 38) : RGB(37, 99, 235);
@@ -778,7 +783,7 @@ void PaintMainWindow(HWND hWnd, HDC hdc) {
     }
 
     // 4. Draw Bottom Work Time Progress Bar
-    RECT rcBottom = { 0, clientH - BOTTOM_BAR_HEIGHT, clientW, clientH };
+    RECT rcBottom = { 0, clientH - WorkTracking::BottomBarHeight(), clientW, clientH };
     if (g_intervalTimer.IsActive()) {
         RECT rcTimerStatus = { 0, rcBottom.top - TIMER_STATUS_HEIGHT, clientW, rcBottom.top };
         RECT rcTimerTrack = { 10, rcTimerStatus.top + 3, clientW - 10, rcTimerStatus.bottom - 3 };
@@ -837,85 +842,87 @@ void PaintMainWindow(HWND hWnd, HDC hdc) {
         DrawTextW(hdcMem, timerStatus.c_str(), -1, &rcTimerLabel,
             DT_LEFT | DT_VCENTER | DT_SINGLELINE);
     }
-    COLORREF bgBottom = isHistory ? hc.bottomBar : (g_darkMode ? RGB(18, 18, 22) : th.bgSubBar);
-    HBRUSH hBrBottom = CreateSolidBrush(bgBottom);
-    FillRect(hdcMem, &rcBottom, hBrBottom);
-    DeleteObject(hBrBottom);
+    if (WorkTracking::IsEnabled()) {
+        COLORREF bgBottom = isHistory ? hc.bottomBar : (g_darkMode ? RGB(18, 18, 22) : th.bgSubBar);
+        HBRUSH hBrBottom = CreateSolidBrush(bgBottom);
+        FillRect(hdcMem, &rcBottom, hBrBottom);
+        DeleteObject(hBrBottom);
 
-    HPEN hPenBotBorder = CreatePen(PS_SOLID, 1, th.borderSep);
-    SelectObject(hdcMem, hPenBotBorder);
-    MoveToEx(hdcMem, 0, rcBottom.top, nullptr);
-    LineTo(hdcMem, clientW, rcBottom.top);
-    DeleteObject(hPenBotBorder);
+        HPEN hPenBotBorder = CreatePen(PS_SOLID, 1, th.borderSep);
+        SelectObject(hdcMem, hPenBotBorder);
+        MoveToEx(hdcMem, 0, rcBottom.top, nullptr);
+        LineTo(hdcMem, clientW, rcBottom.top);
+        DeleteObject(hPenBotBorder);
 
-    RECT rcTrack = { 10, rcBottom.top + 3, clientW - 10, rcBottom.bottom - 3 };
-    const bool workGray = g_workMeasurementStopped || TimerHold::IsActive();
-    COLORREF borderTrack = workGray ? RGB(107, 114, 128)
-        : (isHistory ? hc.barBorder : (g_darkMode ? RGB(255, 255, 255) : th.textSecondary));
-    COLORREF bgTrack = workGray ? RGB(75, 85, 99)
-        : (isHistory ? hc.barTrack : (g_darkMode ? RGB(28, 28, 34) : th.borderSep));
+        RECT rcTrack = { 10, rcBottom.top + 3, clientW - 10, rcBottom.bottom - 3 };
+        const bool workGray = g_workMeasurementStopped || TimerHold::IsActive();
+        COLORREF borderTrack = workGray ? RGB(107, 114, 128)
+            : (isHistory ? hc.barBorder : (g_darkMode ? RGB(255, 255, 255) : th.textSecondary));
+        COLORREF bgTrack = workGray ? RGB(75, 85, 99)
+            : (isHistory ? hc.barTrack : (g_darkMode ? RGB(28, 28, 34) : th.borderSep));
 
-    HBRUSH hBrTrack = CreateSolidBrush(bgTrack);
-    HPEN hPenTrack = CreatePen(PS_SOLID, 1, borderTrack);
-    SelectObject(hdcMem, hBrTrack);
-    SelectObject(hdcMem, hPenTrack);
-    RoundRect(hdcMem, rcTrack.left, rcTrack.top, rcTrack.right, rcTrack.bottom, 4, 4);
-    DeleteObject(hBrTrack);
-    DeleteObject(hPenTrack);
+        HBRUSH hBrTrack = CreateSolidBrush(bgTrack);
+        HPEN hPenTrack = CreatePen(PS_SOLID, 1, borderTrack);
+        SelectObject(hdcMem, hBrTrack);
+        SelectObject(hdcMem, hPenTrack);
+        RoundRect(hdcMem, rcTrack.left, rcTrack.top, rcTrack.right, rcTrack.bottom, 4, 4);
+        DeleteObject(hBrTrack);
+        DeleteObject(hPenTrack);
 
-    int workSec = g_store.work_seconds_today;
-    int manualSec = CurrentManualWorkSeconds();
-    int totalWorkSec = workSec + manualSec;
-    const int targetWorkSec = DAILY_WORK_TARGET_SECONDS;
-    RECT rcFill = { rcTrack.left + 1, rcTrack.top + 1, rcTrack.right - 1, rcTrack.bottom - 1 };
-    COLORREF measuredColor = workGray ? RGB(156, 163, 175)
-        : (g_isWorkActive ? RGB(59, 130, 246) : RGB(71, 85, 105));
-    COLORREF manualColor = workGray ? measuredColor : RGB(245, 158, 11);
-    DrawBarSegments(hdcMem, rcFill, workSec, manualSec, targetWorkSec, measuredColor, manualColor);
-    barToolRegions.push_back({ rcTrack, BuildWorkTooltip(workSec, manualSec) });
+        int workSec = g_store.work_seconds_today;
+        int manualSec = CurrentManualWorkSeconds();
+        int totalWorkSec = workSec + manualSec;
+        const int targetWorkSec = DAILY_WORK_TARGET_SECONDS;
+        RECT rcFill = { rcTrack.left + 1, rcTrack.top + 1, rcTrack.right - 1, rcTrack.bottom - 1 };
+        COLORREF measuredColor = workGray ? RGB(156, 163, 175)
+            : (g_isWorkActive ? RGB(59, 130, 246) : RGB(71, 85, 105));
+        COLORREF manualColor = workGray ? measuredColor : RGB(245, 158, 11);
+        DrawBarSegments(hdcMem, rcFill, workSec, manualSec, targetWorkSec, measuredColor, manualColor);
+        barToolRegions.push_back({ rcTrack, BuildWorkTooltip(workSec, manualSec) });
 
-    int dotY = rcTrack.top + (rcTrack.bottom - rcTrack.top) / 2;
-    int dotX = rcTrack.left + 10;
-    COLORREF dotCol = RGB(156, 163, 175);
-    if (workGray) {
-        dotCol = RGB(156, 163, 175);
-    } else if (g_isWorkActive) {
-        dotCol = RGB(34, 197, 94);
-    } else if (g_isExcludedApp) {
-        dotCol = RGB(249, 115, 22);
+        int dotY = rcTrack.top + (rcTrack.bottom - rcTrack.top) / 2;
+        int dotX = rcTrack.left + 10;
+        COLORREF dotCol = RGB(156, 163, 175);
+        if (workGray) {
+            dotCol = RGB(156, 163, 175);
+        } else if (g_isWorkActive) {
+            dotCol = RGB(34, 197, 94);
+        } else if (g_isExcludedApp) {
+            dotCol = RGB(249, 115, 22);
+        }
+
+        HBRUSH hBrDot = CreateSolidBrush(dotCol);
+        HPEN hPenDot = CreatePen(PS_SOLID, 1, dotCol);
+        SelectObject(hdcMem, hBrDot);
+        SelectObject(hdcMem, hPenDot);
+        Ellipse(hdcMem, dotX - 4, dotY - 4, dotX + 4, dotY + 4);
+        DeleteObject(hBrDot);
+        DeleteObject(hPenDot);
+
+        SelectObject(hdcMem, g_hFontSmall);
+        SetBkMode(hdcMem, TRANSPARENT);
+        SetTextColor(hdcMem, isHistory ? hc.text : th.textPrimary);
+
+        std::wstring workStr = TaskUtils::FormatWorkDuration(totalWorkSec);
+        double pct = ((double)totalWorkSec / (double)targetWorkSec) * 100.0;
+        std::wstring label;
+        if (TimerHold::IsActive()) {
+            label = L"Időstop: a munkaidő-mérés áll (Ctrl+F3)";
+        } else if (g_workMeasurementStopped) {
+            label = L"Idő mérése szünetel";
+        } else if (g_isWorkActive) {
+            wchar_t pctBuf[16];
+            swprintf_s(pctBuf, L"%.0f%%", pct);
+            label = L"Munkaidő: " + workStr + L" (" + pctBuf + L")";
+        } else if (g_isExcludedApp) {
+            label = L"Munkaidő: " + workStr + L" (Szüneteltetve: " + g_excludedAppName + L" megnyitva)";
+        } else {
+            label = L"Munkaidő: " + workStr + L" (Szüneteltetve: inaktív)";
+        }
+        RECT rcLabel = { dotX + 10, rcTrack.top, rcTrack.right - 10, rcTrack.bottom };
+        DrawTextW(hdcMem, label.c_str(), -1, &rcLabel,
+            DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS | DT_NOPREFIX);
     }
-
-    HBRUSH hBrDot = CreateSolidBrush(dotCol);
-    HPEN hPenDot = CreatePen(PS_SOLID, 1, dotCol);
-    SelectObject(hdcMem, hBrDot);
-    SelectObject(hdcMem, hPenDot);
-    Ellipse(hdcMem, dotX - 4, dotY - 4, dotX + 4, dotY + 4);
-    DeleteObject(hBrDot);
-    DeleteObject(hPenDot);
-
-    SelectObject(hdcMem, g_hFontSmall);
-    SetBkMode(hdcMem, TRANSPARENT);
-    SetTextColor(hdcMem, isHistory ? hc.text : th.textPrimary);
-
-    std::wstring workStr = TaskUtils::FormatWorkDuration(totalWorkSec);
-    double pct = ((double)totalWorkSec / (double)targetWorkSec) * 100.0;
-    std::wstring label;
-    if (TimerHold::IsActive()) {
-        label = L"Időstop: a munkaidő-mérés áll (Ctrl+F3)";
-    } else if (g_workMeasurementStopped) {
-        label = L"Idő mérése szünetel";
-    } else if (g_isWorkActive) {
-        wchar_t pctBuf[16];
-        swprintf_s(pctBuf, L"%.0f%%", pct);
-        label = L"Munkaidő: " + workStr + L" (" + pctBuf + L")";
-    } else if (g_isExcludedApp) {
-        label = L"Munkaidő: " + workStr + L" (Szüneteltetve: " + g_excludedAppName + L" megnyitva)";
-    } else {
-        label = L"Munkaidő: " + workStr + L" (Szüneteltetve: inaktív)";
-    }
-    RECT rcLabel = { dotX + 10, rcTrack.top, rcTrack.right - 10, rcTrack.bottom };
-    DrawTextW(hdcMem, label.c_str(), -1, &rcLabel,
-        DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS | DT_NOPREFIX);
 
     BarTooltips::Update(hWnd, barToolRegions);
     BitBlt(hdc, 0, 0, clientW, clientH, hdcMem, 0, 0, SRCCOPY);
