@@ -8,6 +8,8 @@
 #include "SyncPicker.h"
 #include "Cleanup.h"
 #include "WorkTracking.h"
+#include "UpdateCheck.h"
+#include "UpdateOverlay.h"
 #include <algorithm>
 #include <set>
 
@@ -189,6 +191,7 @@ void UpdateControlsVisibility() {
         SetWindowTextW(g_hToggleViewBtn, L"← Aktívak");
     }
     TimerView::UpdateVisibility(isTimer);
+    if (UpdateOverlay::IsVisible()) UpdateOverlay::HideChildren(g_hWnd);
 }
 
 void RecalculateMiniLayout() {
@@ -351,6 +354,7 @@ void EnterMiniMode() {
 
     RecalculateMiniLayout();
     MemoryTrim::Request(g_hWnd);
+    UpdateCheck::Request();
 }
 
 void ExitMiniMode(bool toHidden) {

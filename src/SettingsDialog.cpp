@@ -7,6 +7,8 @@
 #include "SyncPicker.h"
 #include "Version.h"
 #include "WorkTracking.h"
+#include "UpdateCheck.h"
+#include "UpdateOverlay.h"
 #include <commctrl.h>
 #include <string>
 #include <vector>
@@ -22,6 +24,7 @@ namespace {
     constexpr int IDC_SETTINGS_TIMER_AUTO_START = 5107;
     constexpr int IDC_SETTINGS_EXCLUDED_KEYWORDS = 5109;
     constexpr int IDC_SETTINGS_WORK_TRACKING = 5110;
+    constexpr int IDC_SETTINGS_UPDATE_CHECK = 5111;
     constexpr int SETTINGS_DIALOG_WIDTH = 560;
     constexpr UINT WM_APP_REBUILD = WM_APP + 1;
     constexpr DWORD DIALOG_STYLE = WS_POPUP | WS_CAPTION | WS_SYSMENU;
@@ -43,6 +46,7 @@ namespace {
         HWND soundsCheckbox = nullptr;
         HWND timerAutoStartCheckbox = nullptr;
         HWND workTrackingCheckbox = nullptr;
+        HWND updateCheckCheckbox = nullptr;
         HWND excludedKeywordsEdit = nullptr;
         HWND okButton = nullptr;
         HBRUSH backgroundBrush = nullptr;
@@ -193,6 +197,16 @@ namespace {
         SendMessageW(state->timerAutoStartCheckbox, BM_SETCHECK,
             state->timerAutoStart ? BST_CHECKED : BST_UNCHECKED, 0);
         top += TALL_ROW;
+
+        CreateRow(hWnd, L"Frissítések keresése", top, ROW, false);
+        state->updateCheckCheckbox = CreateChild(hWnd, L"BUTTON", L"Engedélyezve",
+            WS_TABSTOP | BS_AUTOCHECKBOX, 184, controlY(ROW), 190, 28, IDC_SETTINGS_UPDATE_CHECK, g_hFontNormal);
+        SendMessageW(state->updateCheckCheckbox, BM_SETCHECK,
+            g_store.update_check_enabled ? BST_CHECKED : BST_UNCHECKED, 0);
+        AddTooltip(state->tooltip, hWnd, state->updateCheckCheckbox,
+            L"Legfeljebb 12 óránként, a program megnyitásakor megnézi a GitHubon, van-e újabb kiadás. "
+            L"Ha van, a programablakban jelzi, és onnan letölthető.");
+        top += ROW;
 
         static constexpr wchar_t excludedHelp[] =
             L"Vesszővel elválasztott kulcsszavak. Ha az előtérben lévő ablak címe tartalmazza "
@@ -383,6 +397,14 @@ namespace {
                 state->excludedKeywords = ReadText(state->excludedKeywordsEdit);
                 g_store.excluded_window_keywords = ExcludedApps::Normalize(state->excludedKeywords);
                 g_store.SaveLocal();
+                return 0;
+            }
+            if (id == IDC_SETTINGS_UPDATE_CHECK && code == BN_CLICKED) {
+                g_store.update_check_enabled =
+                    SendMessageW(state->updateCheckCheckbox, BM_GETCHECK, 0, 0) == BST_CHECKED;
+                g_store.SaveLocal();
+                UpdateCheck::Request();
+                UpdateOverlay::Refresh();
                 return 0;
             }
             if (id == IDC_SETTINGS_WORK_TRACKING && code == BN_CLICKED) {

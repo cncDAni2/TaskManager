@@ -55,6 +55,7 @@
 
 // Custom Messages and Timers
 #define WM_APP_TRAY         (WM_APP + 100)
+#define WM_APP_UPDATE_RESULT (WM_APP + 101)
 #define IDT_WORK_TIMER      4001
 #define IDT_MINI_TIMER_FLASH 4002
 #define IDT_MEMORY_TRIM     4003

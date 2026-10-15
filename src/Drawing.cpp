@@ -1,5 +1,6 @@
 #include "Drawing.h"
 #include <dwmapi.h>
+#include <algorithm>
 #include <cmath>
 #include <utility>
 
@@ -340,5 +341,40 @@ void DrawTimerIcon(HDC hdc, const RECT& rc, COLORREF color) {
     LineTo(hdc, cx, cy - 7);
     SelectObject(hdc, oldBrush);
     SelectObject(hdc, oldPen);
+    DeleteObject(pen);
+}
+
+void DrawDownloadIcon(HDC hdc, const RECT& rc, COLORREF color) {
+    const int size = (std::min)(rc.right - rc.left, rc.bottom - rc.top);
+    const int cx = rc.left + (rc.right - rc.left) / 2;
+    const int top = rc.top + (rc.bottom - rc.top - size) / 2;
+    const int stroke = (std::max)(2, size / 12);
+
+    HPEN pen = CreatePen(PS_SOLID, stroke, color);
+    HBRUSH brush = CreateSolidBrush(color);
+    HGDIOBJ oldPen = SelectObject(hdc, pen);
+    HGDIOBJ oldBrush = SelectObject(hdc, brush);
+
+    // Arrow: shaft and a filled head pointing down.
+    const int headTop = top + size * 9 / 20;
+    const int headBottom = top + size * 7 / 10;
+    MoveToEx(hdc, cx, top + size / 10, nullptr);
+    LineTo(hdc, cx, headTop);
+    POINT head[3] = { { cx - size / 4, headTop }, { cx + size / 4, headTop }, { cx, headBottom } };
+    Polygon(hdc, head, 3);
+
+    // Tray below the arrow.
+    const int trayTop = top + size * 7 / 10;
+    const int trayBottom = top + size * 9 / 10;
+    const int trayLeft = rc.left + (rc.right - rc.left - size) / 2 + size / 8;
+    const int trayRight = trayLeft + size * 3 / 4;
+    MoveToEx(hdc, trayLeft, trayTop, nullptr);
+    LineTo(hdc, trayLeft, trayBottom);
+    LineTo(hdc, trayRight, trayBottom);
+    LineTo(hdc, trayRight, trayTop - 1);
+
+    SelectObject(hdc, oldBrush);
+    SelectObject(hdc, oldPen);
+    DeleteObject(brush);
     DeleteObject(pen);
 }

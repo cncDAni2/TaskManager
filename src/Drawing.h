@@ -11,5 +11,6 @@ void DrawFolderCloudIcon(HDC hdc, const RECT& rc, COLORREF color);
 void DrawSettingsIcon(HDC hdc, const RECT& rc, COLORREF color, COLORREF backgroundColor);
 void DrawTimerIcon(HDC hdc, const RECT& rc, COLORREF color);
 void DrawHandIcon(HDC hdc, const RECT& rc, COLORREF color);
+void DrawDownloadIcon(HDC hdc, const RECT& rc, COLORREF color);
 HICON GenerateAppIcon();
 void ApplyDarkModeTitleBar(HWND hWnd, bool dark);

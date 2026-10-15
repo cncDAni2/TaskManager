@@ -53,6 +53,12 @@ void TaskStore::SaveLocal() {
         << "  \"timer_start_with_app\": " << (timer_start_with_app ? "true" : "false") << ",\n"
         << "  \"sounds_enabled\": " << (sounds_enabled ? "true" : "false") << ",\n"
         << "  \"work_tracking_enabled\": " << (work_tracking_enabled ? "true" : "false") << ",\n"
+        << "  \"update_check_enabled\": " << (update_check_enabled ? "true" : "false") << ",\n"
+        << "  \"update_last_check\": " << static_cast<long long>(update_last_check) << ",\n"
+        << "  \"update_failures\": " << update_failures << ",\n"
+        << "  \"update_last_failure\": " << static_cast<long long>(update_last_failure) << ",\n"
+        << "  \"update_latest_version\": \"" << TaskUtils::EscapeJsonString(update_latest_version) << "\",\n"
+        << "  \"update_dismissed_date\": \"" << TaskUtils::EscapeJsonString(update_dismissed_date) << "\",\n"
         << "  \"excluded_window_keywords\": " << Quote(excluded_window_keywords) << ",\n"
         << "  \"cleanup_days\": " << cleanup_days << ",\n"
         << "  \"cleanup_weeks\": " << cleanup_weeks << ",\n"
@@ -224,6 +230,13 @@ void TaskStore::LoadLocal() {
     }
 
     JsonLite::GetBool(content, "work_tracking_enabled", work_tracking_enabled);
+    JsonLite::GetBool(content, "update_check_enabled", update_check_enabled);
+    long long updateNumber = 0;
+    if (JsonLite::GetInt64(content, "update_last_check", updateNumber)) update_last_check = static_cast<time_t>(updateNumber);
+    if (JsonLite::GetInt64(content, "update_failures", updateNumber)) update_failures = static_cast<int>(updateNumber);
+    if (JsonLite::GetInt64(content, "update_last_failure", updateNumber)) update_last_failure = static_cast<time_t>(updateNumber);
+    JsonLite::GetString(content, "update_latest_version", update_latest_version);
+    JsonLite::GetString(content, "update_dismissed_date", update_dismissed_date);
 
     size_t soundsEnabledPos = content.find("\"sounds_enabled\":");
     if (soundsEnabledPos != std::string::npos) {

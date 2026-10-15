@@ -3,9 +3,7 @@
 #include "Version.h"
 #include <cstdlib>
 
-namespace {
-// Compares dotted version numbers ("1.16.2"); missing parts count as 0.
-int CompareVersions(const std::string& left, const std::string& right) {
+int VersionHint::Compare(const std::string& left, const std::string& right) {
     const char* a = left.c_str();
     const char* b = right.c_str();
     while (*a || *b) {
@@ -20,6 +18,7 @@ int CompareVersions(const std::string& left, const std::string& right) {
     return 0;
 }
 
+namespace {
 std::wstring JoinKeys(const std::vector<std::string>& keys) {
     std::wstring joined;
     for (const std::string& key : keys) {
@@ -32,10 +31,11 @@ std::wstring JoinKeys(const std::vector<std::string>& keys) {
 
 bool VersionHint::Describe(const std::wstring& sourceName, const SyncFileInfo& info, VersionNotice& notice) {
     const std::string own = TASK_MANAGER_VERSION_STRING;
-    const int comparison = info.appVersion.empty() ? 0 : CompareVersions(info.appVersion, own);
+    const int comparison = info.appVersion.empty() ? 0 : Compare(info.appVersion, own);
     const std::wstring theirs = TaskUtils::Utf8ToWide(info.appVersion);
     const std::wstring mine = TaskUtils::Utf8ToWide(own);
 
+    notice.newer = comparison > 0;
     if (comparison > 0) {
         notice.heading = L"ÚJABB VERZIÓ VAN HASZNÁLATBAN";
         notice.body = L"Valakinél " + theirs + L" verzió fut, nálad " + mine + L".";

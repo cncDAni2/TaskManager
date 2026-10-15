@@ -97,6 +97,9 @@ void TaskStore::RewriteSource(SyncSource& source, const SyncFiles::RecordMap* wi
 void TaskStore::NoteVersionHint(const SyncSource& source, const SyncFileInfo& info) {
     VersionNotice notice;
     if (!VersionHint::Describe(source.name, info, notice)) return;
+    // A newer version that is already released is announced by the update overlay instead.
+    if (notice.newer && !update_latest_version.empty() &&
+        VersionHint::Compare(info.appVersion, update_latest_version) <= 0) return;
     if (!shownVersionHints.insert(source.path + L"|" + notice.heading + L"|" + notice.body).second) return;
     pendingVersionNotices.push_back(notice);
 }

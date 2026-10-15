@@ -34,6 +34,13 @@ public:
     bool timer_start_with_app = false;
     bool sounds_enabled = true;
     bool work_tracking_enabled = true; // Off: no work-time measurement and no work bar; history is kept.
+    // GitHub release check (UpdateCheck / UpdateOverlay).
+    bool update_check_enabled = true;
+    time_t update_last_check = 0;     // Last completed check (also set after giving up retries).
+    int update_failures = 0;          // Consecutive failed attempts since then.
+    time_t update_last_failure = 0;
+    std::string update_latest_version; // Latest release seen, e.g. "1.18.0".
+    std::string update_dismissed_date; // YYYY-MM-DD when the overlay was closed.
     std::wstring excluded_window_keywords = ExcludedApps::DEFAULT_KEYWORDS;
     int cleanup_days = 14;
     int cleanup_weeks = 8;

@@ -9,6 +9,7 @@
 #include "IntervalTimer.h"
 #include "TimerHold.h"
 #include "WorkTracking.h"
+#include "UpdateOverlay.h"
 #include "TimerView.h"
 
 namespace {
@@ -303,6 +304,10 @@ void PaintMiniWindow(HWND hWnd, HDC hdc) {
         DeleteObject(flashBrush);
     }
 
+    if (UpdateOverlay::IsVisible()) {
+        UpdateOverlay::Paint(hdcMem, rcClient);
+        BarTooltips::Update(hWnd, {});
+    }
     BitBlt(hdc, 0, 0, clientW, clientH, hdcMem, 0, 0, SRCCOPY);
 
     SelectObject(hdcMem, hOldBmp);
@@ -924,6 +929,10 @@ void PaintMainWindow(HWND hWnd, HDC hdc) {
             DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS | DT_NOPREFIX);
     }
 
+    if (UpdateOverlay::IsVisible()) {
+        UpdateOverlay::Paint(hdcMem, rcClient);
+        barToolRegions.clear();
+    }
     BarTooltips::Update(hWnd, barToolRegions);
     BitBlt(hdc, 0, 0, clientW, clientH, hdcMem, 0, 0, SRCCOPY);
 

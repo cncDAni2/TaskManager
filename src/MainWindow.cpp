@@ -18,6 +18,8 @@
 #include "SyncPicker.h"
 #include "Cleanup.h"
 #include "WorkTracking.h"
+#include "UpdateCheck.h"
+#include "UpdateOverlay.h"
 #include <windowsx.h>
 #include <commctrl.h>
 #include <algorithm>
@@ -143,9 +145,10 @@ void ShowAppWindow() {
     if (g_hSyncToggleBtn) InvalidateRect(g_hSyncToggleBtn, nullptr, TRUE);
     InvalidateRect(g_hWnd, nullptr, TRUE);
 
-    if (g_viewMode == ViewMode::ActiveTasks && g_hEdit) {
+    if (g_viewMode == ViewMode::ActiveTasks && g_hEdit && !UpdateOverlay::IsVisible()) {
         SetFocus(g_hEdit);
     }
+    UpdateCheck::Request();
 }
 
 void HideAppWindow() {
@@ -586,12 +589,17 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             break;
         }
 
+        case WM_APP_UPDATE_RESULT:
+            UpdateCheck::HandleResult(wParam, lParam);
+            return 0;
+
         case WM_APP_TRAY: {
             if (HandleAppTray(hWnd, lParam)) return 0;
             break;
         }
 
         case WM_KEYDOWN: {
+            if (UpdateOverlay::IsVisible()) return 0;
             if (HandleKeyDown(hWnd, wParam)) return 0;
             break;
         }
@@ -616,6 +624,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         }
 
         case WM_MOUSEWHEEL: {
+            if (UpdateOverlay::IsVisible()) return 0;
             int delta = GET_WHEEL_DELTA_WPARAM(wParam);
             g_scrollY -= (delta / WHEEL_DELTA) * 36;
             RECT rcClient;
@@ -633,6 +642,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         }
 
         case WM_SETCURSOR: {
+            if (LOWORD(lParam) == HTCLIENT && UpdateOverlay::HandleSetCursor(hWnd)) return TRUE;
             if (g_isMiniMode && g_pinMode && LOWORD(lParam) == HTCLIENT) {
                 POINT cursorPoint;
                 GetCursorPos(&cursorPoint);
@@ -649,16 +659,19 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         }
 
         case WM_MOUSEMOVE: {
+            if (UpdateOverlay::HandleMouseMove(hWnd, lParam)) return 0;
             if (HandleMouseMove(hWnd, lParam)) return 0;
             break;
         }
 
         case WM_LBUTTONDOWN: {
+            if (UpdateOverlay::HandleLButtonDown(hWnd, lParam)) return 0;
             if (HandleLButtonDown(hWnd, lParam)) return 0;
             break;
         }
 
         case WM_LBUTTONDBLCLK: {
+            if (UpdateOverlay::IsVisible()) return 0;
             if (g_isMiniMode) {
                 return SendMessageW(hWnd, WM_LBUTTONDOWN, wParam, lParam);
             }
@@ -686,6 +699,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         }
 
         case WM_LBUTTONUP: {
+            if (UpdateOverlay::IsVisible()) return 0;
             if (HandleLButtonUp(hWnd, lParam)) return 0;
             break;
         }
