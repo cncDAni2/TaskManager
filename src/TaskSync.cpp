@@ -170,6 +170,7 @@ void TaskStore::ReloadSync(bool forceAll, bool silent) {
         t.assignee = record->assignee;
         t.updated_at = record->updated_at;
         t.updated_by = record->updated_by;
+        t.recurring_uid = record->recurring_uid;
         for (const SyncSource& source : syncSources) {
             if (SyncFiles::Contains(source.records, record->uid)) t.sources.push_back(source.id);
         }
@@ -201,6 +202,7 @@ SyncRecord TaskStore::MakeSyncRecord(Task& task, bool deleted) {
     record.author = task.author;
     record.assignee = task.assignee;
     record.deleted = deleted;
+    record.recurring_uid = task.recurring_uid;
     // Keep what a newer version stored with this task, taken from the newest copy we know.
     const SyncRecord* known = nullptr;
     for (const SyncSource& source : syncSources) {

@@ -2,6 +2,7 @@
 
 #include "AppTypes.h"
 #include "ExcludedApps.h"
+#include "Recurring.h"
 #include "SyncFiles.h"
 #include "TaskUtils.h"
 #include "VersionHint.h"
@@ -51,14 +52,17 @@ public:
     std::vector<SyncSource> syncSources;
     int next_source_id = 1;
     std::vector<int> active_order;
+    std::vector<RecurringRule> recurring_rules;
+    std::vector<int> newRecurringTaskIds; // Created by a work-day rollover; the UI puts them on top.
     std::vector<SyncNotice> pendingNotices;
     std::vector<VersionNotice> pendingVersionNotices; // Queued even when reloading silently.
 
     TaskStore();
 
+    // On a new work day also creates the due recurring tasks (see newRecurringTaskIds).
     void CheckWorkReset();
     // Returns the runtime id of the new task, or 0 when nothing was added.
-    int Add(const std::wstring& text, const std::vector<int>& sourceIds);
+    int Add(const std::wstring& text, const std::vector<int>& sourceIds, const std::string& recurringUid = "");
     void UpdateText(int id, const std::wstring& newText);
     void CycleMarker(int id);
     void ToggleCompleted(int id);
@@ -84,6 +88,16 @@ public:
     // queues notices into `pendingNotices` unless `silent`.
     void ReloadSync(bool forceAll, bool silent);
 
+    // Recurring and later tasks (TaskRecurring.cpp)
+    // The work day the reset time belongs to (before the reset time: the previous day).
+    std::string CurrentWorkDay() const;
+    // Adds or replaces (same uid) a rule. An instance starting today is created at once, and a
+    // one-off rule that ran is not kept. Returns the ids of the created tasks.
+    std::vector<int> SaveRecurringRule(RecurringRule rule);
+    void DeleteRecurringRule(const std::string& uid);
+    // Creates the instances due on the current work day; returns their ids.
+    std::vector<int> RunDueRecurring();
+
     void SaveLocal();
     void Save();
     void LoadLocal();
@@ -99,6 +113,8 @@ private:
     int RuntimeIdFor(const std::string& uid);
     void AddFirstRunSyncSource();
     Task* FindTask(int id);
+    bool IsOpenTask(const std::string& uid) const;
+    int CreateRecurringInstance(RecurringRule& rule);
     void PublishSyncTask(Task& task, bool deleted);
     SyncRecord MakeSyncRecord(Task& task, bool deleted);
     void RewriteSource(SyncSource& source, const SyncFiles::RecordMap* winners, const SyncRecord* upsert);

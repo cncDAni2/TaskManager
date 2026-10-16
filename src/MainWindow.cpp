@@ -20,6 +20,7 @@
 #include "WorkTracking.h"
 #include "UpdateCheck.h"
 #include "UpdateOverlay.h"
+#include "RecurringView.h"
 #include <windowsx.h>
 #include <commctrl.h>
 #include <algorithm>
@@ -211,7 +212,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                 394, 10, 80, 28, hWnd, (HMENU)IDC_MANUAL_WORK_BTN, hInst, nullptr);
             SendMessageW(g_hManualWorkBtn, WM_SETFONT, (WPARAM)g_hFontSmall, TRUE);
 
-            g_hToggleViewBtn = CreateWindowW(L"BUTTON", L"Elkészült (0)",
+            g_hToggleViewBtn = CreateWindowW(L"BUTTON", L"Elkészültek",
                 WS_CHILD | WS_VISIBLE | BS_OWNERDRAW | WS_TABSTOP,
                 345, 10, 125, 28, hWnd, (HMENU)IDC_TOGGLE_VIEW_BTN, hInst, nullptr);
             SendMessageW(g_hToggleViewBtn, WM_SETFONT, (WPARAM)g_hFontSmall, TRUE);
@@ -324,6 +325,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                 tiSyncToggle.lpszText = LPSTR_TEXTCALLBACKW; // Text depends on the selection (SyncPicker).
                 SendMessageW(hTooltip, TTM_ADDTOOL, 0, (LPARAM)&tiSyncToggle);
             }
+            RecurringView::CreateControls(hWnd, hInst);
 
             RegisterHotKey(hWnd, ID_HOTKEY_TOGGLE, MOD_CONTROL, VK_F1);
             RegisterHotKey(hWnd, ID_HOTKEY_UNPIN, MOD_CONTROL, VK_F2);
@@ -453,6 +455,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                 }
 
                 g_store.CheckWorkReset();
+                RecurringView::TakeNewTasks(hWnd);
 
                 LASTINPUTINFO lii = { sizeof(LASTINPUTINFO) };
                 GetLastInputInfo(&lii);
@@ -612,12 +615,14 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         case WM_NOTIFY: {
             if (BarTooltips::HandleNotify(lParam)) return 0;
             if (SyncPicker::HandleTooltipNotify(lParam, g_hSyncToggleBtn)) return 0;
+            if (RecurringView::HandleNotify(lParam)) return 0;
             break;
         }
 
         case WM_COMMAND: {
             if (TimerView::HandleCommand(hWnd, wParam)) return 0;
             if (Cleanup::HandleCommand(hWnd, wParam)) return 0;
+            if (RecurringView::HandleCommand(hWnd, wParam)) return 0;
             if (TimerHold::HandleCommand(LOWORD(wParam))) return 0;
             if (HandleCommand(hWnd, LOWORD(wParam))) return 0;
             break;

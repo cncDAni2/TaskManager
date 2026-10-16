@@ -188,7 +188,13 @@ bool IntervalTimer::Tick() {
 
 bool IntervalTimer::AdvancePhase() {
     if (!IsActive()) return false;
-    return AdvancePhaseAt(Now(), false);
+    const unsigned long long now = Now();
+    // A manual step also restarts the 20-20-20 cycle with a full 20 minutes of screen time.
+    visionBreakActive = false;
+    visionBreakAwaitingInput = false;
+    nextVisionBreakTick = now + kVisionBreakIntervalMs;
+    if (visionBreakClockPaused) visionBreakPauseTick = now;
+    return AdvancePhaseAt(now, false);
 }
 
 bool IntervalTimer::AdvancePhaseAt(unsigned long long now, bool holdWorkUntilActive) {

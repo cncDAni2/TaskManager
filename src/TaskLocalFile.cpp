@@ -71,7 +71,9 @@ void TaskStore::SaveLocal() {
             << ", \"path\": " << Quote(source.path)
             << ", \"default\": " << (source.isDefault ? "true" : "false") << " }";
     }
-    out << (syncSources.empty() ? "],\n" : "\n  ],\n") << "  \"active_order\": [";
+    out << (syncSources.empty() ? "],\n" : "\n  ],\n");
+    Recurring::WriteJson(out, recurring_rules);
+    out << "  \"active_order\": [";
     bool firstOrder = true;
     for (int id : active_order) {
         auto it = std::find_if(tasks.begin(), tasks.end(), [id](const Task& t) { return t.id == id; });
@@ -92,8 +94,11 @@ void TaskStore::SaveLocal() {
         out << "      \"completed\": " << (t.completed ? "true" : "false") << ",\n";
         out << "      \"created_at\": " << t.created_at << ",\n";
         out << "      \"completed_at\": " << t.completed_at << ",\n";
-        out << "      \"marker\": " << static_cast<int>(t.marker) << "\n";
-        out << "    }";
+        out << "      \"marker\": " << static_cast<int>(t.marker);
+        if (!t.recurring_uid.empty()) {
+            out << ",\n      \"recurring_uid\": \"" << TaskUtils::EscapeJsonString(t.recurring_uid) << "\"";
+        }
+        out << "\n    }";
     }
     out << "\n  ]\n}\n";
 }
@@ -290,6 +295,8 @@ void TaskStore::LoadLocal() {
         }
     }
 
+    Recurring::LoadFromJson(content, recurring_rules);
+
     std::vector<std::string> taskObjects;
     JsonLite::ReadObjectArray(content, "tasks", taskObjects);
     for (const std::string& object : taskObjects) {
@@ -308,6 +315,7 @@ void TaskStore::LoadLocal() {
         if (JsonLite::GetInt64(object, "marker", number)) {
             t.marker = static_cast<TaskMarker>((std::min)(3LL, (std::max)(0LL, number)));
         }
+        JsonLite::GetString(object, "recurring_uid", t.recurring_uid);
         t.id = RuntimeIdFor(t.uid);
         tasks.push_back(t);
     }

@@ -13,12 +13,14 @@ void ApplyDarkModeTitleBar(HWND hWnd, bool dark) {
     DwmSetWindowAttribute(hWnd, DWMWA_USE_IMMERSIVE_DARK_MODE, &useDark, sizeof(useDark));
 }
 
-void DrawHandIcon(HDC hdc, const RECT& rc, COLORREF color) {
-    // GDI has no anti-aliasing: draw the shape 4x larger, shrink it with HALFTONE
-    // averaging, and use the result as coverage to blend the color over the button.
-    constexpr int kSize = 20;
-    constexpr int kScale = 4;
-    constexpr int kBig = kSize * kScale;
+namespace {
+constexpr int kSize = 20;
+constexpr int kScale = 4;
+constexpr int kBig = kSize * kScale;
+
+// GDI has no anti-aliasing: `drawShape` paints a white shape on an 80x80 black canvas, which is
+// shrunk with HALFTONE averaging and used as coverage to blend `color` over the 20x20 target.
+void DrawSmoothShape(HDC hdc, const RECT& rc, COLORREF color, void (*drawShape)(HDC)) {
     const int left = rc.left + (rc.right - rc.left - kSize) / 2;
     const int top = rc.top + (rc.bottom - rc.top - kSize) / 2;
 
@@ -46,30 +48,7 @@ void DrawHandIcon(HDC hdc, const RECT& rc, COLORREF color) {
     auto dest = createDib(kSize, destDc, destBits);
 
     if (bigBits && maskBits && destBits) {
-        LOGBRUSH lb{ BS_SOLID, RGB(255, 255, 255), 0 };
-        HPEN fingerPen = ExtCreatePen(PS_GEOMETRIC | PS_SOLID | PS_ENDCAP_ROUND, 11, &lb, 0, nullptr);
-        HGDIOBJ oldPen = SelectObject(bigDc, fingerPen);
-        const POINT fingers[4][2] = {
-            { { 12, 30 }, { 12, 52 } }, { { 28, 14 }, { 28, 52 } },
-            { { 44, 11 }, { 44, 52 } }, { { 60, 18 }, { 60, 52 } } };
-        for (const auto& finger : fingers) {
-            MoveToEx(bigDc, finger[0].x, finger[0].y, nullptr);
-            LineTo(bigDc, finger[1].x, finger[1].y);
-        }
-        MoveToEx(bigDc, 56, 64, nullptr);
-        LineTo(bigDc, 73, 43);
-        SelectObject(bigDc, GetStockObject(NULL_PEN));
-        HBRUSH white = CreateSolidBrush(RGB(255, 255, 255));
-        HGDIOBJ oldBrush = SelectObject(bigDc, white);
-        RoundRect(bigDc, 6, 40, 67, 79, 30, 30);
-        Rectangle(bigDc, 6, 40, 67, 60);
-        // Straight edge from the thumb's underside, tangent to the palm's rounded corner.
-        const POINT thumbBase[] = { { 73, 43 }, { 77, 47 }, { 66, 71 }, { 52, 64 } };
-        Polygon(bigDc, thumbBase, 4);
-        SelectObject(bigDc, oldBrush);
-        SelectObject(bigDc, oldPen);
-        DeleteObject(white);
-        DeleteObject(fingerPen);
+        drawShape(bigDc);
 
         SetStretchBltMode(maskDc, HALFTONE);
         SetBrushOrgEx(maskDc, 0, 0, nullptr);
@@ -100,6 +79,75 @@ void DrawHandIcon(HDC hdc, const RECT& rc, COLORREF color) {
     release(bigDc, big);
     release(maskDc, mask);
     release(destDc, dest);
+}
+}
+
+void DrawHandIcon(HDC hdc, const RECT& rc, COLORREF color) {
+    DrawSmoothShape(hdc, rc, color, [](HDC bigDc) {
+        LOGBRUSH lb{ BS_SOLID, RGB(255, 255, 255), 0 };
+        HPEN fingerPen = ExtCreatePen(PS_GEOMETRIC | PS_SOLID | PS_ENDCAP_ROUND, 11, &lb, 0, nullptr);
+        HGDIOBJ oldPen = SelectObject(bigDc, fingerPen);
+        const POINT fingers[4][2] = {
+            { { 12, 30 }, { 12, 52 } }, { { 28, 14 }, { 28, 52 } },
+            { { 44, 11 }, { 44, 52 } }, { { 60, 18 }, { 60, 52 } } };
+        for (const auto& finger : fingers) {
+            MoveToEx(bigDc, finger[0].x, finger[0].y, nullptr);
+            LineTo(bigDc, finger[1].x, finger[1].y);
+        }
+        MoveToEx(bigDc, 56, 64, nullptr);
+        LineTo(bigDc, 73, 43);
+        SelectObject(bigDc, GetStockObject(NULL_PEN));
+        HBRUSH white = CreateSolidBrush(RGB(255, 255, 255));
+        HGDIOBJ oldBrush = SelectObject(bigDc, white);
+        RoundRect(bigDc, 6, 40, 67, 79, 30, 30);
+        Rectangle(bigDc, 6, 40, 67, 60);
+        // Straight edge from the thumb's underside, tangent to the palm's rounded corner.
+        const POINT thumbBase[] = { { 73, 43 }, { 77, 47 }, { 66, 71 }, { 52, 64 } };
+        Polygon(bigDc, thumbBase, 4);
+        SelectObject(bigDc, oldBrush);
+        SelectObject(bigDc, oldPen);
+        DeleteObject(white);
+        DeleteObject(fingerPen);
+    });
+}
+
+// Two arcs chasing each other clockwise, each ending in an arrowhead.
+void DrawRepeatIcon(HDC hdc, const RECT& rc, COLORREF color) {
+    DrawSmoothShape(hdc, rc, color, [](HDC bigDc) {
+        constexpr double pi = 3.14159265358979323846;
+        constexpr double cx = 40.0, cy = 40.0, radius = 26.0;
+        LOGBRUSH lb{ BS_SOLID, RGB(255, 255, 255), 0 };
+        HPEN pen = ExtCreatePen(PS_GEOMETRIC | PS_SOLID | PS_ENDCAP_FLAT, 9, &lb, 0, nullptr);
+        HBRUSH white = CreateSolidBrush(RGB(255, 255, 255));
+        HGDIOBJ oldPen = SelectObject(bigDc, pen);
+        HGDIOBJ oldBrush = SelectObject(bigDc, white);
+        // Angles grow clockwise on screen (y points down).
+        for (double startDeg : { 195.0, 15.0 }) {
+            const double endDeg = startDeg + 125.0;
+            POINT arc[24];
+            for (int i = 0; i < 24; ++i) {
+                const double a = (startDeg + (endDeg - startDeg) * i / 23.0) * pi / 180.0;
+                arc[i] = { static_cast<LONG>(std::lround(cx + radius * std::cos(a))),
+                    static_cast<LONG>(std::lround(cy + radius * std::sin(a))) };
+            }
+            Polyline(bigDc, arc, 24);
+            const double e = endDeg * pi / 180.0;
+            const double ex = cx + radius * std::cos(e), ey = cy + radius * std::sin(e);
+            const double tx = -std::sin(e), ty = std::cos(e); // Clockwise tangent.
+            const double nx = std::cos(e), ny = std::sin(e);  // Outward normal.
+            SelectObject(bigDc, GetStockObject(NULL_PEN));
+            const POINT head[3] = {
+                { static_cast<LONG>(std::lround(ex + tx * 16)), static_cast<LONG>(std::lround(ey + ty * 16)) },
+                { static_cast<LONG>(std::lround(ex + nx * 14 - tx * 2)), static_cast<LONG>(std::lround(ey + ny * 14 - ty * 2)) },
+                { static_cast<LONG>(std::lround(ex - nx * 14 - tx * 2)), static_cast<LONG>(std::lround(ey - ny * 14 - ty * 2)) } };
+            Polygon(bigDc, head, 3);
+            SelectObject(bigDc, pen);
+        }
+        SelectObject(bigDc, oldBrush);
+        SelectObject(bigDc, oldPen);
+        DeleteObject(white);
+        DeleteObject(pen);
+    });
 }
 
 HICON GenerateAppIcon() {

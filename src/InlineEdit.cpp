@@ -34,12 +34,15 @@ LRESULT CALLBACK EditSubclassProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lP
         InvalidateRect(g_hWnd, nullptr, FALSE);
     }
 
-    if (uMsg == WM_CHAR && (wParam == VK_RETURN || wParam == VK_TAB || wParam == 0x7F)) {
+    // Ctrl+Enter arrives as a line feed (0x0A).
+    if (uMsg == WM_CHAR && (wParam == VK_RETURN || wParam == 0x0A || wParam == VK_TAB || wParam == 0x7F)) {
         if (wParam == 0x7F) DeletePreviousWord(hWnd);
         return 0;
     } else if (uMsg == WM_KEYDOWN) {
         if (wParam == VK_RETURN) {
-            SendMessageW(g_hWnd, WM_COMMAND, MAKEWPARAM(IDC_ADD_TASK_BTN, BN_CLICKED), 0);
+            // Ctrl+Enter: like the repeat button, takes the text over to the scheduled tasks.
+            const int command = (GetKeyState(VK_CONTROL) & 0x8000) ? IDC_RECURRING_BTN : IDC_ADD_TASK_BTN;
+            SendMessageW(g_hWnd, WM_COMMAND, MAKEWPARAM(command, BN_CLICKED), 0);
             return 0;
         } else if (wParam == VK_ESCAPE) {
             if (g_pinMode && !g_isMiniMode) {

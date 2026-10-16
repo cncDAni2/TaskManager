@@ -50,6 +50,7 @@ bool ParseRecord(const std::string& object, SyncRecord& record, SyncFileInfo& in
         else if (key == "author") JsonLite::WideStringValue(value, record.author);
         else if (key == "assignee") JsonLite::WideStringValue(value, record.assignee);
         else if (key == "deleted") JsonLite::BoolValue(value, record.deleted);
+        else if (key == "recurring_uid") JsonLite::StringValue(value, record.recurring_uid);
         else {
             record.extras.push_back(member);
             NoteUnknownKey(info, key);
@@ -151,6 +152,9 @@ bool SyncFiles::Write(const std::wstring& path, const std::vector<SyncRecord>& r
             << "      \"author\": " << Quote(r.author) << ",\n"
             << "      \"assignee\": " << Quote(r.assignee) << ",\n"
             << "      \"deleted\": " << (r.deleted ? "true" : "false");
+        if (!r.recurring_uid.empty()) {
+            out << ",\n      \"recurring_uid\": \"" << TaskUtils::EscapeJsonString(r.recurring_uid) << "\"";
+        }
         WriteExtras(out, r.extras, "      ");
         out << "\n    }" << (i + 1 < records.size() ? ",\n" : "\n");
     }

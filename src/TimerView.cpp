@@ -141,6 +141,13 @@ LRESULT CALLBACK TimerControlSubclassProc(HWND control, UINT message, WPARAM wPa
         SendMessageW(control, BM_CLICK, 0, 0);
         return 0;
     }
+    // Minutes take digits and one decimal separator; repetitions are ES_NUMBER. Control
+    // characters (Backspace, Ctrl+V, ...) pass; a pasted invalid value is still rejected by Start.
+    if (message == WM_CHAR && (control == g_workEdit || control == g_restEdit) && wParam >= L' ' &&
+        !(wParam >= L'0' && wParam <= L'9') && wParam != L',' && wParam != L'.') {
+        if (g_store.sounds_enabled) MessageBeep(MB_OK);
+        return 0;
+    }
     if (message == WM_CHAR && (wParam == L'\t' || wParam == L'\r' ||
         (wParam == L' ' && (control == g_startButton || control == g_pauseButton ||
             control == g_nextButton)))) return 0;

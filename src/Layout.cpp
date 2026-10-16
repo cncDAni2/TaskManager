@@ -10,6 +10,7 @@
 #include "WorkTracking.h"
 #include "UpdateCheck.h"
 #include "UpdateOverlay.h"
+#include "RecurringView.h"
 #include <algorithm>
 #include <set>
 
@@ -19,9 +20,22 @@ static int MeasureTaskTextHeight(HDC hdc, const std::wstring& text, int width) {
     return std::max(20, (int)(rc.bottom - rc.top));
 }
 
+static int TextButtonWidth(HWND button) {
+    wchar_t label[64]{};
+    GetWindowTextW(button, label, _countof(label));
+    HDC dc = GetDC(button);
+    HGDIOBJ oldFont = SelectObject(dc, g_hFontSmall);
+    SIZE size{};
+    GetTextExtentPoint32W(dc, label, static_cast<int>(wcslen(label)), &size);
+    SelectObject(dc, oldFont);
+    ReleaseDC(button, dc);
+    return size.cx + 20;
+}
+
 int GetListTop() {
     if (g_viewMode == ViewMode::ActiveTasks) return 94;
     if (g_viewMode == ViewMode::WorkHistory) return 48;
+    if (g_viewMode == ViewMode::Recurring) return RecurringView::ListTop();
     return 54;
 }
 
@@ -142,6 +156,7 @@ void UpdateControlsVisibility() {
         ShowWindow(g_hCloseBtn, SW_HIDE);
         ShowWindow(g_hPinBtn, SW_HIDE);
         TimerView::UpdateVisibility(false);
+        RecurringView::UpdateVisibility(false);
         Cleanup::UpdateVisibility(0);
         return;
     }
@@ -157,10 +172,9 @@ void UpdateControlsVisibility() {
     bool isActive = (g_viewMode == ViewMode::ActiveTasks);
     bool isHistory = (g_viewMode == ViewMode::WorkHistory);
     bool isTimer = (g_viewMode == ViewMode::IntervalTimer);
+    bool isRecurring = (g_viewMode == ViewMode::Recurring);
     ShowWindow(g_hTimeHistoryBtn, isHistory ? SW_HIDE : SW_SHOW);
     WorkTracking::LayoutFooter(isHistory);
-    SetWindowPos(g_hToggleViewBtn, nullptr, isHistory ? 286 : 345, 10,
-        isHistory ? 104 : 125, 28, SWP_NOZORDER | SWP_NOACTIVATE);
     ShowWindow(g_hManualWorkBtn, isHistory ? SW_SHOW : SW_HIDE);
     {
         RECT rcCleanup{};
@@ -169,28 +183,45 @@ void UpdateControlsVisibility() {
     }
     ShowWindow(g_hEdit, isActive ? SW_SHOW : SW_HIDE);
     ShowWindow(g_hAddBtn, isActive ? SW_SHOW : SW_HIDE);
-    // Without sync files the cloud button disappears and the input row takes its place.
-    const bool showSync = isActive && SyncPicker::HasSources();
+    // [input] [+ Hozzáad] [repeat] [cloud]; without sync files the cloud button disappears.
+    const bool showSync = (isActive || isRecurring) && SyncPicker::HasSources();
     ShowWindow(g_hSyncToggleBtn, showSync ? SW_SHOW : SW_HIDE);
-    const int addButtonX = SyncPicker::HasSources() ? 479 : 516;
+    const int repeatButtonX = SyncPicker::HasSources() ? 540 : 577;
+    const int addButtonX = repeatButtonX - 6 - 92;
     SetWindowPos(g_hEdit, nullptr, 12, 56, addButtonX - 6 - 12, 28, SWP_NOZORDER | SWP_NOACTIVATE);
     SetWindowPos(g_hAddBtn, nullptr, addButtonX, 56, 92, 28, SWP_NOZORDER | SWP_NOACTIVATE);
+    SetWindowPos(GetDlgItem(g_hWnd, IDC_RECURRING_BTN), nullptr, repeatButtonX, 56, 31, 28, SWP_NOZORDER | SWP_NOACTIVATE);
+    if (isActive) SetWindowPos(g_hSyncToggleBtn, nullptr, 577, 56, 31, 28, SWP_NOZORDER | SWP_NOACTIVATE);
     if (isHistory) {
         SetWindowTextW(g_hToggleViewBtn, L"← Feladatok");
         SetWindowTextW(g_hTimeHistoryBtn, L"● Idők");
-    } else if (isTimer) {
+    } else if (isTimer || isRecurring) {
         SetWindowTextW(g_hToggleViewBtn, L"← Feladatok");
         SetWindowTextW(g_hTimeHistoryBtn, L"Idők");
     } else if (isActive) {
         SetWindowTextW(g_hTimeHistoryBtn, L"Idők");
-        size_t count = g_store.GetRecentCompletedTasks().size();
-        std::wstring label = L"Elkészült (" + std::to_wstring(count) + L")";
-        SetWindowTextW(g_hToggleViewBtn, label.c_str());
+        SetWindowTextW(g_hToggleViewBtn, L"Elkészültek");
     } else {
         SetWindowTextW(g_hTimeHistoryBtn, L"Idők");
         SetWindowTextW(g_hToggleViewBtn, L"← Aktívak");
     }
+    // The header buttons line up right-to-left from the timer button: the view toggle (just wide
+    // enough for its label, ~10px padding), "Idők", then the focus and timer-hold buttons.
+    int leftmostX = 286;
+    if (isHistory) {
+        SetWindowPos(g_hToggleViewBtn, nullptr, 286, 10, 104, 28, SWP_NOZORDER | SWP_NOACTIVATE);
+    } else {
+        const int width = TextButtonWidth(g_hToggleViewBtn);
+        const int right = 470;
+        SetWindowPos(g_hToggleViewBtn, nullptr, right - width, 10, width, 28, SWP_NOZORDER | SWP_NOACTIVATE);
+        leftmostX = right - width - 5 - 54;
+        SetWindowPos(g_hTimeHistoryBtn, nullptr, leftmostX, 10, 54, 28, SWP_NOZORDER | SWP_NOACTIVATE);
+    }
+    SetWindowPos(g_hFocusModeBtn, nullptr, leftmostX - 6 - 28, 10, 28, 28, SWP_NOZORDER | SWP_NOACTIVATE);
+    SetWindowPos(GetDlgItem(g_hWnd, IDC_TIMER_HOLD_BTN), nullptr, leftmostX - 2 * (6 + 28), 10, 28, 28,
+        SWP_NOZORDER | SWP_NOACTIVATE);
     TimerView::UpdateVisibility(isTimer);
+    RecurringView::UpdateVisibility(isRecurring);
     if (UpdateOverlay::IsVisible()) UpdateOverlay::HideChildren(g_hWnd);
 }
 
@@ -415,6 +446,11 @@ void RecalculateLayout() {
 
     if (g_viewMode == ViewMode::IntervalTimer) {
         g_totalContentHeight = 0;
+        return;
+    }
+
+    if (g_viewMode == ViewMode::Recurring) {
+        RecurringView::RecalculateLayout(clientWidth);
         return;
     }
 

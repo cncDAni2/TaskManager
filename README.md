@@ -25,12 +25,14 @@ A PIN nézet egy mini, kissé áttetsző lebegő ablak, amely mindig a képerny�
 A főablak megnyitásakor az új feladat hozzáadására szolgáló mező azonnal aktív. Ha van beállított szinkronizációs fájl, mellette felhőikon található: ezzel választhatod ki, hova kerüljön az új feladat (lásd: Szinkronizált feladatok).  
 A feladatokat szerkesztheted, törölheted, készre jelölheted, jelölőikonnal láthatod el (az ikonra kattintva válthatsz a jelölések között), és húzással rendezheted sorba.  
 Főablakban készre jelölve a feladat az ablak bezárásáig látható marad az aktív listában; újranyitáskor már csak az „Elkészült” nézetben szerepel.
-A kész feladatokat napi bontásban, a fenti „Elkészült” gombra kattintva láthatod.  
+A kész feladatokat napi bontásban, a fenti „Elkészültek” gombra kattintva láthatod.  
+**Ismétlődő és későbbi feladatok:** a „+ Hozzáad” melletti ↻ gombbal (a már beírt szöveget átviszi) megadhatod, melyik naptól jelenjen meg a feladat, és hogy hány naponta / hetente / havonta ismétlődjön (0 = egyszeri). A feladat a megadott napon, a munkaidő kezdetekor kerül a lista tetejére; az ismétlődő ↻ jelet kap, és amíg nincs kész, nem jön létre belőle újabb. Az ütemezést csak te látod, a belőle létrehozott (akár szinkronizált) feladat viszont sima feladat.  
 **Takarítás:** az „Elkészült” nézet jobb felső sarkában megadhatod, hány napnál régebben elkészült feladatok törlődjenek (alapból 14), majd a gombbal törölheted őket. Törlés előtt a program megmutatja, hány feladat törlődik; a szinkronizált feladatok a többi felhasználónál is törlődnek. A beírt számot a program megjegyzi.
 
 **Gyorsbillentyűk** a főablak nézetben:
 
 - Enter: új feladat hozzáadása, ha a beviteli mező aktív.  
+- Ctrl+Enter: a beírt szöveg átvitele ismétlődő / későbbi feladatnak (mint a ↻ gomb).  
 - Tab / Shift+Tab: Váltás a feladatok között
 - Space: A kijelölt feladat készre jelölése vagy a jelölés visszavonása
 - Enter: A kijelölt feladat szerkesztése, illetve a szerkesztés befejezése és mentése

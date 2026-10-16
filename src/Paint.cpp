@@ -11,6 +11,7 @@
 #include "WorkTracking.h"
 #include "UpdateOverlay.h"
 #include "TimerView.h"
+#include "RecurringView.h"
 
 namespace {
     constexpr int DAILY_WORK_TARGET_SECONDS = 6 * 3600 + 50 * 60;
@@ -344,8 +345,10 @@ void PaintMainWindow(HWND hWnd, HDC hdc) {
     SetBkMode(hdcMem, TRANSPARENT);
     SetTextColor(hdcMem, isHistory ? hc.title : th.textTitle);
     SelectObject(hdcMem, g_hFontTitle);
+    const bool isRecurring = g_viewMode == ViewMode::Recurring;
     std::wstring title = g_viewMode == ViewMode::ActiveTasks ? L"Feladatok"
-        : (isHistory ? L"Munkaidő" : (isTimer ? L"Időzítő" : L"Elkészült feladatok"));
+        : (isHistory ? L"Munkaidő" : (isTimer ? L"Időzítő"
+            : (isRecurring ? L"Ütemezett feladatok" : L"Elkészült feladatok")));
     RECT rcTitle = { 14, 12, 280, 40 };
     DrawTextW(hdcMem, title.c_str(), -1, &rcTitle, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
 
@@ -361,6 +364,8 @@ void PaintMainWindow(HWND hWnd, HDC hdc) {
         MoveToEx(hdcMem, 0, 93, nullptr);
         LineTo(hdcMem, clientW, 93);
         DeleteObject(hPenSep);
+    } else if (isRecurring) {
+        RecurringView::PaintForm(hdcMem, clientW);
     }
 
     // 3. Draw items with clipping to list area
@@ -525,6 +530,8 @@ void PaintMainWindow(HWND hWnd, HDC hdc) {
             DrawTextW(hdcMem, L"Következő indításkor újraindul", -1, &rcWarning,
                 DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS);
         }
+    } else if (isRecurring) {
+        RecurringView::PaintList(hdcMem, clientW, topOffset, listBottom);
     } else if (g_displayItems.empty()) {
         SelectObject(hdcMem, g_hFontNormal);
         SetTextColor(hdcMem, th.textEmpty);
@@ -671,6 +678,7 @@ void PaintMainWindow(HWND hWnd, HDC hdc) {
                 if (item.task.is_sync && !item.task.assignee.empty()) {
                     meta += L" (" + item.task.assignee + L")";
                 }
+                if (!item.task.recurring_uid.empty()) meta = L"↻ " + meta;
                 DrawTextW(hdcMem, meta.c_str(), -1, &rcMeta, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
             }
 

@@ -1,6 +1,7 @@
 #include "UpdateCheck.h"
 #include "AppState.h"
 #include "JsonLite.h"
+#include "MemoryTrim.h"
 #include "UpdateOverlay.h"
 #include "Version.h"
 #include <winhttp.h>
@@ -112,4 +113,7 @@ void UpdateCheck::HandleResult(WPARAM wParam, LPARAM lParam) {
     delete version;
     g_store.SaveLocal();
     UpdateOverlay::Refresh();
+    // WinHTTP and TLS leave ~2 MB of touched pages behind; give them back unless the full window
+    // is open (hiding it trims anyway).
+    if (g_hWnd && (g_isMiniMode || !IsWindowVisible(g_hWnd))) MemoryTrim::Request(g_hWnd);
 }

@@ -14,6 +14,8 @@ TaskStore::TaskStore() {
     }
     Load();
     CheckWorkReset();
+    RunDueRecurring(); // Also after a restart on the same work day; it creates nothing twice.
+    newRecurringTaskIds.clear(); // The startup ordering already has them on top.
 }
 
 void TaskStore::CheckWorkReset() {
@@ -27,6 +29,8 @@ void TaskStore::CheckWorkReset() {
         work_seconds_today = 0;
         last_reset_time = cutoff;
         SaveLocal();
+        const std::vector<int> created = RunDueRecurring();
+        newRecurringTaskIds.insert(newRecurringTaskIds.end(), created.begin(), created.end());
     }
 }
 
@@ -43,13 +47,14 @@ Task* TaskStore::FindTask(int id) {
     return it == tasks.end() ? nullptr : &*it;
 }
 
-int TaskStore::Add(const std::wstring& text, const std::vector<int>& sourceIds) {
+int TaskStore::Add(const std::wstring& text, const std::vector<int>& sourceIds, const std::string& recurringUid) {
     if (text.empty()) return 0;
     Task t;
     t.uid = SyncFiles::NewUid();
     t.id = RuntimeIdFor(t.uid);
     t.text = text;
     t.created_at = time(nullptr);
+    t.recurring_uid = recurringUid;
 
     for (int sourceId : sourceIds) {
         if (FindSource(sourceId)) t.sources.push_back(sourceId);

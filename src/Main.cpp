@@ -2,6 +2,7 @@
 #include "AppState.h"
 #include "MainWindow.h"
 #include "Layout.h"
+#include "RecurringView.h"
 #include <commctrl.h>
 #include <set>
 
@@ -75,7 +76,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR, int) {
     MSG msg;
     while (GetMessageW(&msg, nullptr, 0, 0)) {
         if (msg.message == WM_KEYDOWN && msg.wParam == VK_ESCAPE &&
-            (!g_hInlineEdit || msg.hwnd != g_hInlineEdit)) {
+            (!g_hInlineEdit || msg.hwnd != g_hInlineEdit) && !RecurringView::IsDropDownOpen()) {
             if (g_pinMode && !g_isMiniMode) {
                 EnterMiniMode();
             } else if (!g_pinMode) {

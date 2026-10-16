@@ -20,6 +20,7 @@ struct SyncRecord {
     std::wstring author;
     std::wstring assignee;
     bool deleted = false;
+    std::string recurring_uid; // Written only when set.
     // Members this version does not know (written by a newer one); kept and written back unchanged.
     std::vector<JsonLite::Member> extras;
 };

@@ -12,6 +12,7 @@
 #include "FocusMode.h"
 #include "IntervalTimer.h"
 #include "WorkTracking.h"
+#include "RecurringView.h"
 #include <windowsx.h>
 #include <algorithm>
 #include <cwctype>
@@ -173,6 +174,9 @@ bool HandleKeyDown(HWND hWnd, WPARAM wParam) {
         } else if (!g_pinMode) {
             HideAppWindow();
         }
+        return true;
+    } else if (g_viewMode == ViewMode::Recurring) {
+        if (wParam == VK_TAB) RecurringView::FocusForm();
         return true;
     } else if (wParam == VK_TAB) {
         bool isShift = (GetKeyState(VK_SHIFT) & 0x8000) != 0;
@@ -375,6 +379,11 @@ bool HandleLButtonDown(HWND hWnd, LPARAM lParam) {
         }
     }
 
+    if (g_viewMode == ViewMode::Recurring) {
+        RecurringView::HandleClick(hWnd, mx, clickRawY);
+        return true;
+    }
+
     int my = clickRawY + g_scrollY;
 
     for (size_t i = 0; i < g_displayItems.size(); ++i) {
@@ -504,6 +513,10 @@ bool HandleMouseMove(HWND hWnd, LPARAM lParam) {
     if (isSbHover != g_scrollbarHovered) {
         g_scrollbarHovered = isSbHover;
         InvalidateRect(hWnd, nullptr, FALSE);
+    }
+    if (g_viewMode == ViewMode::Recurring) {
+        RecurringView::HandleMouseMove(hWnd, isSbHover ? -1 : mx, rawY);
+        return true;
     }
 
     int my = rawY + (g_isMiniMode ? 0 : g_scrollY);
@@ -663,7 +676,7 @@ bool HandleCommand(HWND hWnd, int id) {
         return true;
     } else if (id == IDC_SYNC_TOGGLE_BTN) {
         SyncPicker::HandleClick(hWnd, g_hSyncToggleBtn);
-        SetFocus(g_hEdit);
+        SetFocus(g_viewMode == ViewMode::Recurring ? g_hSyncToggleBtn : g_hEdit);
         return true;
     } else if (id == IDC_SETTINGS_BTN) {
         ShowSettingsDialog(hWnd);
@@ -697,7 +710,7 @@ bool HandleCommand(HWND hWnd, int id) {
         return true;
     } else if (id == IDC_TOGGLE_VIEW_BTN) {
         CommitInlineEdit();
-        if (g_viewMode == ViewMode::IntervalTimer) {
+        if (g_viewMode == ViewMode::IntervalTimer || g_viewMode == ViewMode::Recurring) {
             g_viewMode = ViewMode::ActiveTasks;
         } else if (g_viewMode == ViewMode::ActiveTasks) {
             g_viewMode = ViewMode::CompletedTasks;
@@ -760,6 +773,9 @@ static COLORREF GetButtonSurfaceColor(UINT ctlId, const ThemeColors& th) {
     switch (ctlId) {
     case IDC_ADD_TASK_BTN:
     case IDC_SYNC_TOGGLE_BTN:
+    case IDC_RECURRING_UNIT_BTN:
+    case IDC_RECURRING_SAVE_BTN:
+    case IDC_RECURRING_CANCEL_BTN:
         return th.bgSubBar;
     case IDC_CLEANUP_BTN:
         return Cleanup::SurfaceColor();
@@ -781,6 +797,7 @@ static COLORREF GetButtonSurfaceColor(UINT ctlId, const ThemeColors& th) {
 
 bool HandleDrawItem(HWND /*hWnd*/, DRAWITEMSTRUCT* pDIS) {
     if (!pDIS) return false;
+    if (RecurringView::HandleDrawItem(pDIS)) return true;
     ThemeColors th = GetThemeColors(g_themeMode);
     bool isSelected = (pDIS->itemState & ODS_SELECTED) != 0;
     bool isPink = g_themeMode == ThemeMode::Pink;
@@ -848,7 +865,9 @@ bool HandleDrawItem(HWND /*hWnd*/, DRAWITEMSTRUCT* pDIS) {
         pDIS->CtlID == IDC_TOGGLE_VIEW_BTN || pDIS->CtlID == IDC_TIMER_START_BTN ||
         pDIS->CtlID == IDC_TIMER_PAUSE_BTN || pDIS->CtlID == IDC_TIMER_NEXT_BTN ||
         pDIS->CtlID == IDC_CLOSE_BTN ||
-        pDIS->CtlID == IDC_ADD_TASK_BTN || pDIS->CtlID == IDC_CLEANUP_BTN;
+        pDIS->CtlID == IDC_ADD_TASK_BTN || pDIS->CtlID == IDC_CLEANUP_BTN ||
+        pDIS->CtlID == IDC_RECURRING_UNIT_BTN || pDIS->CtlID == IDC_RECURRING_SAVE_BTN ||
+        pDIS->CtlID == IDC_RECURRING_CANCEL_BTN;
     if (isTextButton) {
         bool isDark = g_themeMode == ThemeMode::Dark;
         bool isMeasurementStopped = pDIS->CtlID == IDC_STOP_WORK_BTN && g_workMeasurementStopped;
@@ -882,7 +901,8 @@ bool HandleDrawItem(HWND /*hWnd*/, DRAWITEMSTRUCT* pDIS) {
         DrawTextW(pDIS->hDC, label, -1, &textRect,
             DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS);
         if ((pDIS->CtlID == IDC_TIMER_START_BTN || pDIS->CtlID == IDC_TIMER_PAUSE_BTN ||
-            pDIS->CtlID == IDC_TIMER_NEXT_BTN) &&
+            pDIS->CtlID == IDC_TIMER_NEXT_BTN || pDIS->CtlID == IDC_RECURRING_UNIT_BTN ||
+            pDIS->CtlID == IDC_RECURRING_SAVE_BTN || pDIS->CtlID == IDC_RECURRING_CANCEL_BTN) &&
             (pDIS->itemState & ODS_FOCUS)) {
             RECT focusRect = pDIS->rcItem;
             InflateRect(&focusRect, -4, -4);
@@ -892,19 +912,22 @@ bool HandleDrawItem(HWND /*hWnd*/, DRAWITEMSTRUCT* pDIS) {
         return true;
     }
 
+    // Icon buttons share the dark theme's gray of the other header buttons.
+    const bool isDarkTheme = g_themeMode == ThemeMode::Dark;
+    const COLORREF iconButtonBg = isPink ? pinkButtonBg
+        : (isDarkTheme ? RGB(60, 60, 60) : (isSelected ? th.bgCardHover : th.bgHeader));
+    const COLORREF iconButtonBorder = isSelected ? th.borderCardHover
+        : (isDarkTheme ? RGB(82, 82, 82) : restingBorder);
+
     if (pDIS->CtlID == IDC_TIMER_HOLD_BTN) {
-        TimerHold::DrawButton(pDIS,
-            isPink ? pinkButtonBg : (isSelected ? th.bgCardHover : th.bgHeader),
-            isSelected ? th.borderCardHover : restingBorder,
+        TimerHold::DrawButton(pDIS, iconButtonBg, iconButtonBorder,
             isPink ? RGB(255, 255, 255) : (isSelected ? th.textPrimary : th.textSecondary));
         return true;
     }
 
     if (pDIS->CtlID == IDC_FOCUS_MODE_BTN) {
-        COLORREF bgBtn = g_focusMode ? RGB(30, 58, 138)
-            : (isPink ? pinkButtonBg : (isSelected ? th.bgCardHover : th.bgHeader));
-        COLORREF borderBtn = g_focusMode ? RGB(30, 64, 175)
-            : (isSelected ? th.borderCardHover : restingBorder);
+        COLORREF bgBtn = g_focusMode ? RGB(30, 58, 138) : iconButtonBg;
+        COLORREF borderBtn = g_focusMode ? RGB(30, 64, 175) : iconButtonBorder;
         COLORREF iconColor = isPink || g_focusMode ? RGB(255, 255, 255)
             : (isSelected ? th.textPrimary : th.textSecondary);
         HBRUSH hBr = CreateSolidBrush(bgBtn);
@@ -955,7 +978,6 @@ bool HandleDrawItem(HWND /*hWnd*/, DRAWITEMSTRUCT* pDIS) {
         return true;
     } else if (pDIS->CtlID == IDC_TIMER_BTN) {
         const bool selected = g_viewMode == ViewMode::IntervalTimer;
-        const bool isDarkTheme = g_themeMode == ThemeMode::Dark;
         COLORREF bgBtn = selected ? RGB(30, 58, 138)
             : (isPink ? pinkButtonBg : (isDarkTheme ? RGB(60, 60, 60) : th.bgHeader));
         COLORREF borderBtn = selected ? RGB(30, 64, 175) : (isDarkTheme ? RGB(82, 82, 82) : restingBorder);
@@ -975,7 +997,6 @@ bool HandleDrawItem(HWND /*hWnd*/, DRAWITEMSTRUCT* pDIS) {
         DrawTimerIcon(pDIS->hDC, iconRect, iconColor);
         return true;
     } else if (pDIS->CtlID == IDC_SETTINGS_BTN) {
-        const bool isDarkTheme = g_themeMode == ThemeMode::Dark;
         const bool active = g_settingsOpen;
         COLORREF bgBtn = active ? RGB(30, 58, 138)
             : (isPink ? pinkButtonBg
@@ -1014,12 +1035,12 @@ bool HandleDrawItem(HWND /*hWnd*/, DRAWITEMSTRUCT* pDIS) {
             borderBtn = th.borderCard;
             cloudColor = RGB(255, 255, 255);
         } else if (isSelected) {
-            bgBtn = th.bgCardHover;
+            bgBtn = isDarkTheme ? RGB(60, 60, 60) : th.bgCardHover;
             borderBtn = th.borderCardHover;
             cloudColor = th.textPrimary;
         } else {
-            bgBtn = th.bgCard;
-            borderBtn = restingBorder;
+            bgBtn = isDarkTheme ? RGB(60, 60, 60) : th.bgCard;
+            borderBtn = isDarkTheme ? RGB(82, 82, 82) : restingBorder;
             cloudColor = th.textSecondary;
         }
 
@@ -1038,6 +1059,11 @@ bool HandleDrawItem(HWND /*hWnd*/, DRAWITEMSTRUCT* pDIS) {
         DrawCloudIcon(pDIS->hDC, rcCloud, cloudColor, true);
         if (SyncPicker::ShowCounts()) {
             SyncPicker::DrawCloudCount(pDIS->hDC, rcCloud, selectedCount, RGB(0, 0, 0));
+        }
+        if ((pDIS->itemState & ODS_FOCUS) && g_viewMode == ViewMode::Recurring) {
+            RECT focusRect = pDIS->rcItem;
+            InflateRect(&focusRect, -3, -3);
+            DrawFocusRect(pDIS->hDC, &focusRect);
         }
         return true;
     }

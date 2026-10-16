@@ -38,6 +38,13 @@
 #define IDC_CLEANUP_BTN     2025
 #define IDC_TIMER_HOLD_BTN  2026
 #define IDC_WORK_TRACKING_BTN 2027
+#define IDC_RECURRING_BTN   2028
+#define IDC_RECURRING_TEXT_EDIT 2029
+#define IDC_RECURRING_DATE  2030
+#define IDC_RECURRING_COUNT_EDIT 2031
+#define IDC_RECURRING_UNIT_BTN 2032
+#define IDC_RECURRING_SAVE_BTN 2033
+#define IDC_RECURRING_CANCEL_BTN 2034
 
 // System Tray and Menu IDs
 #define IDM_TRAY_OPEN       3001
@@ -67,7 +74,8 @@ enum class ViewMode {
     ActiveTasks,
     CompletedTasks,
     WorkHistory,
-    IntervalTimer
+    IntervalTimer,
+    Recurring
 };
 
 enum class ThemeMode {
@@ -97,6 +105,7 @@ struct Task {
     std::wstring updated_by;
     std::vector<int> sources; // Sync source ids whose file contains this task.
     TaskMarker marker = TaskMarker::None;
+    std::string recurring_uid; // Uid of the repeating rule that created it (shown as ↻); empty otherwise.
 };
 
 struct DisplayItem {
