@@ -13,6 +13,8 @@
 #include "IntervalTimer.h"
 #include "WorkTracking.h"
 #include "RecurringView.h"
+#include "Hotkeys.h"
+#include "AudioCue.h"
 #include <windowsx.h>
 #include <algorithm>
 #include <cwctype>
@@ -756,6 +758,9 @@ bool HandleCommand(HWND hWnd, int id) {
         }
         if (g_hPinBtn) InvalidateRect(g_hPinBtn, nullptr, TRUE);
         return true;
+    } else if (id == IDM_TRAY_MUTE) {
+        AudioCue::ToggleSounds();
+        return true;
     } else if (id == IDM_TRAY_AUTORUN) {
         bool current = IsAutoRunEnabled();
         SetAutoRun(!current);
@@ -1079,22 +1084,29 @@ bool HandleAppTray(HWND hWnd, LPARAM lParam) {
         GetCursorPos(&pt);
         g_inContextMenu = true;
         HMENU hMenu = CreatePopupMenu();
-        InsertMenuW(hMenu, 0, MF_BYPOSITION | MF_STRING, IDM_TRAY_OPEN, L"Megnyitás (Ctrl+F1)");
+        const std::wstring openLabel = L"Megnyitás" + Hotkeys::Suffix(Hotkeys::ActionWindow);
+        InsertMenuW(hMenu, 0, MF_BYPOSITION | MF_STRING, IDM_TRAY_OPEN, openLabel.c_str());
         InsertMenuW(hMenu, 1, MF_BYPOSITION | MF_STRING, IDM_TRAY_COMPLETED, L"Elkészült feladatok...");
         InsertMenuW(hMenu, 2, MF_BYPOSITION | MF_STRING, IDM_TRAY_TIMER, L"Időzítő");
         InsertMenuW(hMenu, 3, MF_BYPOSITION | MF_SEPARATOR, 0, nullptr);
 
         UINT uPinCheck = g_pinMode ? MF_CHECKED : MF_UNCHECKED;
-        InsertMenuW(hMenu, 4, MF_BYPOSITION | MF_STRING | uPinCheck, IDM_TRAY_PIN, L"PIN mód (Ctrl+F2)");
+        const std::wstring pinLabel = L"PIN mód" + Hotkeys::Suffix(Hotkeys::ActionPin);
+        InsertMenuW(hMenu, 4, MF_BYPOSITION | MF_STRING | uPinCheck, IDM_TRAY_PIN, pinLabel.c_str());
 
         UINT uHoldCheck = TimerHold::IsActive() ? MF_CHECKED : MF_UNCHECKED;
-        InsertMenuW(hMenu, 5, MF_BYPOSITION | MF_STRING | uHoldCheck, IDM_TRAY_HOLD, TimerHold::MenuLabel());
+        const std::wstring holdLabel = TimerHold::MenuLabel();
+        InsertMenuW(hMenu, 5, MF_BYPOSITION | MF_STRING | uHoldCheck, IDM_TRAY_HOLD, holdLabel.c_str());
+
+        UINT uMuteCheck = g_store.sounds_enabled ? MF_UNCHECKED : MF_CHECKED;
+        const std::wstring muteLabel = L"Hangok némítása" + Hotkeys::Suffix(Hotkeys::ActionMute);
+        InsertMenuW(hMenu, 6, MF_BYPOSITION | MF_STRING | uMuteCheck, IDM_TRAY_MUTE, muteLabel.c_str());
 
         UINT uCheck = IsAutoRunEnabled() ? MF_CHECKED : MF_UNCHECKED;
-        InsertMenuW(hMenu, 6, MF_BYPOSITION | MF_STRING | uCheck, IDM_TRAY_AUTORUN, L"Indítás a Windows-zal");
+        InsertMenuW(hMenu, 7, MF_BYPOSITION | MF_STRING | uCheck, IDM_TRAY_AUTORUN, L"Indítás a Windows-zal");
 
-        InsertMenuW(hMenu, 7, MF_BYPOSITION | MF_SEPARATOR, 0, nullptr);
-        InsertMenuW(hMenu, 8, MF_BYPOSITION | MF_STRING, IDM_TRAY_EXIT, L"Kilépés");
+        InsertMenuW(hMenu, 8, MF_BYPOSITION | MF_SEPARATOR, 0, nullptr);
+        InsertMenuW(hMenu, 9, MF_BYPOSITION | MF_STRING, IDM_TRAY_EXIT, L"Kilépés");
 
         SetForegroundWindow(hWnd);
         TrackPopupMenu(hMenu, TPM_RIGHTALIGN | TPM_BOTTOMALIGN, pt.x, pt.y, 0, hWnd, nullptr);

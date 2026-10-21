@@ -12,6 +12,7 @@
 #include "UpdateOverlay.h"
 #include "TimerView.h"
 #include "RecurringView.h"
+#include "Hotkeys.h"
 
 namespace {
     constexpr int DAILY_WORK_TARGET_SECONDS = 6 * 3600 + 50 * 60;
@@ -513,7 +514,9 @@ void PaintMainWindow(HWND hWnd, HDC hdc) {
             FillRect(hdcMem, &rcHoldWarning, holdBrush);
             DeleteObject(holdBrush);
             SetTextColor(hdcMem, RGB(45, 35, 0));
-            DrawTextW(hdcMem, L"Időstop aktív: a visszaszámlálás csak folytatáskor indul (Ctrl+F3)",
+            const std::wstring holdWarning = L"Időstop aktív: a visszaszámlálás csak folytatáskor indul" +
+                Hotkeys::Suffix(Hotkeys::ActionHold);
+            DrawTextW(hdcMem, holdWarning.c_str(),
                 -1, &rcHoldWarning, DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS);
             SetTextColor(hdcMem, th.textSecondary);
         } else {
@@ -920,7 +923,7 @@ void PaintMainWindow(HWND hWnd, HDC hdc) {
         double pct = ((double)totalWorkSec / (double)targetWorkSec) * 100.0;
         std::wstring label;
         if (TimerHold::IsActive()) {
-            label = L"Időstop: a munkaidő-mérés áll (Ctrl+F3)";
+            label = L"Időstop: a munkaidő-mérés áll" + Hotkeys::Suffix(Hotkeys::ActionHold);
         } else if (g_workMeasurementStopped) {
             label = L"Idő mérése szünetel";
         } else if (g_isWorkActive) {

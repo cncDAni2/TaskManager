@@ -51,8 +51,11 @@ void TaskStore::SaveLocal() {
         << "  \"timer_2020_enabled\": " << (timer_2020_enabled ? "true" : "false") << ",\n"
         << "  \"timer_strict_mode\": " << (timer_strict_mode ? "true" : "false") << ",\n"
         << "  \"timer_start_with_app\": " << (timer_start_with_app ? "true" : "false") << ",\n"
-        << "  \"sounds_enabled\": " << (sounds_enabled ? "true" : "false") << ",\n"
-        << "  \"work_tracking_enabled\": " << (work_tracking_enabled ? "true" : "false") << ",\n"
+        << "  \"sounds_enabled\": " << (sounds_enabled ? "true" : "false") << ",\n";
+    for (int i = 0; i < Hotkeys::ACTION_COUNT; ++i) {
+        out << "  \"" << Hotkeys::JSON_KEYS[i] << "\": " << hotkeys[i] << ",\n";
+    }
+    out << "  \"work_tracking_enabled\": " << (work_tracking_enabled ? "true" : "false") << ",\n"
         << "  \"update_check_enabled\": " << (update_check_enabled ? "true" : "false") << ",\n"
         << "  \"update_last_check\": " << static_cast<long long>(update_last_check) << ",\n"
         << "  \"update_failures\": " << update_failures << ",\n"
@@ -248,6 +251,13 @@ void TaskStore::LoadLocal() {
         size_t valueStart = content.find_first_not_of(" \t\r\n", soundsEnabledPos + 17);
         if (valueStart != std::string::npos) {
             sounds_enabled = content.compare(valueStart, 4, "true") == 0;
+        }
+    }
+
+    for (int i = 0; i < Hotkeys::ACTION_COUNT; ++i) {
+        long long combo = 0;
+        if (JsonLite::GetInt64(content, Hotkeys::JSON_KEYS[i], combo) && Hotkeys::IsValidCombo(combo)) {
+            hotkeys[i] = static_cast<unsigned>(combo);
         }
     }
 

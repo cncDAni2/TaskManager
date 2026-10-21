@@ -2,6 +2,8 @@
 #include "AppState.h"
 #include "Drawing.h"
 #include "ExcludedApps.h"
+#include "HotkeyDialog.h"
+#include "Hotkeys.h"
 #include "Layout.h"
 #include "SettingsSyncRows.h"
 #include "SyncPicker.h"
@@ -25,6 +27,7 @@ namespace {
     constexpr int IDC_SETTINGS_EXCLUDED_KEYWORDS = 5109;
     constexpr int IDC_SETTINGS_WORK_TRACKING = 5110;
     constexpr int IDC_SETTINGS_UPDATE_CHECK = 5111;
+    constexpr int IDC_SETTINGS_HOTKEYS = 5112;
     constexpr int SETTINGS_DIALOG_WIDTH = 560;
     constexpr UINT WM_APP_REBUILD = WM_APP + 1;
     constexpr DWORD DIALOG_STYLE = WS_POPUP | WS_CAPTION | WS_SYSMENU;
@@ -56,10 +59,11 @@ namespace {
         SettingsSyncRows::Controls syncControls;
         int resetHour = 9;
         int resetMinute = 15;
-        bool soundsEnabled = true;
         bool timerAutoStart = false;
         std::wstring excludedKeywords;
     };
+
+    DialogState* g_openState = nullptr;
 
     HWND CreateChild(HWND dialog, const wchar_t* className, const wchar_t* text, DWORD style,
         int x, int y, int width, int height, int id, HFONT font, DWORD exStyle = 0) {
@@ -111,7 +115,6 @@ namespace {
             state->resetHour = selectedTime.wHour;
             state->resetMinute = selectedTime.wMinute;
         }
-        state->soundsEnabled = SendMessageW(state->soundsCheckbox, BM_GETCHECK, 0, 0) == BST_CHECKED;
         state->timerAutoStart = SendMessageW(state->timerAutoStartCheckbox, BM_GETCHECK, 0, 0) == BST_CHECKED;
         state->excludedKeywords = ReadText(state->excludedKeywordsEdit);
     }
@@ -177,7 +180,14 @@ namespace {
         CreateRow(hWnd, L"Hangok", top, ROW, false);
         state->soundsCheckbox = CreateChild(hWnd, L"BUTTON", L"Engedélyezve",
             WS_TABSTOP | BS_AUTOCHECKBOX, 184, controlY(ROW), 190, 28, IDC_SETTINGS_SOUNDS, g_hFontNormal);
-        SendMessageW(state->soundsCheckbox, BM_SETCHECK, state->soundsEnabled ? BST_CHECKED : BST_UNCHECKED, 0);
+        SendMessageW(state->soundsCheckbox, BM_SETCHECK, g_store.sounds_enabled ? BST_CHECKED : BST_UNCHECKED, 0);
+        top += ROW;
+
+        CreateRow(hWnd, L"Gyorsbillentyűk", top, ROW, false);
+        HWND hotkeysButton = CreateChild(hWnd, L"BUTTON", L"Beállítás...",
+            WS_TABSTOP | BS_PUSHBUTTON, 184, controlY(ROW), 120, 28, IDC_SETTINGS_HOTKEYS, g_hFontNormal);
+        AddTooltip(state->tooltip, hWnd, hotkeysButton,
+            L"A főablak, a PIN mód, az Időstop és a hangok némításának bárhonnan működő billentyűkombinációi.");
         top += ROW;
 
         CreateRow(hWnd, L"Munkaidő mérése", top, ROW, false);
@@ -411,9 +421,18 @@ namespace {
                 WorkTracking::SetEnabled(SendMessageW(state->workTrackingCheckbox, BM_GETCHECK, 0, 0) == BST_CHECKED);
                 return 0;
             }
-            if ((id == IDC_SETTINGS_SOUNDS || id == IDC_SETTINGS_TIMER_AUTO_START) && code == BN_CLICKED) {
+            if (id == IDC_SETTINGS_HOTKEYS && code == BN_CLICKED) {
+                ShowHotkeyDialog(hWnd);
+                return 0;
+            }
+            if (id == IDC_SETTINGS_SOUNDS && code == BN_CLICKED) {
+                g_store.sounds_enabled = SendMessageW(state->soundsCheckbox, BM_GETCHECK, 0, 0) == BST_CHECKED;
+                g_store.SaveLocal();
+                Hotkeys::UpdateTrayTip();
+                return 0;
+            }
+            if (id == IDC_SETTINGS_TIMER_AUTO_START && code == BN_CLICKED) {
                 SnapshotControls(state);
-                g_store.sounds_enabled = state->soundsEnabled;
                 g_store.timer_start_with_app = state->timerAutoStart;
                 g_store.SaveLocal();
                 return 0;
@@ -482,7 +501,6 @@ void ShowSettingsDialog(HWND owner) {
     state.syncRows = SettingsSyncRows::FromSources(g_store.syncSources);
     state.resetHour = g_store.work_reset_hour;
     state.resetMinute = g_store.work_reset_minute;
-    state.soundsEnabled = g_store.sounds_enabled;
     state.timerAutoStart = g_store.timer_start_with_app;
     state.excludedKeywords = g_store.excluded_window_keywords;
     state.owner = owner;
@@ -502,6 +520,7 @@ void ShowSettingsDialog(HWND owner) {
 
     ApplyDarkModeTitleBar(dialog, false);
     g_settingsOpen = true;
+    g_openState = &state;
     if (g_hSettingsBtn) InvalidateRect(g_hSettingsBtn, nullptr, TRUE);
     RECT ownerRect{};
     RECT dialogRect{};
@@ -529,9 +548,15 @@ void ShowSettingsDialog(HWND owner) {
     }
 
     g_settingsOpen = false;
+    g_openState = nullptr;
     if (g_hSettingsBtn) InvalidateRect(g_hSettingsBtn, nullptr, TRUE);
     EnableWindow(owner, TRUE);
     SetForegroundWindow(owner);
     g_inContextMenu = false;
     DeleteObject(state.backgroundBrush);
+}
+
+void RefreshSettingsSounds() {
+    if (!g_openState || !g_openState->soundsCheckbox) return;
+    SendMessageW(g_openState->soundsCheckbox, BM_SETCHECK, g_store.sounds_enabled ? BST_CHECKED : BST_UNCHECKED, 0);
 }

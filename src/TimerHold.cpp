@@ -1,6 +1,7 @@
 #include "TimerHold.h"
 #include "AppState.h"
 #include "Drawing.h"
+#include "Hotkeys.h"
 #include "IntervalTimer.h"
 #include "Layout.h"
 #include <commctrl.h>
@@ -10,20 +11,11 @@ bool g_active = false;
 HWND g_hButton = nullptr;
 HWND g_hTooltip = nullptr;
 
-const wchar_t* TooltipText() {
+std::wstring TooltipText() {
+    const std::wstring hotkey = Hotkeys::Suffix(Hotkeys::ActionHold);
     return g_active
-        ? L"Időzítők folytatása (Ctrl+F3)\nA munkaidő-mérés és az időzítő folytatódik, a 20-20-20 újraindul."
-        : L"Időstop - időzítők megállítása (Ctrl+F3)\nMegállítja a munkaidő-mérést, az időzítőt és a 20-20-20 szabályt.";
-}
-
-void UpdateTooltip() {
-    if (!g_hTooltip) return;
-    TOOLINFOW tool{};
-    tool.cbSize = sizeof(tool);
-    tool.hwnd = GetParent(g_hButton);
-    tool.uId = reinterpret_cast<UINT_PTR>(g_hButton);
-    tool.lpszText = const_cast<LPWSTR>(TooltipText());
-    SendMessageW(g_hTooltip, TTM_UPDATETIPTEXTW, 0, (LPARAM)&tool);
+        ? L"Időzítők folytatása" + hotkey + L"\nA munkaidő-mérés és az időzítő folytatódik, a 20-20-20 újraindul."
+        : L"Időstop - időzítők megállítása" + hotkey + L"\nMegállítja a munkaidő-mérést, az időzítőt és a 20-20-20 szabályt.";
 }
 }
 
@@ -41,8 +33,20 @@ void CreateButton(HWND parent, HINSTANCE instance) {
     tool.uFlags = TTF_SUBCLASS | TTF_IDISHWND;
     tool.hwnd = parent;
     tool.uId = reinterpret_cast<UINT_PTR>(g_hButton);
-    tool.lpszText = const_cast<LPWSTR>(TooltipText());
+    std::wstring text = TooltipText();
+    tool.lpszText = text.data();
     SendMessageW(g_hTooltip, TTM_ADDTOOLW, 0, (LPARAM)&tool);
+}
+
+void RefreshTooltip() {
+    if (!g_hTooltip) return;
+    TOOLINFOW tool{};
+    tool.cbSize = sizeof(tool);
+    tool.hwnd = GetParent(g_hButton);
+    tool.uId = reinterpret_cast<UINT_PTR>(g_hButton);
+    std::wstring text = TooltipText();
+    tool.lpszText = text.data();
+    SendMessageW(g_hTooltip, TTM_UPDATETIPTEXTW, 0, (LPARAM)&tool);
 }
 
 void UpdateVisibility(bool visible) {
@@ -63,7 +67,7 @@ void Toggle() {
     } else {
         g_intervalTimer.Release();
     }
-    UpdateTooltip();
+    RefreshTooltip();
     if (g_hButton) InvalidateRect(g_hButton, nullptr, TRUE);
     if (g_hWnd) {
         if (g_isMiniMode && IsWindowVisible(g_hWnd)) RecalculateMiniLayout();
@@ -77,8 +81,8 @@ bool HandleCommand(WORD id) {
     return true;
 }
 
-const wchar_t* MenuLabel() {
-    return g_active ? L"Időzítők folytatása (Ctrl+F3)" : L"Időzítők megállítása (Ctrl+F3)";
+std::wstring MenuLabel() {
+    return (g_active ? L"Időzítők folytatása" : L"Időzítők megállítása") + Hotkeys::Suffix(Hotkeys::ActionHold);
 }
 
 void DrawButton(const DRAWITEMSTRUCT* dis, COLORREF idleBg, COLORREF idleBorder, COLORREF idleIcon) {

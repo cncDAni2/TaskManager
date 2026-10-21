@@ -2,6 +2,7 @@
 
 #include "AppTypes.h"
 #include "ExcludedApps.h"
+#include "Hotkeys.h"
 #include "Recurring.h"
 #include "SyncFiles.h"
 #include "TaskUtils.h"
@@ -34,6 +35,7 @@ public:
     bool timer_strict_mode = false;
     bool timer_start_with_app = false;
     bool sounds_enabled = true;
+    std::array<unsigned, Hotkeys::ACTION_COUNT> hotkeys = Hotkeys::DEFAULT_COMBOS;
     bool work_tracking_enabled = true; // Off: no work-time measurement and no work bar; history is kept.
     // GitHub release check (UpdateCheck / UpdateOverlay).
     bool update_check_enabled = true;

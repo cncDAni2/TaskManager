@@ -8,6 +8,8 @@ Az alkalmazás elsősorban a teendők gyors és egyszerű kezelésére szolgál,
 - Ctrl+F2: PIN mód bekapcsolása / kikapcsolása
 - Ctrl+F3: Összes időzítő megállítása / folytatása (Időstop)
 
+Ezek az alapértelmezett kombinációk; a Beállítások **Gyorsbillentyűk** gombjával módosíthatók vagy törölhetők, és itt a hangok némításához is megadhatsz egyet (Ctrl, Alt, Shift vagy AltGr + billentyű). A hangok a tálcaikon helyi menüjéből is némíthatók.
+
 A főablak megnyitásakor az új feladat felvételére szolgáló mező azonnal fókuszt kap. Nyomd meg a Ctrl+F1 billentyűkombinációt, írd be az új feladatot, majd nyomj Entert.  
 Ha folyamatosan látni szeretnéd a feladataidat, a Ctrl+F2 billentyűkombinációval mini nézetet jeleníthetsz meg. Újabb Ctrl+F2-re a nézet eltűnik.  
 **Helyi menü**: Az óra melletti ikonra jobb gombbal kattintva további funkciókat érhetsz el. Javasolt bekapcsolni az **Indítás a Windows-zal** lehetőséget.

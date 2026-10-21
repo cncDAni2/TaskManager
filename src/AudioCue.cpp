@@ -1,5 +1,7 @@
 #include "AudioCue.h"
 #include "AppState.h"
+#include "Hotkeys.h"
+#include "SettingsDialog.h"
 #include <windows.h>
 #include <mmsystem.h>
 #include <algorithm>
@@ -152,4 +154,12 @@ void AudioCue::PlayVisionBreakStart() {
 
 void AudioCue::PlayVisionBreakEnd() {
     SubmitMelody(4);
+}
+
+void AudioCue::ToggleSounds() {
+    g_store.sounds_enabled = !g_store.sounds_enabled;
+    g_store.SaveLocal();
+    Hotkeys::UpdateTrayTip();
+    RefreshSettingsSounds();
+    if (g_store.sounds_enabled) MessageBeep(MB_OK); // Audible confirmation only when unmuting.
 }

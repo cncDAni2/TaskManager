@@ -21,6 +21,8 @@
 #include "UpdateCheck.h"
 #include "UpdateOverlay.h"
 #include "RecurringView.h"
+#include "Hotkeys.h"
+#include "AudioCue.h"
 #include <windowsx.h>
 #include <commctrl.h>
 #include <algorithm>
@@ -327,9 +329,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             }
             RecurringView::CreateControls(hWnd, hInst);
 
-            RegisterHotKey(hWnd, ID_HOTKEY_TOGGLE, MOD_CONTROL, VK_F1);
-            RegisterHotKey(hWnd, ID_HOTKEY_UNPIN, MOD_CONTROL, VK_F2);
-            RegisterHotKey(hWnd, ID_HOTKEY_HOLD, MOD_CONTROL, VK_F3);
+            Hotkeys::RegisterAll(hWnd);
             FocusMode::RegisterSessionNotifications(hWnd);
 
             SetTimer(hWnd, IDT_WORK_TIMER, 1000, nullptr);
@@ -341,7 +341,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             g_nid.uFlags = NIF_ICON | NIF_MESSAGE | NIF_TIP;
             g_nid.uCallbackMessage = WM_APP_TRAY;
             g_nid.hIcon = g_hIcon;
-            wcscpy_s(g_nid.szTip, L"Feladatkezelő (Ctrl+F1)");
+            wcsncpy_s(g_nid.szTip, Hotkeys::TrayTip().c_str(), _TRUNCATE);
             Shell_NotifyIconW(NIM_ADD, &g_nid);
 
             Cleanup::CreateControls(hWnd, hInst);
@@ -554,6 +554,8 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                 ToggleWindow();
             } else if (wParam == ID_HOTKEY_HOLD) {
                 TimerHold::Toggle();
+            } else if (wParam == ID_HOTKEY_MUTE) {
+                AudioCue::ToggleSounds();
             } else if (wParam == ID_HOTKEY_UNPIN) {
                 if (IsWindowVisible(hWnd)) {
                     g_pinMode = false;
@@ -771,9 +773,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 
         case WM_DESTROY: {
             FocusMode::UnregisterSessionNotifications(hWnd);
-            UnregisterHotKey(hWnd, ID_HOTKEY_TOGGLE);
-            UnregisterHotKey(hWnd, ID_HOTKEY_UNPIN);
-            UnregisterHotKey(hWnd, ID_HOTKEY_HOLD);
+            Hotkeys::UnregisterAll(hWnd);
             Shell_NotifyIconW(NIM_DELETE, &g_nid);
             if (g_hIcon) DestroyIcon(g_hIcon);
             if (g_hEditBrush) DeleteObject(g_hEditBrush);
