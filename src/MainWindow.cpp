@@ -18,6 +18,7 @@
 #include "SyncPicker.h"
 #include "Cleanup.h"
 #include "WorkTracking.h"
+#include "SelfUpdate.h"
 #include "UpdateCheck.h"
 #include "UpdateOverlay.h"
 #include "RecurringView.h"
@@ -115,11 +116,7 @@ void ShowAppWindow() {
             activeOrder.push_back(id);
         }
     }
-    for (const auto& t : g_store.tasks) {
-        if (!t.completed && seenActiveIds.insert(t.id).second) {
-            activeOrder.push_back(t.id);
-        }
-    }
+    g_store.PrependUnorderedActive(activeOrder);
     if (activeOrder != g_store.active_order) {
         g_store.active_order = activeOrder;
         g_store.SaveLocal();
@@ -596,6 +593,10 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 
         case WM_APP_UPDATE_RESULT:
             UpdateCheck::HandleResult(wParam, lParam);
+            return 0;
+
+        case WM_APP_SELF_UPDATE_RESULT:
+            SelfUpdate::HandleResult(hWnd, wParam);
             return 0;
 
         case WM_APP_TRAY: {

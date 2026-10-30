@@ -2,6 +2,7 @@
 #include "AppState.h"
 #include "Drawing.h"
 #include "Layout.h"
+#include "SelfUpdate.h"
 #include "UpdateCheck.h"
 #include "Version.h"
 #include "VersionHint.h"
@@ -90,6 +91,11 @@ void DrawClose(HDC hdc, const RECT& rc, COLORREF color, COLORREF hoverBg, bool h
 }
 }
 
+void UpdateOverlay::OpenDownloadPage() {
+    ShellExecuteW(nullptr, L"open", UpdateCheck::DOWNLOAD_URL, nullptr, nullptr, SW_SHOWNORMAL);
+    Dismiss();
+}
+
 bool UpdateOverlay::IsVisible() {
     const TaskStore& store = g_store;
     if (!store.update_check_enabled || store.update_latest_version.empty()) return false;
@@ -151,7 +157,7 @@ void UpdateOverlay::Paint(HDC hdc, const RECT& client) {
     SelectObject(hdc, g.compact ? g_hFontNormal : g_hFontHeader);
     SetTextColor(hdc, ACCENT);
     RECT labelRect = g.label;
-    DrawTextW(hdc, L"Letöltés", -1, &labelRect,
+    DrawTextW(hdc, SelfUpdate::IsBusy() ? L"Letöltés…" : L"Frissítés", -1, &labelRect,
         (g.compact ? DT_LEFT : DT_CENTER) | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
 
     DrawClose(hdc, g.close, th.textSecondary, th.bgCardHover, g_hover == Hover::Close);
@@ -162,8 +168,7 @@ bool UpdateOverlay::HandleLButtonDown(HWND hWnd, LPARAM lParam) {
     if (!IsVisible()) return false;
     const Hover hit = HitTest(hWnd, { GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam) });
     if (hit == Hover::Download) {
-        ShellExecuteW(nullptr, L"open", UpdateCheck::DOWNLOAD_URL, nullptr, nullptr, SW_SHOWNORMAL);
-        Dismiss();
+        if (!SelfUpdate::Start(hWnd)) OpenDownloadPage();
     } else if (hit == Hover::Close) {
         Dismiss();
     }

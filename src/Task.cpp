@@ -241,9 +241,22 @@ void TaskStore::Load() {
         const Task* t = FindTask(id);
         if (t && !t->completed && seen.insert(id).second) reconciled.push_back(id);
     }
-    for (const auto& t : tasks) {
-        if (!t.completed && seen.insert(t.id).second) reconciled.push_back(t.id);
-    }
+    PrependUnorderedActive(reconciled);
     active_order = reconciled;
     SaveLocal();
+}
+
+void TaskStore::PrependUnorderedActive(std::vector<int>& order) const {
+    std::set<int> listed(order.begin(), order.end());
+    std::vector<const Task*> missing;
+    for (const auto& t : tasks) {
+        if (!t.completed && listed.find(t.id) == listed.end()) missing.push_back(&t);
+    }
+    if (missing.empty()) return;
+    std::stable_sort(missing.begin(), missing.end(), [](const Task* a, const Task* b) {
+        return a->created_at > b->created_at;
+    });
+    std::vector<int> ids;
+    for (const Task* t : missing) ids.push_back(t->id);
+    order.insert(order.begin(), ids.begin(), ids.end());
 }

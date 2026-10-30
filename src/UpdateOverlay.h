@@ -3,10 +3,12 @@
 #include <windows.h>
 
 // Full-window "Új verzió érhető el" cover for the main window and the PIN view, shown while
-// a newer GitHub release is known. It swallows input; the X (or the download) hides it for
-// the rest of the day.
+// a newer GitHub release is known. It swallows input; the X hides it for the rest of the day.
+// "Frissítés" updates in place (SelfUpdate); if that fails, OpenDownloadPage takes over.
 namespace UpdateOverlay {
 bool IsVisible();
+// Opens the release download in the browser and hides the overlay for the day.
+void OpenDownloadPage();
 // Re-applies child-control visibility and repaints after the state may have changed.
 void Refresh();
 // Hides the main window's child controls while the overlay covers it.

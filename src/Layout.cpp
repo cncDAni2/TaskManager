@@ -241,6 +241,7 @@ void RecalculateMiniLayout() {
                 g_miniCompletionGraceTaskIds.end());
     };
 
+    g_store.PrependUnorderedActive(g_sessionActiveTaskIds);
     std::vector<Task> orderedActiveTasks;
     std::set<int> seenIds;
     for (int id : g_sessionActiveTaskIds) {
@@ -254,7 +255,6 @@ void RecalculateMiniLayout() {
     }
     for (const auto& t : g_store.tasks) {
         if (shouldShowTask(t) && seenIds.find(t.id) == seenIds.end()) {
-            if (!t.completed) g_sessionActiveTaskIds.push_back(t.id);
             orderedActiveTasks.push_back(t);
         }
     }
@@ -461,11 +461,10 @@ void RecalculateLayout() {
     HFONT hOldFont = (HFONT)SelectObject(hdcMeasure, g_hFontNormal);
 
     if (g_viewMode == ViewMode::ActiveTasks) {
-        std::set<int> seenIds;
+        g_store.PrependUnorderedActive(g_sessionActiveTaskIds);
         for (int id : g_sessionActiveTaskIds) {
             for (const auto& t : g_store.tasks) {
                 if (t.id == id) {
-                    seenIds.insert(id);
                     DisplayItem item;
                     item.isHeader = false;
                     item.task = t;
@@ -497,40 +496,6 @@ void RecalculateLayout() {
                     currentY += rowHeight + 6;
                     break;
                 }
-            }
-        }
-        for (const auto& t : g_store.tasks) {
-            if (!t.completed && seenIds.find(t.id) == seenIds.end()) {
-                g_sessionActiveTaskIds.push_back(t.id);
-                DisplayItem item;
-                item.isHeader = false;
-                item.task = t;
-                item.optionsRect = { clientWidth - 36, currentY + 10, clientWidth - 12, currentY + 34 };
-                if (!t.is_sync) {
-                    item.markerRect = { clientWidth - 68, currentY + 8, clientWidth - 40, currentY + 36 };
-                }
-                if (t.is_sync) {
-                    item.assignRect = { clientWidth - 82, currentY + 10, clientWidth - 40, currentY + 34 };
-                }
-                int textLeft = 18 + 20 + 10 + (t.is_sync ? 19 : 0);
-                int textRight = t.is_sync ? item.assignRect.left - 6
-                    : item.markerRect.left - 6;
-                int textHeight = MeasureTaskTextHeight(hdcMeasure, t.text, textRight - textLeft);
-                int rowHeight = std::max(itemHeight, textHeight + 28);
-                item.rect = { 10, currentY, clientWidth - 10, currentY + rowHeight };
-                item.checkRect = { 18, currentY + (rowHeight - 20) / 2, 38, currentY + (rowHeight + 20) / 2 };
-                item.optionsRect.top = currentY + (rowHeight - 24) / 2;
-                item.optionsRect.bottom = item.optionsRect.top + 24;
-                if (item.markerRect.right > 0) {
-                    item.markerRect.top = currentY + (rowHeight - 28) / 2;
-                    item.markerRect.bottom = item.markerRect.top + 28;
-                }
-                item.deleteRect.top = currentY + (rowHeight - 24) / 2;
-                item.deleteRect.bottom = item.deleteRect.top + 24;
-                item.textRect = { textLeft, currentY + 5, textRight, currentY + 5 + textHeight };
-
-                g_displayItems.push_back(item);
-                currentY += rowHeight + 6;
             }
         }
     } else {

@@ -75,6 +75,8 @@ public:
     int CountWorkHistoryBefore(const std::string& dateKey) const;
     void PurgeWorkHistoryBefore(const std::string& dateKey);
 
+    // Puts open tasks missing from `order` (e.g. new ones from a sync file) on top, newest first.
+    void PrependUnorderedActive(std::vector<int>& order) const;
     std::vector<Task> GetActiveTasks() const;
     std::vector<Task> GetRecentCompletedTasks() const;
     std::vector<Task> GetAllCompletedTasks() const;
