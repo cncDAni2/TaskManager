@@ -113,9 +113,26 @@ int SettingsSyncRows::Create(HWND dialog, HWND tooltip, const std::vector<Row>& 
     const int headerY = top + 33;
     const int firstRowY = top + 55;
 
-    HWND group = CreateChild(dialog, L"BUTTON", L"Szinkronizációs file-ok ℹ️", BS_GROUPBOX,
+    static constexpr wchar_t groupTitle[] = L"Szinkronizációs file-ok ℹ️";
+    HWND group = CreateChild(dialog, L"BUTTON", groupTitle, BS_GROUPBOX,
         left, top, right - left, 10, 0, g_hFontNormal);
-    AddTip(tooltip, dialog, group, SYNC_HELP);
+    // A group box is transparent to the mouse, so its caption gets a rectangle tool on the dialog.
+    if (tooltip && group) {
+        HDC dc = GetDC(dialog);
+        HGDIOBJ oldFont = SelectObject(dc, g_hFontNormal);
+        SIZE textSize{};
+        GetTextExtentPoint32W(dc, groupTitle, lstrlenW(groupTitle), &textSize);
+        SelectObject(dc, oldFont);
+        ReleaseDC(dialog, dc);
+        TOOLINFOW tool{};
+        tool.cbSize = sizeof(tool);
+        tool.uFlags = TTF_SUBCLASS;
+        tool.hwnd = dialog;
+        tool.uId = 1;
+        tool.rect = { left, top, left + 12 + textSize.cx, top + textSize.cy + 2 };
+        tool.lpszText = const_cast<LPWSTR>(SYNC_HELP);
+        SendMessageW(tooltip, TTM_ADDTOOLW, 0, (LPARAM)&tool);
+    }
 
     HWND defaultHeader = CreateChild(dialog, L"STATIC", L"A.", SS_CENTER | SS_NOTIFY,
         defaultX - 4, headerY, 26, 18, 0, g_hFontSmall);

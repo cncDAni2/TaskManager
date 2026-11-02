@@ -13,5 +13,7 @@ void DrawTimerIcon(HDC hdc, const RECT& rc, COLORREF color);
 void DrawHandIcon(HDC hdc, const RECT& rc, COLORREF color);
 void DrawRepeatIcon(HDC hdc, const RECT& rc, COLORREF color);
 void DrawDownloadIcon(HDC hdc, const RECT& rc, COLORREF color);
+void DrawSpeakerIcon(HDC hdc, const RECT& rc, COLORREF color, bool muted);
+void DrawGripIcon(HDC hdc, const RECT& rc, COLORREF color);
 HICON GenerateAppIcon();
 void ApplyDarkModeTitleBar(HWND hWnd, bool dark);

@@ -8,7 +8,7 @@ Az alkalmazás elsősorban a teendők gyors és egyszerű kezelésére szolgál,
 - Ctrl+F2: PIN mód bekapcsolása / kikapcsolása
 - Ctrl+F3: Összes időzítő megállítása / folytatása (Időstop)
 
-Ezek az alapértelmezett kombinációk; a Beállítások **Gyorsbillentyűk** gombjával módosíthatók vagy törölhetők, és itt a hangok némításához is megadhatsz egyet (Ctrl, Alt, Shift vagy AltGr + billentyű). A hangok a tálcaikon helyi menüjéből is némíthatók.
+Ezek az alapértelmezett kombinációk; a Beállítások **Gyorsbillentyűk** gombjával módosíthatók vagy törölhetők, és itt a hangok némításához és a fókusz módhoz is megadhatsz egyet (Ctrl, Alt, Shift vagy AltGr + billentyű). A hangok a tálcaikon helyi menüjéből is némíthatók.
 
 A főablak megnyitásakor az új feladat felvételére szolgáló mező azonnal fókuszt kap. Nyomd meg a Ctrl+F1 billentyűkombinációt, írd be az új feladatot, majd nyomj Entert.  
 Ha folyamatosan látni szeretnéd a feladataidat, a Ctrl+F2 billentyűkombinációval mini nézetet jeleníthetsz meg. Újabb Ctrl+F2-re a nézet eltűnik.  
@@ -20,7 +20,7 @@ A PIN nézet egy mini, kissé áttetsző lebegő ablak, amely mindig a képerny�
 **Jelölőnégyzetek:** Ebben a nézetben is késznek jelölheted a feladatokat. A kész feladatok még 10 másodpercig láthatók, így marad időd ellenőrizni vagy visszavonni a jelölést; ezután a PIN és a főablak aktív listájából is eltűnnek, és az "Elkészült" nézetben találhatók meg.
 **Feladat címe:** Csak annyi szöveg látszik, amennyi kifér. Kattints a címre a főablak megnyitásához és a feladat szerkesztéséhez; a teljes szöveg ki lesz jelölve.
 **Jelölések:** Látható a feladat jelölőikonja, globálisan szinkronizált feladatnál pedig a felhőikon és az "ÉN" gomb.  
-**Felső fülek:** Itt látható a visszaszámlálás (piros háttér = munka, kék = pihenés, szem ikon = szem pihentetése), a Fókusz mód kapcsolója és a lebegő ablak mozgatófogantyúja.
+**Felső fülek:** Alapból itt látható a visszaszámlálás (piros háttér = munka, kék = pihenés, szem ikon = szem pihentetése), a PIN mód kikapcsolója és a lebegő ablak mozgatófogantyúja. A Beállítások "PIN mód gyorsgombok" sorában a Fókusz mód, a némítás és az Időstop is ide tehető; a gombok kattintással ki-be kapcsolhatók, húzással átrendezhetők.
 
 ### Főablak nézet - alapértelmezett nézet
 
@@ -96,7 +96,7 @@ STRICT MODE: Ha ezt is bepipálod, akkor az időzítő kihatással lesz a munkai
 
 ### Fókusz mód
 
-Fókusz mód a főablakban és a PIN ablakban is elérhető (célkereszt ikon). Bekapcsolásakor a program az inaktivitás és a kizárt alkalmazások ellenére is méri az időt, amíg a gépet le nem zárolod, vagy ki nem kapcsolod a fókusz módot. A bekapcsolt mód ikonja kék.
+Fókusz mód a főablakban és a PIN ablakban is elérhető (célkereszt ikon), valamint a tálcaikon helyi menüjéből. Bekapcsolásakor a program az inaktivitás és a kizárt alkalmazások ellenére is méri az időt, amíg a gépet le nem zárolod, vagy ki nem kapcsolod a fókusz módot. A bekapcsolt mód ikonja kék.
 
 ### Időstop (időzítők megállítása)
 

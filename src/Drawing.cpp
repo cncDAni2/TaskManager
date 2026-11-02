@@ -150,6 +150,70 @@ void DrawRepeatIcon(HDC hdc, const RECT& rc, COLORREF color) {
     });
 }
 
+namespace {
+void DrawSpeakerBody(HDC bigDc) {
+    HBRUSH white = CreateSolidBrush(RGB(255, 255, 255));
+    HGDIOBJ oldBrush = SelectObject(bigDc, white);
+    HGDIOBJ oldPen = SelectObject(bigDc, GetStockObject(NULL_PEN));
+    const POINT body[] = { { 6, 28 }, { 22, 28 }, { 42, 10 }, { 42, 70 }, { 22, 52 }, { 6, 52 } };
+    Polygon(bigDc, body, 6);
+    SelectObject(bigDc, oldPen);
+    SelectObject(bigDc, oldBrush);
+    DeleteObject(white);
+}
+
+HPEN CreateRoundPen(int width) {
+    LOGBRUSH lb{ BS_SOLID, RGB(255, 255, 255), 0 };
+    return ExtCreatePen(PS_GEOMETRIC | PS_SOLID | PS_ENDCAP_ROUND, width, &lb, 0, nullptr);
+}
+}
+
+// Speaker with sound waves, or crossed out when muted.
+void DrawSpeakerIcon(HDC hdc, const RECT& rc, COLORREF color, bool muted) {
+    DrawSmoothShape(hdc, rc, color, muted ? +[](HDC bigDc) {
+        DrawSpeakerBody(bigDc);
+        HPEN pen = CreateRoundPen(8);
+        HGDIOBJ oldPen = SelectObject(bigDc, pen);
+        MoveToEx(bigDc, 54, 28, nullptr);
+        LineTo(bigDc, 74, 52);
+        MoveToEx(bigDc, 54, 52, nullptr);
+        LineTo(bigDc, 74, 28);
+        SelectObject(bigDc, oldPen);
+        DeleteObject(pen);
+    } : +[](HDC bigDc) {
+        DrawSpeakerBody(bigDc);
+        HPEN pen = CreateRoundPen(7);
+        HGDIOBJ oldPen = SelectObject(bigDc, pen);
+        // Counterclockwise from lower right to upper right: the arcs open towards the speaker.
+        for (int radius : { 14, 28 }) {
+            const int offset = radius * 7 / 10;
+            Arc(bigDc, 42 - radius, 40 - radius, 42 + radius, 40 + radius,
+                42 + offset, 40 + offset, 42 + offset, 40 - offset);
+        }
+        SelectObject(bigDc, oldPen);
+        DeleteObject(pen);
+    });
+}
+
+// Six dots in two columns: the PIN window's move handle.
+void DrawGripIcon(HDC hdc, const RECT& rc, COLORREF color) {
+    HBRUSH brush = CreateSolidBrush(color);
+    HGDIOBJ oldBrush = SelectObject(hdc, brush);
+    HGDIOBJ oldPen = SelectObject(hdc, GetStockObject(NULL_PEN));
+    const int cx = rc.left + (rc.right - rc.left) / 2;
+    const int cy = rc.top + (rc.bottom - rc.top) / 2;
+    for (int row = -1; row <= 1; ++row) {
+        for (int column : { -4, 4 }) {
+            const int x = cx + column;
+            const int y = cy + row * 5;
+            Ellipse(hdc, x - 2, y - 2, x + 2, y + 2);
+        }
+    }
+    SelectObject(hdc, oldPen);
+    SelectObject(hdc, oldBrush);
+    DeleteObject(brush);
+}
+
 HICON GenerateAppIcon() {
     int cx = 32;
     int cy = 32;

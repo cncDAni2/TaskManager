@@ -45,6 +45,7 @@ public:
     std::string update_latest_version; // Latest release seen, e.g. "1.18.0".
     std::string update_dismissed_date; // YYYY-MM-DD when the overlay was closed.
     std::wstring excluded_window_keywords = ExcludedApps::DEFAULT_KEYWORDS;
+    std::string pin_buttons = "timer,-focus,-mute,-hold,pin,drag"; // PinButtons::DEFAULT_CONFIG; "-" = hidden.
     int cleanup_days = 14;
     int cleanup_weeks = 8;
     ThemeMode theme_mode = ThemeMode::Dark;

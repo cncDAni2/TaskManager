@@ -1,5 +1,6 @@
 #include "Task.h"
 #include "JsonLite.h"
+#include "PinButtons.h"
 #include <algorithm>
 #include <cstring>
 #include <fstream>
@@ -63,6 +64,7 @@ void TaskStore::SaveLocal() {
         << "  \"update_latest_version\": \"" << TaskUtils::EscapeJsonString(update_latest_version) << "\",\n"
         << "  \"update_dismissed_date\": \"" << TaskUtils::EscapeJsonString(update_dismissed_date) << "\",\n"
         << "  \"excluded_window_keywords\": " << Quote(excluded_window_keywords) << ",\n"
+        << "  \"pin_buttons\": \"" << TaskUtils::EscapeJsonString(pin_buttons) << "\",\n"
         << "  \"cleanup_days\": " << cleanup_days << ",\n"
         << "  \"cleanup_weeks\": " << cleanup_weeks << ",\n"
         << "  \"next_source_id\": " << next_source_id << ",\n"
@@ -245,6 +247,7 @@ void TaskStore::LoadLocal() {
     if (JsonLite::GetInt64(content, "update_last_failure", updateNumber)) update_last_failure = static_cast<time_t>(updateNumber);
     JsonLite::GetString(content, "update_latest_version", update_latest_version);
     JsonLite::GetString(content, "update_dismissed_date", update_dismissed_date);
+    if (!JsonLite::GetString(content, "pin_buttons", pin_buttons)) pin_buttons = PinButtons::LEGACY_CONFIG;
 
     size_t soundsEnabledPos = content.find("\"sounds_enabled\":");
     if (soundsEnabledPos != std::string::npos) {

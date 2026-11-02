@@ -5,6 +5,7 @@
 #include "IntervalTimer.h"
 #include "TimerView.h"
 #include "MemoryTrim.h"
+#include "PinButtons.h"
 #include "SyncPicker.h"
 #include "Cleanup.h"
 #include "WorkTracking.h"
@@ -120,19 +121,6 @@ ScrollbarMetrics GetScrollbarMetrics() {
 
     m.rcThumb = { scrollbarLeft, thumbY, scrollbarRight, thumbY + thumbH };
     return m;
-}
-
-RECT GetMiniDragHandleRect(int clientWidth) {
-    return { clientWidth - 32, 2, clientWidth - 4, 24 };
-}
-
-RECT GetMiniFocusButtonRect(int clientWidth) {
-    return { clientWidth - 66, 2, clientWidth - 34, 24 };
-}
-
-RECT GetMiniTimerTextRect(int clientWidth) {
-    const int right = GetMiniFocusButtonRect(clientWidth).left - 3;
-    return { right - 38, 6, right, 20 };
 }
 
 RECT GetTimerPanelRect(int clientWidth) {
@@ -306,24 +294,8 @@ void RecalculateMiniLayout() {
     g_miniPositionValid = true;
     previousMiniHeight = totalH;
 
-    RECT rcDragHandle = GetMiniDragHandleRect(miniW);
-    HRGN hMiniRegion = CreateRectRgn(0, rcDragHandle.bottom - 4, miniW, totalH);
-    HRGN hHandleRegion = CreateRectRgn(rcDragHandle.left, rcDragHandle.top,
-        rcDragHandle.right, rcDragHandle.bottom);
-    CombineRgn(hMiniRegion, hMiniRegion, hHandleRegion, RGN_OR);
-    DeleteObject(hHandleRegion);
-    RECT rcFocusButton = GetMiniFocusButtonRect(miniW);
-    HRGN hFocusButtonRegion = CreateRectRgn(rcFocusButton.left, rcFocusButton.top,
-        rcFocusButton.right, rcFocusButton.bottom);
-    CombineRgn(hMiniRegion, hMiniRegion, hFocusButtonRegion, RGN_OR);
-    DeleteObject(hFocusButtonRegion);
-    if (g_intervalTimer.IsActive() || g_intervalTimer.IsVisionBreakActive()) {
-        const RECT rcTimerText = GetMiniTimerTextRect(miniW);
-        HRGN hTimerTextRegion = CreateRectRgn(rcTimerText.left, rcTimerText.top,
-            rcTimerText.right, rcTimerText.bottom);
-        CombineRgn(hMiniRegion, hMiniRegion, hTimerTextRegion, RGN_OR);
-        DeleteObject(hTimerTextRegion);
-    }
+    HRGN hMiniRegion = CreateRectRgn(0, PinButtons::STRIP_BOTTOM, miniW, totalH);
+    PinButtons::AddToRegion(hMiniRegion, miniW);
     if (!SetWindowRgn(g_hWnd, hMiniRegion, TRUE)) {
         DeleteObject(hMiniRegion);
     }

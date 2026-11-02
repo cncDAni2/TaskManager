@@ -24,6 +24,8 @@
 #include "RecurringView.h"
 #include "Hotkeys.h"
 #include "AudioCue.h"
+#include "PinButtons.h"
+#include "StateToast.h"
 #include <windowsx.h>
 #include <commctrl.h>
 #include <algorithm>
@@ -447,7 +449,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                     (timerWasRunning || g_intervalTimer.IsRunning())) {
                     RECT rcClient{};
                     GetClientRect(hWnd, &rcClient);
-                    RECT rcTimerText = { 0, 0, GetMiniFocusButtonRect(rcClient.right).left, 26 };
+                    RECT rcTimerText = { 0, 0, rcClient.right, PinButtons::STRIP_BOTTOM + 2 };
                     InvalidateRect(hWnd, &rcTimerText, FALSE);
                 }
 
@@ -551,8 +553,13 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                 ToggleWindow();
             } else if (wParam == ID_HOTKEY_HOLD) {
                 TimerHold::Toggle();
+                StateToast::ShowToggled(PinButtons::Hold);
             } else if (wParam == ID_HOTKEY_MUTE) {
                 AudioCue::ToggleSounds();
+                StateToast::ShowToggled(PinButtons::Mute);
+            } else if (wParam == ID_HOTKEY_FOCUS) {
+                FocusMode::Toggle();
+                StateToast::ShowToggled(PinButtons::Focus);
             } else if (wParam == ID_HOTKEY_UNPIN) {
                 if (IsWindowVisible(hWnd)) {
                     g_pinMode = false;
@@ -657,8 +664,9 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                 ScreenToClient(hWnd, &cursorPoint);
                 RECT rcClient;
                 GetClientRect(hWnd, &rcClient);
-                RECT rcDragHandle = GetMiniDragHandleRect(rcClient.right);
-                if (PtInRect(&rcDragHandle, cursorPoint)) {
+                RECT rcDragHandle{};
+                if (PinButtons::GetRect(rcClient.right, PinButtons::Drag, rcDragHandle) &&
+                    PtInRect(&rcDragHandle, cursorPoint)) {
                     SetCursor(LoadCursorW(nullptr, IDC_SIZEALL));
                     return TRUE;
                 }

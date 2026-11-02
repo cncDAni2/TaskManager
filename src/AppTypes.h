@@ -55,12 +55,14 @@
 #define IDM_TRAY_EXIT       3006
 #define IDM_TRAY_HOLD       3007
 #define IDM_TRAY_MUTE       3008
+#define IDM_TRAY_FOCUS      3009
 
 // Hotkey IDs (ID_HOTKEY_TOGGLE + Hotkeys::Action)
 #define ID_HOTKEY_TOGGLE    1001
 #define ID_HOTKEY_UNPIN     1002
 #define ID_HOTKEY_HOLD      1003
 #define ID_HOTKEY_MUTE      1004
+#define ID_HOTKEY_FOCUS     1005
 
 // Custom Messages and Timers
 #define WM_APP_TRAY         (WM_APP + 100)

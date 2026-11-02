@@ -6,6 +6,7 @@
 #include "TaskUtils.h"
 #include "BarTooltips.h"
 #include "Marker.h"
+#include "PinButtons.h"
 #include "IntervalTimer.h"
 #include "TimerHold.h"
 #include "WorkTracking.h"
@@ -87,65 +88,7 @@ void PaintMiniWindow(HWND hWnd, HDC hdc) {
     FillRect(hdcMem, &rcClient, hBrushBg);
     DeleteObject(hBrushBg);
 
-    RECT rcDragHandle = GetMiniDragHandleRect(clientW);
-    HBRUSH hBrushGripDots = CreateSolidBrush(g_themeMode == ThemeMode::Pink
-        ? RGB(0, 0, 0) : (g_darkMode ? RGB(212, 212, 216) : RGB(71, 85, 105)));
-    HGDIOBJ hOldDotsBrush = SelectObject(hdcMem, hBrushGripDots);
-    HGDIOBJ hOldDotsPen = SelectObject(hdcMem, GetStockObject(NULL_PEN));
-    int gripCenterX = rcDragHandle.left + (rcDragHandle.right - rcDragHandle.left) / 2;
-    int gripCenterY = rcDragHandle.top + (rcDragHandle.bottom - rcDragHandle.top) / 2;
-    for (int row = -1; row <= 1; ++row) {
-        for (int column = 0; column < 2; ++column) {
-            int dotX = gripCenterX + (column == 0 ? -4 : 4);
-            int dotY = gripCenterY + row * 5;
-            Ellipse(hdcMem, dotX - 2, dotY - 2, dotX + 2, dotY + 2);
-        }
-    }
-    SelectObject(hdcMem, hOldDotsPen);
-    SelectObject(hdcMem, hOldDotsBrush);
-    DeleteObject(hBrushGripDots);
-
-    RECT rcFocusButton = GetMiniFocusButtonRect(clientW);
-    COLORREF focusBg = g_focusMode ? RGB(30, 58, 138)
-        : (g_themeMode == ThemeMode::Pink ? miniBg : th.bgCard);
-    COLORREF focusBorder = g_focusMode ? RGB(30, 64, 175) : th.borderSep;
-    COLORREF focusIcon = g_focusMode ? RGB(255, 255, 255)
-        : (g_themeMode == ThemeMode::Pink ? RGB(0, 0, 0) : th.textSecondary);
-    HBRUSH hFocusBrush = CreateSolidBrush(focusBg);
-    HPEN hFocusPen = CreatePen(PS_SOLID, 1, focusBorder);
-    HGDIOBJ hOldFocusBrush = SelectObject(hdcMem, hFocusBrush);
-    HGDIOBJ hOldFocusPen = SelectObject(hdcMem, hFocusPen);
-    RoundRect(hdcMem, rcFocusButton.left, rcFocusButton.top, rcFocusButton.right,
-        rcFocusButton.bottom, 6, 6);
-    SelectObject(hdcMem, hOldFocusPen);
-    SelectObject(hdcMem, hOldFocusBrush);
-    DeleteObject(hFocusPen);
-    DeleteObject(hFocusBrush);
-    DrawFocusIcon(hdcMem, rcFocusButton, focusIcon);
-
-    if (g_intervalTimer.IsActive() || g_intervalTimer.IsVisionBreakActive()) {
-        const RECT rcTimer = GetMiniTimerTextRect(clientW);
-        const bool workPhase = g_intervalTimer.IsWorkPhase();
-        const bool held = TimerHold::IsActive();
-        const COLORREF timerColor = held ? RGB(107, 114, 128) : (workPhase ? RGB(220, 38, 38) : RGB(37, 99, 235));
-        const COLORREF timerBorder = held ? RGB(75, 85, 99) : (workPhase ? RGB(185, 28, 28) : RGB(29, 78, 216));
-        HBRUSH timerBrush = CreateSolidBrush(timerColor);
-        HPEN timerPen = CreatePen(PS_SOLID, 1, timerBorder);
-        HGDIOBJ oldTimerBrush = SelectObject(hdcMem, timerBrush);
-        HGDIOBJ oldTimerPen = SelectObject(hdcMem, timerPen);
-        RoundRect(hdcMem, rcTimer.left, rcTimer.top, rcTimer.right, rcTimer.bottom, 5, 5);
-        SelectObject(hdcMem, oldTimerPen);
-        SelectObject(hdcMem, oldTimerBrush);
-        DeleteObject(timerPen);
-        DeleteObject(timerBrush);
-        SelectObject(hdcMem, g_hFontMiniTimer);
-        SetTextColor(hdcMem, RGB(255, 255, 255));
-        SetBkMode(hdcMem, TRANSPARENT);
-        const std::wstring remaining = held ? L"ÁLL"
-            : (g_intervalTimer.IsVisionBreakActive() ? L"👁️" : FormatTimerTime(g_intervalTimer.SecondsRemaining()));
-        DrawTextW(hdcMem, remaining.c_str(), -1, (LPRECT)&rcTimer,
-            DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
-    }
+    PinButtons::Paint(hdcMem, clientW);
 
     if (g_displayItems.empty()) {
         SelectObject(hdcMem, g_hFontNormal);
@@ -290,9 +233,12 @@ void PaintMiniWindow(HWND hWnd, HDC hdc) {
         std::vector<BarTooltips::Region> barToolRegions = {
             { rcMiniBar, BuildWorkTooltip(workSec, manualSec) }
         };
+        PinButtons::AddTooltips(barToolRegions, clientW);
         BarTooltips::Update(hWnd, barToolRegions);
     } else {
-        BarTooltips::Update(hWnd, {});
+        std::vector<BarTooltips::Region> buttonRegions;
+        PinButtons::AddTooltips(buttonRegions, clientW);
+        BarTooltips::Update(hWnd, buttonRegions);
     }
 
     if (g_miniTimerFlashStep > 0 && g_miniTimerFlashStep % 2 == 1) {

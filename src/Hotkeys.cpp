@@ -30,6 +30,7 @@ const wchar_t* ActionName(int action) {
     case ActionPin: return L"PIN mód be- / kikapcsolása";
     case ActionHold: return L"Időzítők megállítása / folytatása";
     case ActionMute: return L"Hangok némítása / engedélyezése";
+    case ActionFocus: return L"Fókusz mód be- / kikapcsolása";
     }
     return L"";
 }

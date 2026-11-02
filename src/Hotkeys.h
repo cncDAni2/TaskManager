@@ -6,11 +6,11 @@
 
 // Configurable global hotkeys. A combo is (MOD_* flags << 16) | virtual key; 0 means not set.
 namespace Hotkeys {
-enum Action { ActionWindow, ActionPin, ActionHold, ActionMute, ACTION_COUNT };
+enum Action { ActionWindow, ActionPin, ActionHold, ActionMute, ActionFocus, ACTION_COUNT };
 
 constexpr std::array<unsigned, ACTION_COUNT> DEFAULT_COMBOS = {
-    (MOD_CONTROL << 16) | VK_F1, (MOD_CONTROL << 16) | VK_F2, (MOD_CONTROL << 16) | VK_F3, 0u };
-constexpr const char* JSON_KEYS[ACTION_COUNT] = { "hotkey_window", "hotkey_pin", "hotkey_hold", "hotkey_mute" };
+    (MOD_CONTROL << 16) | VK_F1, (MOD_CONTROL << 16) | VK_F2, (MOD_CONTROL << 16) | VK_F3, 0u, 0u };
+constexpr const char* JSON_KEYS[ACTION_COUNT] = { "hotkey_window", "hotkey_pin", "hotkey_hold", "hotkey_mute", "hotkey_focus" };
 
 constexpr unsigned Make(UINT modifiers, UINT vk) { return (modifiers << 16) | vk; }
 constexpr UINT Modifiers(unsigned combo) { return (combo >> 16) & (MOD_ALT | MOD_CONTROL | MOD_SHIFT); }

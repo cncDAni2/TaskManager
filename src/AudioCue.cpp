@@ -161,5 +161,6 @@ void AudioCue::ToggleSounds() {
     g_store.SaveLocal();
     Hotkeys::UpdateTrayTip();
     RefreshSettingsSounds();
+    if (g_hWnd) InvalidateRect(g_hWnd, nullptr, FALSE); // The PIN window's mute button.
     if (g_store.sounds_enabled) MessageBeep(MB_OK); // Audible confirmation only when unmuting.
 }

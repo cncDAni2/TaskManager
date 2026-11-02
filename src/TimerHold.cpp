@@ -4,6 +4,7 @@
 #include "Hotkeys.h"
 #include "IntervalTimer.h"
 #include "Layout.h"
+#include "StateToast.h"
 #include <commctrl.h>
 
 namespace {
@@ -78,6 +79,7 @@ void Toggle() {
 bool HandleCommand(WORD id) {
     if (id != IDC_TIMER_HOLD_BTN && id != IDM_TRAY_HOLD) return false;
     Toggle();
+    if (id == IDM_TRAY_HOLD) StateToast::ShowToggled(PinButtons::Hold);
     return true;
 }
 

@@ -5,6 +5,7 @@
 #include "HotkeyDialog.h"
 #include "Hotkeys.h"
 #include "Layout.h"
+#include "PinButtonsEditor.h"
 #include "SettingsSyncRows.h"
 #include "SyncPicker.h"
 #include "Version.h"
@@ -28,6 +29,7 @@ namespace {
     constexpr int IDC_SETTINGS_WORK_TRACKING = 5110;
     constexpr int IDC_SETTINGS_UPDATE_CHECK = 5111;
     constexpr int IDC_SETTINGS_HOTKEYS = 5112;
+    constexpr int IDC_SETTINGS_PIN_BUTTONS = 5113;
     constexpr int SETTINGS_DIALOG_WIDTH = 560;
     constexpr UINT WM_APP_REBUILD = WM_APP + 1;
     constexpr DWORD DIALOG_STYLE = WS_POPUP | WS_CAPTION | WS_SYSMENU;
@@ -187,7 +189,14 @@ namespace {
         HWND hotkeysButton = CreateChild(hWnd, L"BUTTON", L"Beállítás...",
             WS_TABSTOP | BS_PUSHBUTTON, 184, controlY(ROW), 120, 28, IDC_SETTINGS_HOTKEYS, g_hFontNormal);
         AddTooltip(state->tooltip, hWnd, hotkeysButton,
-            L"A főablak, a PIN mód, az Időstop és a hangok némításának bárhonnan működő billentyűkombinációi.");
+            L"A főablak, a PIN mód, az Időstop, a hangok némításának és a fókusz módnak bárhonnan működő billentyűkombinációi.");
+        top += ROW;
+
+        HWND pinButtonsLabel = CreateRow(hWnd, L"PIN mód gyorsgombok", top, ROW, true);
+        PinButtonsEditor::Create(hWnd, 184, controlY(ROW), IDC_SETTINGS_PIN_BUTTONS, SETTINGS_DIALOG_BG);
+        AddTooltip(state->tooltip, hWnd, pinButtonsLabel,
+            L"A kitűzött (PIN) ablak tetején megjelenő gombok. Kattintással be- és kikapcsolhatók, "
+            L"húzással átrendezhetők; a kék gombok látszanak.");
         top += ROW;
 
         CreateRow(hWnd, L"Munkaidő mérése", top, ROW, false);

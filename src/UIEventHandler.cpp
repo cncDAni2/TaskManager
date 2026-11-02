@@ -15,6 +15,8 @@
 #include "RecurringView.h"
 #include "Hotkeys.h"
 #include "AudioCue.h"
+#include "PinButtons.h"
+#include "StateToast.h"
 #include <windowsx.h>
 #include <algorithm>
 #include <cwctype>
@@ -268,23 +270,7 @@ bool HandleLButtonDown(HWND hWnd, LPARAM lParam) {
         int my = GET_Y_LPARAM(lParam);
         RECT rcClient;
         GetClientRect(hWnd, &rcClient);
-        RECT rcTimerText = GetMiniTimerTextRect(rcClient.right);
-        RECT rcDragHandle = GetMiniDragHandleRect(rcClient.right);
-        RECT rcFocusButton = GetMiniFocusButtonRect(rcClient.right);
-        if (g_intervalTimer.IsActive() && PtInRect(&rcTimerText, { mx, my })) {
-            g_viewMode = ViewMode::IntervalTimer;
-            ShowAppWindow();
-            return true;
-        }
-        if (g_pinMode && PtInRect(&rcFocusButton, { mx, my })) {
-            FocusMode::Toggle();
-            return true;
-        }
-        if (g_pinMode && PtInRect(&rcDragHandle, { mx, my })) {
-            ReleaseCapture();
-            SendMessageW(hWnd, WM_NCLBUTTONDOWN, HTCAPTION, 0);
-            return true;
-        }
+        if (PinButtons::HandleClick(hWnd, { mx, my }, rcClient.right)) return true;
 
         for (size_t i = 0; i < g_displayItems.size(); ++i) {
             const auto& item = g_displayItems[i];
@@ -317,7 +303,7 @@ bool HandleLButtonDown(HWND hWnd, LPARAM lParam) {
         }
 
         // Empty space below the top strip opens the main window; the strip itself still drags.
-        if (my > rcDragHandle.bottom + 2) {
+        if (my > PinButtons::STRIP_BOTTOM + 6) {
             ToggleWindow();
             return true;
         }
@@ -760,6 +746,11 @@ bool HandleCommand(HWND hWnd, int id) {
         return true;
     } else if (id == IDM_TRAY_MUTE) {
         AudioCue::ToggleSounds();
+        StateToast::ShowToggled(PinButtons::Mute);
+        return true;
+    } else if (id == IDM_TRAY_FOCUS) {
+        FocusMode::Toggle();
+        StateToast::ShowToggled(PinButtons::Focus);
         return true;
     } else if (id == IDM_TRAY_AUTORUN) {
         bool current = IsAutoRunEnabled();
@@ -1102,11 +1093,14 @@ bool HandleAppTray(HWND hWnd, LPARAM lParam) {
         const std::wstring muteLabel = L"Hangok némítása" + Hotkeys::Suffix(Hotkeys::ActionMute);
         InsertMenuW(hMenu, 6, MF_BYPOSITION | MF_STRING | uMuteCheck, IDM_TRAY_MUTE, muteLabel.c_str());
 
-        UINT uCheck = IsAutoRunEnabled() ? MF_CHECKED : MF_UNCHECKED;
-        InsertMenuW(hMenu, 7, MF_BYPOSITION | MF_STRING | uCheck, IDM_TRAY_AUTORUN, L"Indítás a Windows-zal");
+        UINT uFocusCheck = g_focusMode ? MF_CHECKED : MF_UNCHECKED;
+        const std::wstring focusLabel = L"Fókusz mód" + Hotkeys::Suffix(Hotkeys::ActionFocus);
+        InsertMenuW(hMenu, 7, MF_BYPOSITION | MF_STRING | uFocusCheck, IDM_TRAY_FOCUS, focusLabel.c_str());
 
         InsertMenuW(hMenu, 8, MF_BYPOSITION | MF_SEPARATOR, 0, nullptr);
-        InsertMenuW(hMenu, 9, MF_BYPOSITION | MF_STRING, IDM_TRAY_EXIT, L"Kilépés");
+        UINT uCheck = IsAutoRunEnabled() ? MF_CHECKED : MF_UNCHECKED;
+        InsertMenuW(hMenu, 9, MF_BYPOSITION | MF_STRING | uCheck, IDM_TRAY_AUTORUN, L"Indítás a Windows-zal");
+        InsertMenuW(hMenu, 10, MF_BYPOSITION | MF_STRING, IDM_TRAY_EXIT, L"Kilépés");
 
         SetForegroundWindow(hWnd);
         TrackPopupMenu(hMenu, TPM_RIGHTALIGN | TPM_BOTTOMALIGN, pt.x, pt.y, 0, hWnd, nullptr);
