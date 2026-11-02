@@ -279,8 +279,8 @@ void RecalculateMiniLayout() {
     int maxH = (rcWork.bottom - rcWork.top) - 30;
     if (totalH > maxH) totalH = maxH;
 
-    int x = g_miniPositionValid ? g_miniWinX : rcWork.right - miniW - 12;
-    int y = g_miniPositionValid ? g_miniWinY : rcWork.bottom - totalH - 12;
+    int x = g_miniPositionValid ? g_miniWinX : rcWork.right - miniW - 4; // Snug in the corner above the taskbar.
+    int y = g_miniPositionValid ? g_miniWinY : rcWork.bottom - totalH - 4;
     if (g_miniPositionValid && previousMiniHeight > 0) {
         y += previousMiniHeight - totalH;
     }

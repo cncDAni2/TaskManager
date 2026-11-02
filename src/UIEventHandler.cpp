@@ -737,12 +737,15 @@ bool HandleCommand(HWND hWnd, int id) {
         ShowAppWindow();
         return true;
     } else if (id == IDM_TRAY_PIN) {
-        g_pinMode = !g_pinMode;
-        g_miniPositionValid = false;
-        if (!g_pinMode && g_isMiniMode) {
-            ExitMiniMode(false);
+        if (!g_pinMode) {
+            ShowPinWindow();
+            return true;
         }
+        // Like the PIN window's own "PIN mód ki" button: the PIN window closes to the tray.
+        g_pinMode = false;
+        g_miniPositionValid = false;
         if (g_hPinBtn) InvalidateRect(g_hPinBtn, nullptr, TRUE);
+        if (g_isMiniMode && IsWindowVisible(hWnd)) HideAppWindow();
         return true;
     } else if (id == IDM_TRAY_MUTE) {
         AudioCue::ToggleSounds();

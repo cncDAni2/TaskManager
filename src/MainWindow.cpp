@@ -153,6 +153,20 @@ void ShowAppWindow() {
     UpdateCheck::Request();
 }
 
+void ShowPinWindow() {
+    g_pinMode = true;
+    g_miniPositionValid = false;
+    if (g_hPinBtn) InvalidateRect(g_hPinBtn, nullptr, TRUE);
+    if (g_isMiniMode && IsWindowVisible(g_hWnd)) return;
+    if (!IsWindowVisible(g_hWnd)) {
+        // Coming from the tray: start the session from the saved order, as ShowAppWindow does.
+        g_sessionActiveTaskIds = g_store.active_order;
+        g_sessionActiveIdsInitialized = true;
+        g_selectedIndex = -1;
+    }
+    EnterMiniMode();
+}
+
 void HideAppWindow() {
     CommitInlineEdit();
     FinalizeCompletedTaskSession();
@@ -567,15 +581,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                     if (g_hPinBtn) InvalidateRect(g_hPinBtn, nullptr, TRUE);
                     HideAppWindow();
                 } else {
-                    g_pinMode = true;
-                    g_miniPositionValid = false;
-                    if (g_hPinBtn) InvalidateRect(g_hPinBtn, nullptr, TRUE);
-
-                    g_sessionActiveTaskIds = g_store.active_order;
-                    g_sessionActiveIdsInitialized = true;
-                    g_selectedIndex = -1;
-
-                    EnterMiniMode();
+                    ShowPinWindow();
                 }
             }
             return 0;
