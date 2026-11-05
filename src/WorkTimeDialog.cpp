@@ -164,6 +164,7 @@ namespace {
 
 bool ShowManualWorkDialog(HWND owner, const WorkHistory::Records& manualRecords,
     std::string& date, int& seconds) {
+    UiScale::ContextScope scaledByWindows(false);
     WNDCLASSW dialogClass{};
     dialogClass.lpfnWndProc = ManualWorkDialogProc;
     dialogClass.hInstance = GetModuleHandleW(nullptr);

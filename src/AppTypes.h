@@ -8,6 +8,7 @@
 #endif
 
 #include <windows.h>
+#include "UiScale.h"
 #include <string>
 #include <vector>
 #include <ctime>

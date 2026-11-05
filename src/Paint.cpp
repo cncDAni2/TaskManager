@@ -71,18 +71,17 @@ static bool IsAssignedToOtherUser(const Task& task) {
     return task.is_sync && !task.assignee.empty() && task.assignee != CurrentUserName();
 }
 
-void PaintMiniWindow(HWND hWnd, HDC hdc) {
+void PaintMiniWindow(HWND hWnd, HDC hdc, const RECT& dirty) {
     RECT rcClient;
-    GetClientRect(hWnd, &rcClient);
+    UiScale::ClientRect(hWnd, &rcClient);
     int clientW = rcClient.right - rcClient.left;
     int clientH = rcClient.bottom - rcClient.top;
 
     ThemeColors th = GetThemeColors(g_themeMode);
     const COLORREF miniBg = g_themeMode == ThemeMode::Pink ? RGB(255, 20, 147) : th.bgWindow;
 
-    HDC hdcMem = CreateCompatibleDC(hdc);
-    HBITMAP hBmp = CreateCompatibleBitmap(hdc, clientW, clientH);
-    HGDIOBJ hOldBmp = SelectObject(hdcMem, hBmp);
+    UiScale::Buffer buffer(hdc, dirty);
+    HDC hdcMem = buffer.Dc();
 
     HBRUSH hBrushBg = CreateSolidBrush(miniBg);
     FillRect(hdcMem, &rcClient, hBrushBg);
@@ -100,6 +99,8 @@ void PaintMiniWindow(HWND hWnd, HDC hdc) {
         for (size_t i = 0; i < g_displayItems.size(); ++i) {
             const auto& item = g_displayItems[i];
             RECT r = item.rect;
+            RECT rcCardDirty{};
+            if (!IntersectRect(&rcCardDirty, &r, &dirty)) continue;
             bool isHovered = ((int)i == g_hoverItemIndex);
             bool isBeingDragged = (g_taskDragging && (int)i == g_dragSourceIndex);
             bool isAssignedToOther = IsAssignedToOtherUser(item.task);
@@ -256,71 +257,14 @@ void PaintMiniWindow(HWND hWnd, HDC hdc) {
         UpdateOverlay::Paint(hdcMem, rcClient);
         BarTooltips::Update(hWnd, {});
     }
-    BitBlt(hdc, 0, 0, clientW, clientH, hdcMem, 0, 0, SRCCOPY);
-
-    SelectObject(hdcMem, hOldBmp);
-    DeleteObject(hBmp);
-    DeleteDC(hdcMem);
+    buffer.Present();
 }
 
-void PaintMainWindow(HWND hWnd, HDC hdc) {
-    RECT rcClient;
-    GetClientRect(hWnd, &rcClient);
-    int clientW = rcClient.right - rcClient.left;
-    int clientH = rcClient.bottom - rcClient.top;
-
-    ThemeColors th = GetThemeColors(g_themeMode);
-
-    HDC hdcMem = CreateCompatibleDC(hdc);
-    HBITMAP hBmp = CreateCompatibleBitmap(hdc, clientW, clientH);
-    HGDIOBJ hOldBmp = SelectObject(hdcMem, hBmp);
-
+static void PaintListArea(HDC hdcMem, int clientW, int topOffset, int listBottom, const ThemeColors& th,
+    const HistoryColors& hc, std::vector<BarTooltips::Region>& barToolRegions) {
     const bool isHistory = g_viewMode == ViewMode::WorkHistory;
     const bool isTimer = g_viewMode == ViewMode::IntervalTimer;
-    std::vector<BarTooltips::Region> barToolRegions;
-    const HistoryColors hc = GetHistoryColors(g_themeMode);
-    HBRUSH hBrushBg = CreateSolidBrush(isHistory ? hc.background : th.bgWindow);
-    FillRect(hdcMem, &rcClient, hBrushBg);
-    DeleteObject(hBrushBg);
-
-    // 1. Draw Header
-    RECT rcHeader = { 0, 0, clientW, 48 };
-    HBRUSH hBrushHeader = CreateSolidBrush(isHistory ? hc.header : th.bgHeader);
-    FillRect(hdcMem, &rcHeader, hBrushHeader);
-    DeleteObject(hBrushHeader);
-
-    SetBkMode(hdcMem, TRANSPARENT);
-    SetTextColor(hdcMem, isHistory ? hc.title : th.textTitle);
-    SelectObject(hdcMem, g_hFontTitle);
     const bool isRecurring = g_viewMode == ViewMode::Recurring;
-    std::wstring title = g_viewMode == ViewMode::ActiveTasks ? L"Feladatok"
-        : (isHistory ? L"Munkaidő" : (isTimer ? L"Időzítő"
-            : (isRecurring ? L"Ütemezett feladatok" : L"Elkészült feladatok")));
-    RECT rcTitle = { 14, 12, 280, 40 };
-    DrawTextW(hdcMem, title.c_str(), -1, &rcTitle, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
-
-    // 2. Draw sub-bar background
-    if (g_viewMode == ViewMode::ActiveTasks) {
-        RECT rcInputBg = { 0, 48, clientW, 94 };
-        HBRUSH hBrushInput = CreateSolidBrush(th.bgSubBar);
-        FillRect(hdcMem, &rcInputBg, hBrushInput);
-        DeleteObject(hBrushInput);
-
-        HPEN hPenSep = CreatePen(PS_SOLID, 1, th.borderSep);
-        SelectObject(hdcMem, hPenSep);
-        MoveToEx(hdcMem, 0, 93, nullptr);
-        LineTo(hdcMem, clientW, 93);
-        DeleteObject(hPenSep);
-    } else if (isRecurring) {
-        RecurringView::PaintForm(hdcMem, clientW);
-    }
-
-    // 3. Draw items with clipping to list area
-    int topOffset = GetListTop();
-    int listBottom = GetListBottom(clientH);
-    HRGN hRgnClip = CreateRectRgn(0, topOffset, clientW, listBottom);
-    SelectClipRgn(hdcMem, hRgnClip);
-
     if (isHistory) {
         auto entries = g_store.GetWorkHistory();
         int maxSeconds = 1;
@@ -704,9 +648,76 @@ void PaintMainWindow(HWND hWnd, HDC hdc) {
             }
         }
     }
+}
 
-    SelectClipRgn(hdcMem, nullptr);
-    DeleteObject(hRgnClip);
+void PaintMainWindow(HWND hWnd, HDC hdc, const RECT& dirty) {
+    RECT rcClient;
+    UiScale::ClientRect(hWnd, &rcClient);
+    int clientW = rcClient.right - rcClient.left;
+    int clientH = rcClient.bottom - rcClient.top;
+
+    ThemeColors th = GetThemeColors(g_themeMode);
+
+    UiScale::Buffer buffer(hdc, dirty);
+    HDC hdcMem = buffer.Dc();
+
+    const bool isHistory = g_viewMode == ViewMode::WorkHistory;
+    const bool isTimer = g_viewMode == ViewMode::IntervalTimer;
+    std::vector<BarTooltips::Region> barToolRegions;
+    const HistoryColors hc = GetHistoryColors(g_themeMode);
+    HBRUSH hBrushBg = CreateSolidBrush(isHistory ? hc.background : th.bgWindow);
+    FillRect(hdcMem, &rcClient, hBrushBg);
+    DeleteObject(hBrushBg);
+
+    // 1. Draw Header
+    RECT rcHeader = { 0, 0, clientW, 48 };
+    HBRUSH hBrushHeader = CreateSolidBrush(isHistory ? hc.header : th.bgHeader);
+    FillRect(hdcMem, &rcHeader, hBrushHeader);
+    DeleteObject(hBrushHeader);
+
+    SetBkMode(hdcMem, TRANSPARENT);
+    SetTextColor(hdcMem, isHistory ? hc.title : th.textTitle);
+    SelectObject(hdcMem, g_hFontTitle);
+    const bool isRecurring = g_viewMode == ViewMode::Recurring;
+    std::wstring title = g_viewMode == ViewMode::ActiveTasks ? L"Feladatok"
+        : (isHistory ? L"Munkaidő" : (isTimer ? L"Időzítő"
+            : (isRecurring ? L"Ütemezett feladatok" : L"Elkészült feladatok")));
+    RECT rcTitle = { 14, 12, 280, 40 };
+    DrawTextW(hdcMem, title.c_str(), -1, &rcTitle, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
+
+    // 2. Draw sub-bar background
+    if (g_viewMode == ViewMode::ActiveTasks) {
+        RECT rcInputBg = { 0, 48, clientW, 94 };
+        HBRUSH hBrushInput = CreateSolidBrush(th.bgSubBar);
+        FillRect(hdcMem, &rcInputBg, hBrushInput);
+        DeleteObject(hBrushInput);
+
+        HPEN hPenSep = CreatePen(PS_SOLID, 1, th.borderSep);
+        SelectObject(hdcMem, hPenSep);
+        MoveToEx(hdcMem, 0, 93, nullptr);
+        LineTo(hdcMem, clientW, 93);
+        DeleteObject(hPenSep);
+    } else if (isRecurring) {
+        RecurringView::PaintForm(hdcMem, clientW);
+    }
+
+    // 3. Draw items with clipping to list area
+    int topOffset = GetListTop();
+    int listBottom = GetListBottom(clientH);
+    const RECT rcList = { 0, topOffset, clientW, listBottom };
+    buffer.ClipTo(rcList);
+
+    // The list keeps its tooltips while only the work bar or another strip is repainted.
+    static std::vector<BarTooltips::Region> s_listToolRegions;
+    RECT rcListDirty{};
+    if (IntersectRect(&rcListDirty, &rcList, &dirty)) {
+        PaintListArea(hdcMem, clientW, topOffset, listBottom, th, hc, barToolRegions);
+        s_listToolRegions = barToolRegions;
+    } else {
+        barToolRegions = s_listToolRegions;
+    }
+
+    buffer.ClearClip();
 
     // 3b. Draw Custom 5px Scrollbar
     if (!g_isMiniMode) {
@@ -891,9 +902,5 @@ void PaintMainWindow(HWND hWnd, HDC hdc) {
         barToolRegions.clear();
     }
     BarTooltips::Update(hWnd, barToolRegions);
-    BitBlt(hdc, 0, 0, clientW, clientH, hdcMem, 0, 0, SRCCOPY);
-
-    SelectObject(hdcMem, hOldBmp);
-    DeleteObject(hBmp);
-    DeleteDC(hdcMem);
+    buffer.Present();
 }

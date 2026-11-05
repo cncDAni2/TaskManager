@@ -171,6 +171,7 @@ BOOL CALLBACK CountNoticeWindows(HWND hWnd, LPARAM countPtr) {
 }
 
 void ShowNotice(Notice* notice, const wchar_t* caption) {
+    UiScale::ContextScope scaledByWindows(false);
     static bool classRegistered = false;
     HINSTANCE instance = GetModuleHandleW(nullptr);
     if (!classRegistered) {

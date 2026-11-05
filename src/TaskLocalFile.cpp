@@ -3,9 +3,6 @@
 #include "PinButtons.h"
 #include <algorithm>
 #include <cstring>
-#include <fstream>
-#include <iterator>
-#include <sstream>
 
 namespace {
 std::string Quote(const std::wstring& text) {
@@ -35,7 +32,7 @@ void TaskStore::AddFirstRunSyncSource() {
 }
 
 void TaskStore::SaveLocal() {
-    std::ostringstream out(std::ios::out | std::ios::binary);
+    TaskUtils::TextBuffer out;
 
     out << "{\n  \"work_seconds\": " << work_seconds_today << ",\n"
         << "  \"last_reset\": " << (unsigned long long)last_reset_time << ",\n";
@@ -108,9 +105,9 @@ void TaskStore::SaveLocal() {
     out << "\n  ]\n}\n";
 
     // Callers save after every possible change; the disk is touched only if something really did.
-    std::string content = out.str();
+    const std::string& content = out.str();
     if (content == savedLocalContent) return;
-    if (TaskUtils::WriteFileAtomic(filePath, content)) savedLocalContent = std::move(content);
+    if (TaskUtils::WriteFileAtomic(filePath, content)) savedLocalContent = content;
 }
 
 void TaskStore::LoadLocal() {
@@ -118,14 +115,12 @@ void TaskStore::LoadLocal() {
         return !t.is_sync;
     }), tasks.end());
 
-    std::ifstream in(filePath, std::ios::in | std::ios::binary);
-    if (!in.is_open()) {
+    std::string content;
+    if (!TaskUtils::ReadFileBytes(filePath, content)) {
         AddFirstRunSyncSource();
         return;
     }
 
-    std::string content((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
-    in.close();
     savedLocalContent = content;
     WorkHistory::LoadFromJson(content, work_history, manual_work_history);
 

@@ -4,9 +4,6 @@
 #include "Version.h"
 #include <rpc.h>
 #include <algorithm>
-#include <fstream>
-#include <iterator>
-#include <sstream>
 
 namespace {
 constexpr time_t TOMBSTONE_RETENTION_SECONDS = 14 * 24 * 60 * 60;
@@ -70,7 +67,7 @@ bool ParseRecord(const std::string& object, SyncRecord& record, SyncFileInfo& in
     return true;
 }
 
-void WriteExtras(std::ostream& out, const std::vector<JsonLite::Member>& extras, const char* indent) {
+void WriteExtras(TaskUtils::TextBuffer& out, const std::vector<JsonLite::Member>& extras, const char* indent) {
     for (const JsonLite::Member& member : extras) {
         out << ",\n" << indent << "\"" << member.first << "\": " << member.second;
     }
@@ -98,10 +95,8 @@ SyncFiles::ReadResult SyncFiles::Read(const std::wstring& path, std::vector<Sync
             ? ReadResult::Missing : ReadResult::Error;
     }
 
-    std::ifstream in(path, std::ios::in | std::ios::binary);
-    if (!in.is_open()) return ReadResult::Error;
-    std::string content((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
-    in.close();
+    std::string content;
+    if (!TaskUtils::ReadFileBytes(path, content)) return ReadResult::Error;
     GetWriteTime(path, writeTime);
 
     // An empty file is a freshly created share; anything else must parse completely.
@@ -134,7 +129,7 @@ SyncFiles::ReadResult SyncFiles::Read(const std::wstring& path, std::vector<Sync
 bool SyncFiles::Write(const std::wstring& path, const std::vector<SyncRecord>& records, const SyncFileInfo& info,
     FILETIME& writeTime) {
     TaskUtils::EnsureParentDirectoryExists(path);
-    std::ostringstream out(std::ios::out | std::ios::binary);
+    TaskUtils::TextBuffer out;
 
     out << "{\n  \"app_version\": \"" TASK_MANAGER_VERSION_STRING "\"";
     WriteExtras(out, info.extras, "  ");

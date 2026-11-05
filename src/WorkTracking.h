@@ -13,6 +13,10 @@ void SetEnabled(bool enabled);
 int BottomBarHeight();
 int MiniBarHeight();
 
+// Call on every tick: the whole seconds really elapsed since the last counted tick, so slow or
+// late timer messages lose no work time. Sleep is not included and a long stall counts as 5 s.
+int TakeCountedSeconds(bool counting);
+
 void CreateButton(HWND parent, HINSTANCE instance);
 // Places the footer buttons of the work-history view ("Mérés leállítása" and the on/off toggle).
 void LayoutFooter(bool historyVisible);

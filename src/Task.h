@@ -13,6 +13,9 @@
 #include <string>
 #include <vector>
 
+// Where a deleted task stood in an id list: (index, id), ascending by index.
+using OrderSlots = std::vector<std::pair<int, int>>;
+
 // A synchronized change worth telling the user about.
 struct SyncNotice {
     bool isNew = false;
@@ -70,11 +73,14 @@ public:
     void CycleMarker(int id);
     void ToggleCompleted(int id);
     std::wstring ToggleAssignment(int id, const std::wstring& userName);
-    void Delete(int id);
-    // Deletes several tasks with one write per sync file.
+    // Deletes tasks with one write per sync file.
     void DeleteMany(const std::vector<int>& ids);
+    // Undo of DeleteMany (TaskUndo.cpp): `saved` are the tasks as they were before it. Synced tasks
+    // come back in their files as a newer change, so the delete is undone for the others too.
+    void RestoreTasks(std::vector<Task> saved, const OrderSlots& orderSlots);
     int CountWorkHistoryBefore(const std::string& dateKey) const;
     void PurgeWorkHistoryBefore(const std::string& dateKey);
+    void RestoreWorkHistory(const WorkHistory::Records& measured, const WorkHistory::Records& manual);
 
     // Puts open tasks missing from `order` (e.g. new ones from a sync file) on top, newest first.
     void PrependUnorderedActive(std::vector<int>& order) const;
@@ -122,6 +128,8 @@ private:
     bool IsOpenTask(const std::string& uid) const;
     int CreateRecurringInstance(RecurringRule& rule);
     void PublishSyncTask(Task& task, bool deleted);
+    // Records a change in the task's files in memory; RewriteSource on `touched` writes them.
+    void QueueSyncRecord(Task& task, bool deleted, std::vector<SyncSource*>& touched);
     SyncRecord MakeSyncRecord(Task& task, bool deleted);
     void RewriteSource(SyncSource& source, const SyncFiles::RecordMap* winners, const SyncRecord* upsert);
     void NoteVersionHint(const SyncSource& source, const SyncFileInfo& info);

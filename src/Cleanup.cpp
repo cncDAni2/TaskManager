@@ -2,6 +2,7 @@
 #include "AppState.h"
 #include "Layout.h"
 #include "UIEventHandler.h"
+#include "UndoToast.h"
 #include <commctrl.h>
 #include <algorithm>
 #include <string>
@@ -61,7 +62,7 @@ void CleanCompletedTasks(HWND hWnd, int days) {
     }
     text += L"\n\nFolytatod?";
     if (ShowCenteredMessageBox(hWnd, text, L"Takarítás", MB_YESNO | MB_ICONWARNING | MB_DEFBUTTON2) != IDYES) return;
-    g_store.DeleteMany(ids);
+    UndoToast::DeleteTasks(ids);
     RefreshView(hWnd);
 }
 
@@ -85,7 +86,7 @@ void CleanWorkHistory(HWND hWnd, int weeks) {
     std::wstring text = std::to_wstring(count) + L" nap mért és kézi munkaideje törlődik (" +
         TaskUtils::Utf8ToWide(cutoff) + L" előtt).\n\nFolytatod?";
     if (ShowCenteredMessageBox(hWnd, text, L"Takarítás", MB_YESNO | MB_ICONWARNING | MB_DEFBUTTON2) != IDYES) return;
-    g_store.PurgeWorkHistoryBefore(cutoff);
+    UndoToast::PurgeWorkHistory(cutoff);
     RefreshView(hWnd);
 }
 }
@@ -94,7 +95,7 @@ void Cleanup::CreateControls(HWND parent, HINSTANCE instance) {
     g_hCleanupEdit = CreateWindowExW(WS_EX_CLIENTEDGE, L"EDIT", L"",
         WS_CHILD | WS_TABSTOP | ES_NUMBER | ES_CENTER, 0, 0, 30, 22, parent,
         (HMENU)IDC_CLEANUP_EDIT, instance, nullptr);
-    SendMessageW(g_hCleanupEdit, WM_SETFONT, (WPARAM)g_hFontSmall, TRUE);
+    UiScale::SetControlFont(g_hCleanupEdit, 14);
     SendMessageW(g_hCleanupEdit, EM_LIMITTEXT, 2, 0);
     g_hCleanupBtn = CreateWindowW(L"BUTTON", L"", WS_CHILD | WS_TABSTOP | BS_OWNERDRAW,
         0, 0, 250, 26, parent, (HMENU)IDC_CLEANUP_BTN, instance, nullptr);
@@ -151,8 +152,8 @@ void Cleanup::UpdateVisibility(int clientWidth) {
     const int top = GetListTop() + 4;
     const int buttonWidth = ButtonWidth(label);
     const int buttonX = clientWidth - 14 - buttonWidth;
-    SetWindowPos(g_hCleanupBtn, HWND_TOP, buttonX, top, buttonWidth, height, SWP_NOACTIVATE);
-    SetWindowPos(g_hCleanupEdit, HWND_TOP, buttonX - 4 - 30, top, 30, height, SWP_NOACTIVATE);
+    UiScale::Place(g_hCleanupBtn, HWND_TOP, buttonX, top, buttonWidth, height, SWP_NOACTIVATE);
+    UiScale::Place(g_hCleanupEdit, HWND_TOP, buttonX - 4 - 30, top, 30, height, SWP_NOACTIVATE);
     InvalidateRect(g_hCleanupBtn, nullptr, TRUE);
 }
 

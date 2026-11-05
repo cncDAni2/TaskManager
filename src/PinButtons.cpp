@@ -192,12 +192,12 @@ bool GetRect(int clientWidth, Id id, RECT& rect) {
 
 void AddToRegion(HRGN region, int clientWidth) {
     for (const Placed& placed : Place(clientWidth)) {
-        const RECT& r = placed.rect;
+        const RECT r = UiScale::Px(placed.rect);
         // Rounded like the painted shapes, so no square corners stick out above the window. Tabs
         // reach into the body so only their top corners are rounded.
         HRGN part = placed.id == Timer
-            ? CreateRoundRectRgn(r.left, r.top, r.right + 1, r.bottom + 1, 5, 5)
-            : CreateRoundRectRgn(r.left, r.top, r.right + 1, r.bottom + 8, 6, 6);
+            ? CreateRoundRectRgn(r.left, r.top, r.right + 1, r.bottom + 1, UiScale::Px(5), UiScale::Px(5))
+            : CreateRoundRectRgn(r.left, r.top, r.right + 1, r.bottom + UiScale::Px(8), UiScale::Px(6), UiScale::Px(6));
         CombineRgn(region, region, part, RGN_OR);
         DeleteObject(part);
     }

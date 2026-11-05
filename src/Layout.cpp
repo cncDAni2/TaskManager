@@ -49,7 +49,7 @@ int GetListBottom(int clientHeight) {
 void EnsureVisible(int itemIndex) {
     if (itemIndex < 0 || itemIndex >= (int)g_displayItems.size()) return;
     RECT rcClient;
-    GetClientRect(g_hWnd, &rcClient);
+    UiScale::ClientRect(g_hWnd, &rcClient);
     int topOffset = GetListTop();
     int listBottom = GetListBottom(rcClient.bottom);
     int viewableHeight = listBottom - topOffset;
@@ -72,7 +72,7 @@ ScrollbarMetrics GetScrollbarMetrics() {
     if (g_isMiniMode) return m;
 
     RECT rcClient;
-    GetClientRect(g_hWnd, &rcClient);
+    UiScale::ClientRect(g_hWnd, &rcClient);
     int clientW = rcClient.right - rcClient.left;
     int clientH = rcClient.bottom - rcClient.top;
 
@@ -129,6 +129,7 @@ RECT GetTimerPanelRect(int clientWidth) {
 }
 
 void UpdateControlsVisibility() {
+    UiScale::ContextScope native(true); // Settings can get here too.
     if (g_isMiniMode) {
         ShowWindow(g_hEdit, SW_HIDE);
         ShowWindow(g_hAddBtn, SW_HIDE);
@@ -149,6 +150,12 @@ void UpdateControlsVisibility() {
         return;
     }
 
+    constexpr UINT fixedFlags = SWP_NOZORDER | SWP_NOACTIVATE;
+    UiScale::Place(g_hManualWorkBtn, nullptr, 394, 10, 80, 28, fixedFlags);
+    UiScale::Place(g_hTimerBtn, nullptr, 478, 10, 28, 28, fixedFlags);
+    UiScale::Place(g_hSettingsBtn, nullptr, 512, 10, 28, 28, fixedFlags);
+    UiScale::Place(g_hPinBtn, nullptr, 546, 10, 28, 28, fixedFlags);
+    UiScale::Place(g_hCloseBtn, nullptr, 580, 10, 28, 28, fixedFlags);
     ShowWindow(g_hCloseBtn, SW_SHOW);
     ShowWindow(g_hPinBtn, SW_SHOW);
     ShowWindow(g_hFocusModeBtn, SW_SHOW);
@@ -166,7 +173,7 @@ void UpdateControlsVisibility() {
     ShowWindow(g_hManualWorkBtn, isHistory ? SW_SHOW : SW_HIDE);
     {
         RECT rcCleanup{};
-        GetClientRect(g_hWnd, &rcCleanup);
+        UiScale::ClientRect(g_hWnd, &rcCleanup);
         Cleanup::UpdateVisibility(rcCleanup.right);
     }
     ShowWindow(g_hEdit, isActive ? SW_SHOW : SW_HIDE);
@@ -176,10 +183,10 @@ void UpdateControlsVisibility() {
     ShowWindow(g_hSyncToggleBtn, showSync ? SW_SHOW : SW_HIDE);
     const int repeatButtonX = SyncPicker::HasSources() ? 540 : 577;
     const int addButtonX = repeatButtonX - 6 - 92;
-    SetWindowPos(g_hEdit, nullptr, 12, 56, addButtonX - 6 - 12, 28, SWP_NOZORDER | SWP_NOACTIVATE);
-    SetWindowPos(g_hAddBtn, nullptr, addButtonX, 56, 92, 28, SWP_NOZORDER | SWP_NOACTIVATE);
-    SetWindowPos(GetDlgItem(g_hWnd, IDC_RECURRING_BTN), nullptr, repeatButtonX, 56, 31, 28, SWP_NOZORDER | SWP_NOACTIVATE);
-    if (isActive) SetWindowPos(g_hSyncToggleBtn, nullptr, 577, 56, 31, 28, SWP_NOZORDER | SWP_NOACTIVATE);
+    UiScale::Place(g_hEdit, nullptr, 12, 56, addButtonX - 6 - 12, 28, SWP_NOZORDER | SWP_NOACTIVATE);
+    UiScale::Place(g_hAddBtn, nullptr, addButtonX, 56, 92, 28, SWP_NOZORDER | SWP_NOACTIVATE);
+    UiScale::Place(GetDlgItem(g_hWnd, IDC_RECURRING_BTN), nullptr, repeatButtonX, 56, 31, 28, SWP_NOZORDER | SWP_NOACTIVATE);
+    if (isActive) UiScale::Place(g_hSyncToggleBtn, nullptr, 577, 56, 31, 28, SWP_NOZORDER | SWP_NOACTIVATE);
     if (isHistory) {
         SetWindowTextW(g_hToggleViewBtn, L"← Feladatok");
         SetWindowTextW(g_hTimeHistoryBtn, L"● Idők");
@@ -197,16 +204,16 @@ void UpdateControlsVisibility() {
     // enough for its label, ~10px padding), "Idők", then the focus and timer-hold buttons.
     int leftmostX = 286;
     if (isHistory) {
-        SetWindowPos(g_hToggleViewBtn, nullptr, 286, 10, 104, 28, SWP_NOZORDER | SWP_NOACTIVATE);
+        UiScale::Place(g_hToggleViewBtn, nullptr, 286, 10, 104, 28, SWP_NOZORDER | SWP_NOACTIVATE);
     } else {
         const int width = TextButtonWidth(g_hToggleViewBtn);
         const int right = 470;
-        SetWindowPos(g_hToggleViewBtn, nullptr, right - width, 10, width, 28, SWP_NOZORDER | SWP_NOACTIVATE);
+        UiScale::Place(g_hToggleViewBtn, nullptr, right - width, 10, width, 28, SWP_NOZORDER | SWP_NOACTIVATE);
         leftmostX = right - width - 5 - 54;
-        SetWindowPos(g_hTimeHistoryBtn, nullptr, leftmostX, 10, 54, 28, SWP_NOZORDER | SWP_NOACTIVATE);
+        UiScale::Place(g_hTimeHistoryBtn, nullptr, leftmostX, 10, 54, 28, SWP_NOZORDER | SWP_NOACTIVATE);
     }
-    SetWindowPos(g_hFocusModeBtn, nullptr, leftmostX - 6 - 28, 10, 28, 28, SWP_NOZORDER | SWP_NOACTIVATE);
-    SetWindowPos(GetDlgItem(g_hWnd, IDC_TIMER_HOLD_BTN), nullptr, leftmostX - 2 * (6 + 28), 10, 28, 28,
+    UiScale::Place(g_hFocusModeBtn, nullptr, leftmostX - 6 - 28, 10, 28, 28, SWP_NOZORDER | SWP_NOACTIVATE);
+    UiScale::Place(GetDlgItem(g_hWnd, IDC_TIMER_HOLD_BTN), nullptr, leftmostX - 2 * (6 + 28), 10, 28, 28,
         SWP_NOZORDER | SWP_NOACTIVATE);
     TimerView::UpdateVisibility(isTimer);
     RecurringView::UpdateVisibility(isRecurring);
@@ -214,6 +221,7 @@ void UpdateControlsVisibility() {
 }
 
 void RecalculateMiniLayout() {
+    UiScale::ContextScope native(true); // Settings can get here too.
     static int previousMiniHeight = 0;
     g_displayItems.clear();
     int miniW = g_fullWinW / 2;
@@ -276,31 +284,34 @@ void RecalculateMiniLayout() {
 
     RECT rcWork;
     SystemParametersInfoW(SPI_GETWORKAREA, 0, &rcWork, 0);
-    int maxH = (rcWork.bottom - rcWork.top) - 30;
+    int maxH = UiScale::Units(rcWork.bottom - rcWork.top) - 30;
     if (totalH > maxH) totalH = maxH;
 
-    int x = g_miniPositionValid ? g_miniWinX : rcWork.right - miniW - 4; // Snug in the corner above the taskbar.
-    int y = g_miniPositionValid ? g_miniWinY : rcWork.bottom - totalH - 4;
+    // The window itself lives in real pixels.
+    const int pixelW = UiScale::Px(miniW);
+    const int pixelH = UiScale::Px(totalH);
+    int x = g_miniPositionValid ? g_miniWinX : rcWork.right - pixelW - 4; // Snug in the corner above the taskbar.
+    int y = g_miniPositionValid ? g_miniWinY : rcWork.bottom - pixelH - 4;
     if (g_miniPositionValid && previousMiniHeight > 0) {
-        y += previousMiniHeight - totalH;
+        y += previousMiniHeight - pixelH;
     }
     if (y < rcWork.top) y = rcWork.top;
     if (x < rcWork.left) x = rcWork.left;
-    if (x + miniW > rcWork.right) x = rcWork.right - miniW;
-    if (y + totalH > rcWork.bottom) y = rcWork.bottom - totalH;
+    if (x + pixelW > rcWork.right) x = rcWork.right - pixelW;
+    if (y + pixelH > rcWork.bottom) y = rcWork.bottom - pixelH;
 
     g_miniWinX = x;
     g_miniWinY = y;
     g_miniPositionValid = true;
-    previousMiniHeight = totalH;
+    previousMiniHeight = pixelH;
 
-    HRGN hMiniRegion = CreateRectRgn(0, PinButtons::STRIP_BOTTOM, miniW, totalH);
+    HRGN hMiniRegion = CreateRectRgn(0, UiScale::Px(PinButtons::STRIP_BOTTOM), pixelW, pixelH);
     PinButtons::AddToRegion(hMiniRegion, miniW);
     if (!SetWindowRgn(g_hWnd, hMiniRegion, TRUE)) {
         DeleteObject(hMiniRegion);
     }
 
-    SetWindowPos(g_hWnd, HWND_TOPMOST, x, y, miniW, totalH, SWP_SHOWWINDOW | SWP_NOACTIVATE);
+    SetWindowPos(g_hWnd, HWND_TOPMOST, x, y, pixelW, pixelH, SWP_SHOWWINDOW | SWP_NOACTIVATE);
     InvalidateRect(g_hWnd, nullptr, TRUE);
 }
 
@@ -330,8 +341,8 @@ void EnterMiniMode() {
     SystemParametersInfoW(SPI_GETWORKAREA, 0, &rcWork, 0);
     int defaultW = 620;
     int defaultH = 550;
-    int defaultX = rcWork.right - defaultW - 12;
-    int defaultY = rcWork.bottom - defaultH - 12;
+    int defaultX = rcWork.right - UiScale::Px(defaultW) - 12;
+    int defaultY = rcWork.bottom - UiScale::Px(defaultH) - 12;
 
     g_fullWinX = defaultX;
     g_fullWinY = defaultY;
@@ -385,7 +396,7 @@ void ExitMiniMode(bool toHidden) {
         return;
     }
 
-    SetWindowPos(g_hWnd, HWND_TOPMOST, g_fullWinX, g_fullWinY, g_fullWinW, g_fullWinH, SWP_SHOWWINDOW);
+    SetWindowPos(g_hWnd, HWND_TOPMOST, g_fullWinX, g_fullWinY, UiScale::Px(g_fullWinW), UiScale::Px(g_fullWinH), SWP_SHOWWINDOW);
     UpdateControlsVisibility();
     RecalculateLayout();
     if (g_hPinBtn) InvalidateRect(g_hPinBtn, nullptr, TRUE);
@@ -395,13 +406,14 @@ void ExitMiniMode(bool toHidden) {
 }
 
 void RecalculateLayout() {
+    UiScale::ContextScope native(true); // Settings can get here too.
     if (g_isMiniMode) {
         RecalculateMiniLayout();
         return;
     }
     g_displayItems.clear();
     RECT rcClient;
-    GetClientRect(g_hWnd, &rcClient);
+    UiScale::ClientRect(g_hWnd, &rcClient);
     int clientWidth = rcClient.right - rcClient.left;
 
     int topOffset = GetListTop();
@@ -431,6 +443,10 @@ void RecalculateLayout() {
     const int headerHeight = 28;
     HDC hdcMeasure = GetDC(g_hWnd);
     HFONT hOldFont = (HFONT)SelectObject(hdcMeasure, g_hFontNormal);
+    SelectObject(hdcMeasure, hOldFont);
+    {
+    UiScale::DrawScope measureInUnits(hdcMeasure); // Line breaks must match the painted text.
+    SelectObject(hdcMeasure, g_hFontNormal);
 
     if (g_viewMode == ViewMode::ActiveTasks) {
         g_store.PrependUnorderedActive(g_sessionActiveTaskIds);
@@ -514,6 +530,7 @@ void RecalculateLayout() {
         }
     }
 
+    }
     SelectObject(hdcMeasure, hOldFont);
     ReleaseDC(g_hWnd, hdcMeasure);
     int listContentHeight = currentY - topOffset;

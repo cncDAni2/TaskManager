@@ -29,7 +29,7 @@ A feladatokat szerkesztheted, törölheted, készre jelölheted, jelölőikonnal
 Főablakban készre jelölve a feladat az ablak bezárásáig látható marad az aktív listában; újranyitáskor már csak az "Elkészült" nézetben szerepel.
 A kész feladatokat napi bontásban, a fenti "Elkészültek" gombra kattintva láthatod.  
 **Ismétlődő és későbbi feladatok:** a "+ Hozzáad" melletti ↻ gombbal (a már beírt szöveget átviszi) megadhatod, melyik naptól jelenjen meg a feladat, és hogy hány naponta / hetente / havonta ismétlődjön (0 = egyszeri). A feladat a megadott napon, a munkaidő kezdetekor kerül a lista tetejére; az ismétlődő ↻ jelet kap, és amíg nincs kész, nem jön létre belőle újabb. Az ütemezést csak te látod, a belőle létrehozott (akár szinkronizált) feladat viszont sima feladat.  
-**Takarítás:** az "Elkészült" nézet jobb felső sarkában megadhatod, hány napnál régebben elkészült feladatok törlődjenek (alapból 14), majd a gombbal törölheted őket. Törlés előtt a program megmutatja, hány feladat törlődik; a szinkronizált feladatok a többi felhasználónál is törlődnek. A beírt számot a program megjegyzi.
+**Takarítás:** az "Elkészült" nézet jobb felső sarkában megadhatod, hány napnál régebben elkészült feladatok törlődjenek (alapból 14), majd a gombbal törölheted őket. Törlés előtt a program megmutatja, hány feladat törlődik; a szinkronizált feladatok a többi felhasználónál is törlődnek. A törlés után 5 másodpercig visszavonható. A beírt számot a program megjegyzi.
 
 **Gyorsbillentyűk** a főablak nézetben:
 
@@ -39,7 +39,7 @@ A kész feladatokat napi bontásban, a fenti "Elkészültek" gombra kattintva l�
 - Space: A kijelölt feladat készre jelölése vagy a jelölés visszavonása
 - Enter: A kijelölt feladat szerkesztése, illetve a szerkesztés befejezése és mentése
 - ESC: Szerkesztés közben visszavonja a módosításokat; egyébként befejezi és menti a szerkesztést
-- Delete: Kijelölt feladat törlése (megerősítést kér)
+- Delete: Kijelölt feladat törlése (5 másodpercig visszavonható)
 - Dupla kattintás egy feladatra: az adott feladat szerkesztése.
 
 ### Szinkronizált feladatok
@@ -81,7 +81,7 @@ Nem ez a program fő funkciója, de hasznos a munkaidő nyomon követésére is.
 
 Az időmérés "munkanapot" mér. A munkaidő kezdete alapértelmezés szerint 9:15.  
 Az eddigi méréseket napi és heti bontásban is megtekintheted az "Idők" oldalon.  
-**Takarítás:** az "Idők" nézet jobb felső sarkában megadhatod, hány hétnél régebbi mért és kézi munkaidők törlődjenek (alapból 8); a mostani hét és az előtte lévő megadott számú hét megmarad. Törlés előtt megerősítést kér.  
+**Takarítás:** az "Idők" nézet jobb felső sarkában megadhatod, hány hétnél régebbi mért és kézi munkaidők törlődjenek (alapból 8); a mostani hét és az előtte lévő megadott számú hét megmarad. Törlés előtt megerősítést kér, utána 5 másodpercig visszavonható.  
 **Manuális** munkaidőmegadás: Az Idők nézetben kézzel is megadhatsz munkaidőt. Kiválaszthatsz egy napot, ahol módosíthatod a korábbi kézi bejegyzést. Alapból minden naphoz ez 0 óra. A kézi megadást az áttekintő nézetek más színnel jelzik.  
 **Kikapcsolás:** az Idők nézetben vagy a Beállításokban az időmérés teljesen kikapcsolható; ilyenkor a munkaidő-sáv sem látszik.  
 A százalékos kijelző a 8 órás munkaidőhöz viszonyítva mutatja az eltelt aktív idő arányát. Ez törvényileg szabályozott módon 6 óra 50 perc-nél jelez 100%-ot, ugyanis a törvény egy 20 perces szünetet ír elő, valamint hogy a képernyő előtti munkavégzést óránként 10 percre szüneteltetni kell. (Fontos megjegyezni: Ez NEM munkaszünet, de a program a képernyőidőt méri, azt pedig szüneteltetni kell - így a program számára ez nem számolható mint munkaidő.)
@@ -121,7 +121,7 @@ A mellékelt `build.bat` parancsfájl azonnal lefordítja az alkalmazást:
 build.bat
 ```
 
-A generált futtatható fájl: `TaskManager.exe` (~670 KB méretű önálló natív exe)
+A generált futtatható fájl: `TaskManager.exe` (~715 KB méretű önálló natív exe)
 
 ## Licenc
 

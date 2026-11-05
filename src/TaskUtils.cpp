@@ -2,11 +2,17 @@
 
 #define SECURITY_WIN32
 #include <security.h>
-#include <sstream>
-#include <iomanip>
 #include <cctype>
+#include <cstdio>
 
 namespace TaskUtils {
+
+TextBuffer& TextBuffer::operator<<(double value) {
+    char buffer[32];
+    sprintf_s(buffer, "%g", value);
+    data += buffer;
+    return *this;
+}
 
 std::string WideToUtf8(const std::wstring& wstr) {
     if (wstr.empty()) return "";
@@ -95,27 +101,30 @@ std::wstring FormatWorkDuration(int totalSeconds) {
 }
 
 std::string EscapeJsonString(const std::string& s) {
-    std::ostringstream o;
+    std::string o;
+    o.reserve(s.size());
     for (size_t i = 0; i < s.size(); ++i) {
         unsigned char c = static_cast<unsigned char>(s[i]);
         switch (c) {
-            case '"': o << "\\\""; break;
-            case '\\': o << "\\\\"; break;
-            case '\b': o << "\\b"; break;
-            case '\f': o << "\\f"; break;
-            case '\n': o << "\\n"; break;
-            case '\r': o << "\\r"; break;
-            case '\t': o << "\\t"; break;
+            case '"': o += "\\\""; break;
+            case '\\': o += "\\\\"; break;
+            case '\b': o += "\\b"; break;
+            case '\f': o += "\\f"; break;
+            case '\n': o += "\\n"; break;
+            case '\r': o += "\\r"; break;
+            case '\t': o += "\\t"; break;
             default:
                 if (c < 0x20) {
-                    o << "\\u" << std::hex << std::setw(4) << std::setfill('0') << (int)c;
+                    char escaped[8];
+                    sprintf_s(escaped, "\\u%04x", static_cast<unsigned>(c));
+                    o += escaped;
                 } else {
-                    o << (char)c;
+                    o += static_cast<char>(c);
                 }
                 break;
         }
     }
-    return o.str();
+    return o;
 }
 
 std::string UnescapeJsonString(const std::string& s) {
@@ -179,6 +188,28 @@ std::wstring GetCleanUserName() {
         return envBuf;
     }
     return L"Felhasználó";
+}
+
+bool ReadFileBytes(const std::wstring& path, std::string& content) {
+    content.clear();
+    HANDLE file = CreateFileW(path.c_str(), GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+        nullptr, OPEN_EXISTING, FILE_FLAG_SEQUENTIAL_SCAN, nullptr);
+    if (file == INVALID_HANDLE_VALUE) return false;
+    LARGE_INTEGER size{};
+    bool ok = GetFileSizeEx(file, &size) != 0 && size.QuadPart < 0x7FFFFFFF;
+    if (ok) {
+        content.resize(static_cast<size_t>(size.QuadPart));
+        DWORD total = 0;
+        while (ok && total < content.size()) {
+            DWORD count = 0;
+            ok = ReadFile(file, &content[total], static_cast<DWORD>(content.size()) - total, &count, nullptr) != 0;
+            if (count == 0) break; // The file shrank while reading.
+            total += count;
+        }
+        content.resize(total);
+    }
+    CloseHandle(file);
+    return ok;
 }
 
 bool WriteFileAtomic(const std::wstring& path, const std::string& content) {

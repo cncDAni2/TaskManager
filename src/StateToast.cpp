@@ -40,10 +40,9 @@ COLORREF TextColor(const ThemeColors& theme) {
 void Paint(HWND hWnd, HDC hdc) {
     const ThemeColors theme = GetThemeColors(g_themeMode);
     RECT client{};
-    GetClientRect(hWnd, &client);
-    HDC mem = CreateCompatibleDC(hdc);
-    HBITMAP bitmap = CreateCompatibleBitmap(hdc, client.right, client.bottom);
-    HGDIOBJ oldBitmap = SelectObject(mem, bitmap);
+    UiScale::ClientRect(hWnd, &client);
+    UiScale::Buffer buffer(hdc, client);
+    HDC mem = buffer.Dc();
 
     HBRUSH background = CreateSolidBrush(Background(theme));
     HPEN border = CreatePen(PS_SOLID, 1, theme.borderCard);
@@ -80,10 +79,7 @@ void Paint(HWND hWnd, HDC hdc) {
     DrawTextW(mem, g_text.c_str(), -1, &textRect, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
     SelectObject(mem, oldFont);
 
-    BitBlt(hdc, 0, 0, client.right, client.bottom, mem, 0, 0, SRCCOPY);
-    SelectObject(mem, oldBitmap);
-    DeleteObject(bitmap);
-    DeleteDC(mem);
+    buffer.Present();
 }
 
 // Alpha for the time since the toast appeared; -1 once it is over.
@@ -169,21 +165,22 @@ void ShowToggled(PinButtons::Id id) {
     GetTextExtentPoint32W(screen, g_text.c_str(), static_cast<int>(g_text.size()), &textSize);
     SelectObject(screen, oldFont);
     ReleaseDC(nullptr, screen);
-    const int width = kPadding + kIconSize + kGap + textSize.cx + kPadding + 4;
-    const int height = kPadding + kIconSize + kPadding;
+    const int width = UiScale::Px(kPadding + kIconSize + kGap + textSize.cx + kPadding + 4);
+    const int height = UiScale::Px(kPadding + kIconSize + kPadding);
+    const int corner = UiScale::Px(12);
 
     // Bottom right above the taskbar, or above the PIN window when it is there.
     RECT workArea{};
     SystemParametersInfoW(SPI_GETWORKAREA, 0, &workArea, 0);
-    int x = workArea.right - width - 14;
-    int y = workArea.bottom - height - 14;
+    int x = workArea.right - width - UiScale::Px(14);
+    int y = workArea.bottom - height - UiScale::Px(14);
     RECT pin{};
     if (g_isMiniMode && IsWindowVisible(g_hWnd) && GetWindowRect(g_hWnd, &pin)) {
         x = pin.right - width;
-        y = pin.top - height - 8;
-        if (y < workArea.top) y = pin.bottom + 8;
+        y = pin.top - height - UiScale::Px(8);
+        if (y < workArea.top) y = pin.bottom + UiScale::Px(8);
     }
-    HRGN region = CreateRoundRectRgn(0, 0, width + 1, height + 1, 12, 12);
+    HRGN region = CreateRoundRectRgn(0, 0, width + 1, height + 1, corner, corner);
     if (!SetWindowRgn(g_toast, region, FALSE)) DeleteObject(region);
     SetWindowPos(g_toast, HWND_TOPMOST, x, y, width, height, SWP_NOACTIVATE | SWP_SHOWWINDOW);
     InvalidateRect(g_toast, nullptr, FALSE);

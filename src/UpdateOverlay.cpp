@@ -61,7 +61,7 @@ void Dismiss() {
 
 Hover HitTest(HWND hWnd, POINT point) {
     RECT client{};
-    GetClientRect(hWnd, &client);
+    UiScale::ClientRect(hWnd, &client);
     const Geometry g = Measure(client);
     if (PtInRect(&g.close, point)) return Hover::Close;
     if (PtInRect(&g.download, point)) return Hover::Download;
@@ -188,8 +188,7 @@ bool UpdateOverlay::HandleMouseMove(HWND hWnd, LPARAM lParam) {
 bool UpdateOverlay::HandleSetCursor(HWND hWnd) {
     if (!IsVisible()) return false;
     POINT cursor{};
-    GetCursorPos(&cursor);
-    ScreenToClient(hWnd, &cursor);
+    UiScale::CursorPos(hWnd, &cursor);
     SetCursor(LoadCursorW(nullptr, HitTest(hWnd, cursor) == Hover::None ? IDC_ARROW : IDC_HAND));
     return true;
 }

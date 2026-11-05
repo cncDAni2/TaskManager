@@ -122,31 +122,11 @@ std::wstring TaskStore::ToggleAssignment(int id, const std::wstring& userName) {
     return L"";
 }
 
-void TaskStore::Delete(int id) {
-    Task* t = FindTask(id);
-    if (!t) return;
-    if (t->is_sync) PublishSyncTask(*t, true);
-    tasks.erase(std::remove_if(tasks.begin(), tasks.end(),
-        [id](const Task& task) { return task.id == id; }), tasks.end());
-    auto itOrder = std::find(active_order.begin(), active_order.end(), id);
-    if (itOrder != active_order.end()) active_order.erase(itOrder);
-    SaveLocal();
-}
-
 void TaskStore::DeleteMany(const std::vector<int>& ids) {
     std::vector<SyncSource*> touched;
     for (int id : ids) {
         Task* t = FindTask(id);
-        if (!t || !t->is_sync) continue;
-        const SyncRecord record = MakeSyncRecord(*t, true);
-        for (int sourceId : t->sources) {
-            for (SyncSource& source : syncSources) {
-                if (source.id != sourceId) continue;
-                SyncFiles::Upsert(source.pendingWrites, record);
-                SyncFiles::Upsert(source.records, record);
-                if (std::find(touched.begin(), touched.end(), &source) == touched.end()) touched.push_back(&source);
-            }
-        }
+        if (t && t->is_sync) QueueSyncRecord(*t, true, touched);
     }
     for (SyncSource* source : touched) RewriteSource(*source, nullptr, nullptr);
 

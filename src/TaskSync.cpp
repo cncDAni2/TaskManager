@@ -213,6 +213,7 @@ SyncRecord TaskStore::MakeSyncRecord(Task& task, bool deleted) {
     if (known) record.extras = known->extras;
     // Always strictly newer than the version we started from, even with a lagging clock.
     record.updated_at = (std::max)(time(nullptr), task.updated_at + 1);
+    if (known) record.updated_at = (std::max)(record.updated_at, known->updated_at + 1);
     // updated_by names who created or last rewrote the text (set by Add/UpdateText); ticking,
     // "ÉN" and deleting keep it. The merge relies on updated_at alone.
     record.updated_by = task.updated_by.empty() ? CurrentUser() : task.updated_by;
@@ -221,6 +222,18 @@ SyncRecord TaskStore::MakeSyncRecord(Task& task, bool deleted) {
     task.updated_by = record.updated_by;
     if (!deleted) knownSyncTexts[task.uid] = task.text;
     return record;
+}
+
+void TaskStore::QueueSyncRecord(Task& task, bool deleted, std::vector<SyncSource*>& touched) {
+    const SyncRecord record = MakeSyncRecord(task, deleted);
+    for (int sourceId : task.sources) {
+        for (SyncSource& source : syncSources) {
+            if (source.id != sourceId) continue;
+            SyncFiles::Upsert(source.pendingWrites, record);
+            SyncFiles::Upsert(source.records, record);
+            if (std::find(touched.begin(), touched.end(), &source) == touched.end()) touched.push_back(&source);
+        }
+    }
 }
 
 void TaskStore::PublishSyncTask(Task& task, bool deleted) {

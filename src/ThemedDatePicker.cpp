@@ -49,10 +49,11 @@ void Paint(HWND picker) {
     HGDIOBJ oldFont = SelectObject(dc, reinterpret_cast<HFONT>(SendMessageW(picker, WM_GETFONT, 0, 0)));
     SetBkMode(dc, TRANSPARENT);
     SetTextColor(dc, th.textEdit);
-    RECT textRect = { client.left + 4, client.top, client.right - 22, client.bottom };
+    const int arrowWidth = UiScale::Px(22);
+    RECT textRect = { client.left + UiScale::Px(4), client.top, client.right - arrowWidth, client.bottom };
     DrawTextW(dc, text, -1, &textRect, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
     SetTextColor(dc, th.textSecondary);
-    RECT arrowRect = { client.right - 22, client.top, client.right, client.bottom };
+    RECT arrowRect = { client.right - arrowWidth, client.top, client.right, client.bottom };
     DrawTextW(dc, L"▾", -1, &arrowRect, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
     SelectObject(dc, oldFont);
 

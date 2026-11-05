@@ -127,16 +127,16 @@ void StartInlineEdit(int itemIndex) {
     HINSTANCE hInst = GetModuleHandle(nullptr);
     g_hInlineEdit = CreateWindowExW(WS_EX_CLIENTEDGE, L"EDIT", item.task.text.c_str(),
         WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_AUTOHSCROLL,
-        r.left - 2, editY, (r.right - r.left) + 4, editH,
+        UiScale::Px(r.left - 2), UiScale::Px(editY), UiScale::Px((r.right - r.left) + 4), UiScale::Px(editH),
         g_hWnd, (HMENU)IDC_INLINE_EDIT, hInst, nullptr);
 
-    SendMessageW(g_hInlineEdit, WM_SETFONT, (WPARAM)g_hFontNormal, TRUE);
+    UiScale::SetControlFont(g_hInlineEdit, 17);
     SendMessageW(g_hInlineEdit, EM_SETSEL, 0, -1);
     SetWindowSubclass(g_hInlineEdit, InlineEditSubclassProc, 0, 0);
     RECT itemRect = item.rect;
     itemRect.top -= g_scrollY;
     itemRect.bottom -= g_scrollY;
-    InvalidateRect(g_hWnd, &itemRect, FALSE);
+    UiScale::Invalidate(g_hWnd, &itemRect, FALSE);
     UpdateWindow(g_hWnd);
     SetFocus(g_hInlineEdit);
 }
@@ -186,6 +186,6 @@ void UpdateInlineEditPos() {
         r.bottom -= g_scrollY;
         int editH = 24;
         int editY = r.top + (r.bottom - r.top - editH) / 2;
-        SetWindowPos(g_hInlineEdit, nullptr, r.left - 2, editY, (r.right - r.left) + 4, editH, SWP_NOZORDER);
+        UiScale::Place(g_hInlineEdit, nullptr, r.left - 2, editY, (r.right - r.left) + 4, editH, SWP_NOZORDER);
     }
 }

@@ -1,9 +1,10 @@
 #pragma once
 
 #include <ctime>
-#include <ostream>
 #include <string>
 #include <vector>
+
+namespace TaskUtils { class TextBuffer; }
 
 enum class RepeatUnit { Day = 0, Week = 1, Month = 2 };
 
@@ -36,6 +37,6 @@ namespace Recurring {
     std::wstring UnitLabel(RepeatUnit unit);                 // "nap", "hét", "hónap"
     std::wstring FormatDate(const std::string& date);        // "2026.10.20."
 
-    void WriteJson(std::ostream& out, const std::vector<RecurringRule>& rules);
+    void WriteJson(TaskUtils::TextBuffer& out, const std::vector<RecurringRule>& rules);
     void LoadFromJson(const std::string& content, std::vector<RecurringRule>& rules);
 }

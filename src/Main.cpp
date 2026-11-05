@@ -18,6 +18,8 @@
 #pragma comment(lib, "wtsapi32.lib")
 
 int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR, int) {
+    UiScale::InitProcess();
+    UiScale::ContextScope nativeMainWindow(true);
     HANDLE hMutex = CreateMutexW(nullptr, TRUE, L"TaskManager_SingleInstance_Mutex_98741");
     if (GetLastError() == ERROR_ALREADY_EXISTS) {
         HWND hExisting = FindWindowW(L"TaskManager_Popup_Window_Class", nullptr);
@@ -48,22 +50,20 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR, int) {
     SystemParametersInfoW(SPI_GETWORKAREA, 0, &rcWork, 0);
     int defaultW = 620;
     int defaultH = 550;
-    int defaultX = rcWork.right - defaultW - 12;
-    int defaultY = rcWork.bottom - defaultH - 12;
-
     HWND hWnd = CreateWindowExW(
         WS_EX_TOPMOST | WS_EX_TOOLWINDOW,
         wc.lpszClassName,
         L"Feladatkezelő",
         WS_POPUP | WS_BORDER | WS_CLIPCHILDREN,
-        defaultX, defaultY, defaultW, defaultH,
+        rcWork.left, rcWork.top, defaultW, defaultH,
         nullptr, nullptr, hInstance, nullptr
     );
 
     if (!hWnd) return 0;
 
-    g_fullWinX = defaultX;
-    g_fullWinY = defaultY;
+    // The window's DPI is known only now.
+    g_fullWinX = rcWork.right - UiScale::Px(defaultW) - 12;
+    g_fullWinY = rcWork.bottom - UiScale::Px(defaultH) - 12;
     g_fullWinW = defaultW;
     g_fullWinH = defaultH;
 

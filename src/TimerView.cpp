@@ -205,7 +205,7 @@ void TimerView::CreateControls(HWND owner, HINSTANCE instance) {
     SetWindowSubclass(g_strictCheck, TimerControlSubclassProc, IDC_TIMER_STRICT_CHECK, 0);
 
     for (HWND edit : { g_workEdit, g_restEdit, g_repetitionsEdit }) {
-        SendMessageW(edit, WM_SETFONT, (WPARAM)g_hFontNormal, TRUE);
+        UiScale::SetControlFont(edit, 17);
     }
     SendMessageW(g_workEdit, EM_SETLIMITTEXT, 5, 0);
     SendMessageW(g_restEdit, EM_SETLIMITTEXT, 5, 0);
@@ -307,7 +307,7 @@ void TimerView::StartConfiguredTimer() {
 void TimerView::Layout(HWND owner) {
     if (!owner) return;
     RECT client{};
-    GetClientRect(owner, &client);
+    UiScale::ClientRect(owner, &client);
     const int width = client.right - client.left;
     const int rowHeight = 32;
     const int rowGap = 46;
@@ -315,11 +315,11 @@ void TimerView::Layout(HWND owner) {
     const int firstRowY = panel.top + 18;
     const int inputX = panel.left + 162;
     const int inputWidth = 82;
-    SetWindowPos(g_workEdit, nullptr, inputX, firstRowY, inputWidth, rowHeight,
+    UiScale::Place(g_workEdit, nullptr, inputX, firstRowY, inputWidth, rowHeight,
         SWP_NOZORDER | SWP_NOACTIVATE);
-    SetWindowPos(g_restEdit, nullptr, inputX, firstRowY + rowGap, inputWidth, rowHeight,
+    UiScale::Place(g_restEdit, nullptr, inputX, firstRowY + rowGap, inputWidth, rowHeight,
         SWP_NOZORDER | SWP_NOACTIVATE);
-    SetWindowPos(g_repetitionsEdit, nullptr, inputX, firstRowY + rowGap * 2,
+    UiScale::Place(g_repetitionsEdit, nullptr, inputX, firstRowY + rowGap * 2,
         inputWidth, rowHeight, SWP_NOZORDER | SWP_NOACTIVATE);
 
     HDC hdc = GetDC(owner);
@@ -346,9 +346,9 @@ void TimerView::Layout(HWND owner) {
         : (width - checkWidth) / 2;
     const bool showAutoStartWarning = ShouldShowAutoStartWarning();
     const int checksY = panel.bottom - (showAutoStartWarning ? 101 : 93);
-    SetWindowPos(g_2020Check, nullptr, checksLeft, checksY,
+    UiScale::Place(g_2020Check, nullptr, checksLeft, checksY,
         checkWidth, 28, SWP_NOZORDER | SWP_NOACTIVATE);
-    SetWindowPos(g_strictCheck, nullptr, checksLeft + checkWidth + checkGap,
+    UiScale::Place(g_strictCheck, nullptr, checksLeft + checkWidth + checkGap,
         checksY, strictWidth, 28, SWP_NOZORDER | SWP_NOACTIVATE);
     const int buttonY = panel.bottom - (showAutoStartWarning ? 66 : 52);
     const bool active = g_intervalTimer.IsActive();
@@ -360,11 +360,11 @@ void TimerView::Layout(HWND owner) {
         ? startWidth + pauseWidth + nextWidth + buttonGap * 2
         : startWidth;
     const int buttonLeft = (width - groupWidth) / 2;
-    SetWindowPos(g_startButton, nullptr, buttonLeft, buttonY, startWidth, 32,
+    UiScale::Place(g_startButton, nullptr, buttonLeft, buttonY, startWidth, 32,
         SWP_NOZORDER | SWP_NOACTIVATE);
-    SetWindowPos(g_pauseButton, nullptr, buttonLeft + startWidth + buttonGap,
+    UiScale::Place(g_pauseButton, nullptr, buttonLeft + startWidth + buttonGap,
         buttonY, pauseWidth, 32, SWP_NOZORDER | SWP_NOACTIVATE);
-    SetWindowPos(g_nextButton, nullptr,
+    UiScale::Place(g_nextButton, nullptr,
         buttonLeft + startWidth + buttonGap + pauseWidth + buttonGap,
         buttonY, nextWidth, 32,
         SWP_NOZORDER | SWP_NOACTIVATE);

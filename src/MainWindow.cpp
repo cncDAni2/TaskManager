@@ -91,6 +91,7 @@ void ToggleWindow() {
 
 void ShowAppWindow() {
     CancelInlineEdit();
+    UiScale::UpdateFromWindow(g_hWnd); // A hidden window may have missed a display change.
 
     if (g_isMiniMode) {
         ExitMiniMode(false);
@@ -100,8 +101,8 @@ void ShowAppWindow() {
     SystemParametersInfoW(SPI_GETWORKAREA, 0, &rcWork, 0);
     int winW = 620;
     int winH = 550;
-    int x = rcWork.right - winW - 12;
-    int y = rcWork.bottom - winH - 12;
+    int x = rcWork.right - UiScale::Px(winW) - 12;
+    int y = rcWork.bottom - UiScale::Px(winH) - 12;
 
     g_fullWinX = x;
     g_fullWinY = y;
@@ -138,7 +139,7 @@ void ShowAppWindow() {
     g_sessionActiveIdsInitialized = true;
     g_selectedIndex = -1;
 
-    SetWindowPos(g_hWnd, HWND_TOPMOST, x, y, winW, winH, SWP_SHOWWINDOW);
+    SetWindowPos(g_hWnd, HWND_TOPMOST, x, y, UiScale::Px(winW), UiScale::Px(winH), SWP_SHOWWINDOW);
     SetForegroundWindow(g_hWnd);
     UpdateControlsVisibility();
     RecalculateLayout();
@@ -180,7 +181,7 @@ void HideAppWindow() {
     MemoryTrim::Request(g_hWnd);
 }
 
-LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
+static LRESULT MainProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     // Sent when Explorer (re)starts; the new taskbar knows no icons until they are added again.
     static const UINT s_taskbarCreated = RegisterWindowMessageW(L"TaskbarCreated");
     if (msg == s_taskbarCreated && s_taskbarCreated != 0) {
@@ -191,6 +192,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     switch (msg) {
         case WM_CREATE: {
             g_hWnd = hWnd;
+            UiScale::UpdateFromWindow(hWnd);
             HINSTANCE hInst = ((LPCREATESTRUCT)lParam)->hInstance;
 
             ApplyDarkModeTitleBar(hWnd, g_darkMode);
@@ -325,7 +327,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             g_hEdit = CreateWindowExW(WS_EX_CLIENTEDGE, L"EDIT", L"",
                 WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_AUTOHSCROLL,
                 12, 56, 461, 28, hWnd, (HMENU)IDC_NEW_TASK_EDIT, hInst, nullptr);
-            SendMessageW(g_hEdit, WM_SETFONT, (WPARAM)g_hFontNormal, TRUE);
+            UiScale::SetControlFont(g_hEdit, 17);
             SendMessageW(g_hEdit, EM_SETCUEBANNER, TRUE, (LPARAM)L"Új feladat hozzáadása... (Enter / Tab navigációhoz)");
             SetWindowSubclass(g_hEdit, EditSubclassProc, 0, 0);
 
@@ -469,9 +471,10 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                 if (g_isMiniMode && IsWindowVisible(hWnd) &&
                     (timerWasRunning || g_intervalTimer.IsRunning())) {
                     RECT rcClient{};
-                    GetClientRect(hWnd, &rcClient);
+                    UiScale::ClientRect(hWnd, &rcClient);
                     RECT rcTimerText = { 0, 0, rcClient.right, PinButtons::STRIP_BOTTOM + 2 };
-                    InvalidateRect(hWnd, &rcTimerText, FALSE);
+                    UiScale::Invalidate(hWnd, &rcTimerText, FALSE);
+                    UpdateWindow(hWnd); // Painted now, so it does not merge with the bottom bar below.
                 }
 
                 g_store.CheckWorkReset();
@@ -498,10 +501,13 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                     (g_focusMode || (!g_isIdlePaused && !g_isExcludedApp));
                 g_isWorkActive = countWork;
 
-                if (countWork) {
-                    g_store.work_seconds_today++;
-                    if (g_store.work_seconds_today % 600 == 0) g_store.Save();
-                    if (g_store.work_seconds_today % 30 == 0 &&
+                const int countedSeconds = WorkTracking::TakeCountedSeconds(countWork);
+                if (countedSeconds > 0) {
+                    const int workBefore = g_store.work_seconds_today;
+                    g_store.work_seconds_today += countedSeconds;
+                    const int workNow = g_store.work_seconds_today;
+                    if (workBefore / 600 != workNow / 600) g_store.Save();
+                    if (workBefore / 30 != workNow / 30 &&
                         g_viewMode == ViewMode::WorkHistory && IsWindowVisible(hWnd)) {
                         InvalidateRect(hWnd, nullptr, FALSE);
                     }
@@ -542,11 +548,11 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 
                 if (IsWindowVisible(hWnd)) {
                     RECT rcClient;
-                    GetClientRect(hWnd, &rcClient);
+                    UiScale::ClientRect(hWnd, &rcClient);
                     if (g_isMiniMode) {
                         RECT rcMiniBottom = { 0, rcClient.bottom - WorkTracking::MiniBarHeight(),
                             rcClient.right, rcClient.bottom };
-                        if (tracking) InvalidateRect(hWnd, &rcMiniBottom, FALSE);
+                        if (tracking) UiScale::Invalidate(hWnd, &rcMiniBottom, FALSE);
                         if (visionBreakWasActive != g_intervalTimer.IsVisionBreakActive() ||
                             g_intervalTimer.IsVisionBreakActive()) {
                             RedrawWindow(hWnd, nullptr, nullptr,
@@ -555,15 +561,15 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                     } else {
                         const int barHeight = WorkTracking::BottomBarHeight();
                         RECT rcBottom = { 0, rcClient.bottom - barHeight, rcClient.right, rcClient.bottom };
-                        if (tracking) InvalidateRect(hWnd, &rcBottom, FALSE);
+                        if (tracking) UiScale::Invalidate(hWnd, &rcBottom, FALSE);
                         if (timerWasRunning || g_intervalTimer.IsRunning()) {
                             RECT rcTimerStatus = { 0,
                                 rcClient.bottom - barHeight - TIMER_STATUS_HEIGHT,
                                 rcClient.right, rcClient.bottom };
-                            InvalidateRect(hWnd, &rcTimerStatus, FALSE);
+                            UiScale::Invalidate(hWnd, &rcTimerStatus, FALSE);
                             if (g_viewMode == ViewMode::IntervalTimer) {
                                 RECT rcTimerDisplay = { 0, 200, rcClient.right, 340 };
-                                InvalidateRect(hWnd, &rcTimerDisplay, FALSE);
+                                UiScale::Invalidate(hWnd, &rcTimerDisplay, FALSE);
                             }
                         }
                     }
@@ -609,6 +615,23 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             return 0;
         }
 
+        case WM_DPICHANGED: {
+            UiScale::SetDpi(HIWORD(wParam));
+            if (g_isMiniMode) {
+                RecalculateMiniLayout();
+            } else {
+                const RECT* suggested = reinterpret_cast<const RECT*>(lParam);
+                g_fullWinX = suggested->left;
+                g_fullWinY = suggested->top;
+                SetWindowPos(hWnd, nullptr, suggested->left, suggested->top, suggested->right - suggested->left,
+                    suggested->bottom - suggested->top, SWP_NOZORDER | SWP_NOACTIVATE);
+                UpdateControlsVisibility();
+                RecalculateLayout();
+            }
+            InvalidateRect(hWnd, nullptr, TRUE);
+            return 0;
+        }
+
         case WM_ENDSESSION:
             if (wParam) g_store.Save();
             return 0;
@@ -642,7 +665,12 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         }
 
         case WM_DRAWITEM: {
-            if (HandleDrawItem(hWnd, (DRAWITEMSTRUCT*)lParam)) return TRUE;
+            auto* item = reinterpret_cast<DRAWITEMSTRUCT*>(lParam);
+            FillButtonSurface(item);
+            const RECT pixels = item->rcItem;
+            item->rcItem = UiScale::Units(pixels);
+            UiScale::DrawScope unitsOnly(item->hDC, pixels, item->rcItem);
+            if (HandleDrawItem(hWnd, item)) return TRUE;
             break;
         }
 
@@ -667,7 +695,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             int delta = GET_WHEEL_DELTA_WPARAM(wParam);
             g_scrollY -= (delta / WHEEL_DELTA) * 36;
             RECT rcClient;
-            GetClientRect(hWnd, &rcClient);
+            UiScale::ClientRect(hWnd, &rcClient);
             int topOffset = GetListTop();
             int viewableHeight = GetListBottom(rcClient.bottom) - topOffset;
             int maxScroll = std::max(0, g_totalContentHeight - viewableHeight);
@@ -684,10 +712,9 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             if (LOWORD(lParam) == HTCLIENT && UpdateOverlay::HandleSetCursor(hWnd)) return TRUE;
             if (g_isMiniMode && g_pinMode && LOWORD(lParam) == HTCLIENT) {
                 POINT cursorPoint;
-                GetCursorPos(&cursorPoint);
-                ScreenToClient(hWnd, &cursorPoint);
+                UiScale::CursorPos(hWnd, &cursorPoint);
                 RECT rcClient;
-                GetClientRect(hWnd, &rcClient);
+                UiScale::ClientRect(hWnd, &rcClient);
                 RECT rcDragHandle{};
                 if (PinButtons::GetRect(rcClient.right, PinButtons::Drag, rcDragHandle) &&
                     PtInRect(&rcDragHandle, cursorPoint)) {
@@ -713,7 +740,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         case WM_LBUTTONDBLCLK: {
             if (UpdateOverlay::IsVisible()) return 0;
             if (g_isMiniMode) {
-                return SendMessageW(hWnd, WM_LBUTTONDOWN, wParam, lParam);
+                return MainProc(hWnd, WM_LBUTTONDOWN, wParam, lParam);
             }
             int mx = GET_X_LPARAM(lParam);
             int my = GET_Y_LPARAM(lParam) + g_scrollY;
@@ -727,7 +754,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                         (item.markerRect.right > 0 && PtInRect(&item.markerRect, { mx, my })) ||
                         (item.assignRect.right > 0 && PtInRect(&item.assignRect, { mx, my })) ||
                         (item.editRect.right > 0 && PtInRect(&item.editRect, { mx, my }))) {
-                        return SendMessageW(hWnd, WM_LBUTTONDOWN, wParam, lParam);
+                        return MainProc(hWnd, WM_LBUTTONDOWN, wParam, lParam);
                     }
                     if (PtInRect(&item.rect, { mx, my })) {
                         StartInlineEdit((int)i);
@@ -766,9 +793,9 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             PAINTSTRUCT ps;
             HDC hdc = BeginPaint(hWnd, &ps);
             if (g_isMiniMode) {
-                PaintMiniWindow(hWnd, hdc);
+                PaintMiniWindow(hWnd, hdc, UiScale::Units(ps.rcPaint));
             } else {
-                PaintMainWindow(hWnd, hdc);
+                PaintMainWindow(hWnd, hdc, UiScale::Units(ps.rcPaint));
             }
             EndPaint(hWnd, &ps);
             return 0;
@@ -823,4 +850,21 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         }
     }
     return DefWindowProcW(hWnd, msg, wParam, lParam);
+}
+
+// App code works in units, so mouse positions become units on the way in.
+LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
+    switch (msg) {
+    case WM_MOUSEMOVE:
+    case WM_LBUTTONDOWN:
+    case WM_LBUTTONUP:
+    case WM_LBUTTONDBLCLK:
+    case WM_RBUTTONDOWN:
+    case WM_RBUTTONUP: {
+        const POINT units = UiScale::Units(POINT{ GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam) });
+        return MainProc(hWnd, msg, wParam, MAKELPARAM(units.x, units.y));
+    }
+    default:
+        return MainProc(hWnd, msg, wParam, lParam);
+    }
 }

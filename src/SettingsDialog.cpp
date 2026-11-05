@@ -499,6 +499,7 @@ namespace {
 }
 
 void ShowSettingsDialog(HWND owner) {
+    UiScale::ContextScope scaledByWindows(false);
     WNDCLASSW dialogClass{};
     dialogClass.lpfnWndProc = SettingsDialogProc;
     dialogClass.hInstance = GetModuleHandleW(nullptr);

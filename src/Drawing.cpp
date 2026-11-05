@@ -21,8 +21,14 @@ constexpr int kBig = kSize * kScale;
 // GDI has no anti-aliasing: `drawShape` paints a white shape on an 80x80 black canvas, which is
 // shrunk with HALFTONE averaging and used as coverage to blend `color` over the 20x20 target.
 void DrawSmoothShape(HDC hdc, const RECT& rc, COLORREF color, void (*drawShape)(HDC)) {
-    const int left = rc.left + (rc.right - rc.left - kSize) / 2;
-    const int top = rc.top + (rc.bottom - rc.top - kSize) / 2;
+    // Blended in real pixels, so the icon stays smooth at any display scale.
+    const bool scaled = UiScale::IsScaled(hdc);
+    UiScale::PixelScope pixels(hdc);
+    const int size = scaled ? UiScale::Px(kSize) : kSize;
+    const int unitsLeft = rc.left + (rc.right - rc.left - kSize) / 2;
+    const int unitsTop = rc.top + (rc.bottom - rc.top - kSize) / 2;
+    const int left = scaled ? UiScale::Px(unitsLeft) : unitsLeft;
+    const int top = scaled ? UiScale::Px(unitsTop) : unitsTop;
 
     auto createDib = [hdc](int size, HDC& dc, DWORD*& bits) {
         BITMAPINFO bi{};
@@ -44,21 +50,21 @@ void DrawSmoothShape(HDC hdc, const RECT& rc, COLORREF color, void (*drawShape)(
     DWORD* maskBits = nullptr;
     DWORD* destBits = nullptr;
     auto big = createDib(kBig, bigDc, bigBits);
-    auto mask = createDib(kSize, maskDc, maskBits);
-    auto dest = createDib(kSize, destDc, destBits);
+    auto mask = createDib(size, maskDc, maskBits);
+    auto dest = createDib(size, destDc, destBits);
 
     if (bigBits && maskBits && destBits) {
         drawShape(bigDc);
 
         SetStretchBltMode(maskDc, HALFTONE);
         SetBrushOrgEx(maskDc, 0, 0, nullptr);
-        StretchBlt(maskDc, 0, 0, kSize, kSize, bigDc, 0, 0, kBig, kBig, SRCCOPY);
+        StretchBlt(maskDc, 0, 0, size, size, bigDc, 0, 0, kBig, kBig, SRCCOPY);
         GdiFlush();
-        BitBlt(destDc, 0, 0, kSize, kSize, hdc, left, top, SRCCOPY);
+        BitBlt(destDc, 0, 0, size, size, hdc, left, top, SRCCOPY);
         GdiFlush();
 
         const int r = GetRValue(color), g = GetGValue(color), b = GetBValue(color);
-        for (int i = 0; i < kSize * kSize; ++i) {
+        for (int i = 0; i < size * size; ++i) {
             const int a = maskBits[i] & 0xFF;
             if (a == 0) continue;
             const DWORD px = destBits[i];
@@ -66,7 +72,7 @@ void DrawSmoothShape(HDC hdc, const RECT& rc, COLORREF color, void (*drawShape)(
             destBits[i] = static_cast<DWORD>(((dr * (255 - a) + r * a) / 255) << 16 |
                 ((dg * (255 - a) + g * a) / 255) << 8 | ((db * (255 - a) + b * a) / 255));
         }
-        BitBlt(hdc, left, top, kSize, kSize, destDc, 0, 0, SRCCOPY);
+        BitBlt(hdc, left, top, size, size, destDc, 0, 0, SRCCOPY);
     }
 
     auto release = [](HDC dc, const std::pair<HBITMAP, HGDIOBJ>& dib) {

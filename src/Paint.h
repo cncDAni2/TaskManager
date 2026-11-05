@@ -2,5 +2,6 @@
 
 #include "AppTypes.h"
 
-void PaintMainWindow(HWND hWnd, HDC hdc);
-void PaintMiniWindow(HWND hWnd, HDC hdc);
+// Only `dirty` (in units, see UiScale) is rendered: the back buffer covers just that rectangle.
+void PaintMainWindow(HWND hWnd, HDC hdc, const RECT& dirty);
+void PaintMiniWindow(HWND hWnd, HDC hdc, const RECT& dirty);

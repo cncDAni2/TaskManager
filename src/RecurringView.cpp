@@ -84,9 +84,9 @@ void SetUnit(RepeatUnit unit) {
 
 void InvalidateForm() {
     RECT client{};
-    GetClientRect(g_hWnd, &client);
+    UiScale::ClientRect(g_hWnd, &client);
     RECT form = { 0, 48, client.right, FORM_BOTTOM };
-    InvalidateRect(g_hWnd, &form, FALSE);
+    UiScale::Invalidate(g_hWnd, &form, FALSE);
 }
 
 void Refresh() {
@@ -306,14 +306,14 @@ void RecurringView::CreateControls(HWND owner, HINSTANCE instance) {
         540, 56, 31, FIELD_H, owner, (HMENU)IDC_RECURRING_BTN, instance, nullptr);
     g_textEdit = CreateWindowExW(WS_EX_CLIENTEDGE, L"EDIT", L"", WS_CHILD | WS_TABSTOP | ES_AUTOHSCROLL,
         0, 0, 10, FIELD_H, owner, (HMENU)IDC_RECURRING_TEXT_EDIT, instance, nullptr);
-    SendMessageW(g_textEdit, WM_SETFONT, (WPARAM)g_hFontNormal, TRUE);
+    UiScale::SetControlFont(g_textEdit, 17);
     SendMessageW(g_textEdit, EM_SETCUEBANNER, TRUE, (LPARAM)L"A feladat szövege");
     g_dateEdit = CreateWindowExW(0, DATETIMEPICK_CLASSW, L"", WS_CHILD | WS_TABSTOP | DTS_SHORTDATEFORMAT,
         0, 0, 10, FIELD_H, owner, (HMENU)IDC_RECURRING_DATE, instance, nullptr);
-    SendMessageW(g_dateEdit, WM_SETFONT, (WPARAM)g_hFontNormal, TRUE);
+    UiScale::SetControlFont(g_dateEdit, 17);
     g_countEdit = CreateWindowExW(WS_EX_CLIENTEDGE, L"EDIT", L"0", WS_CHILD | WS_TABSTOP | ES_NUMBER | ES_CENTER,
         0, 0, 10, FIELD_H, owner, (HMENU)IDC_RECURRING_COUNT_EDIT, instance, nullptr);
-    SendMessageW(g_countEdit, WM_SETFONT, (WPARAM)g_hFontNormal, TRUE);
+    UiScale::SetControlFont(g_countEdit, 17);
     SendMessageW(g_countEdit, EM_SETLIMITTEXT, 3, 0);
     g_unitBtn = CreateButton(owner, instance, L"", IDC_RECURRING_UNIT_BTN);
     g_saveBtn = CreateButton(owner, instance, L"Feladat felvétele", IDC_RECURRING_SAVE_BTN);
@@ -362,17 +362,17 @@ void RecurringView::UpdateVisibility(bool pageVisible) {
     if (!g_pageVisible) return;
 
     RECT client{};
-    GetClientRect(g_hWnd, &client);
+    UiScale::ClientRect(g_hWnd, &client);
     const int right = client.right - 14;
     const UINT flags = SWP_NOZORDER | SWP_NOACTIVATE;
-    SetWindowPos(g_textEdit, nullptr, FIELD_X, ROW1_Y, right - FIELD_X, FIELD_H, flags);
-    SetWindowPos(g_dateEdit, nullptr, FIELD_X, ROW2_Y, 130, FIELD_H, flags);
-    SetWindowPos(g_countEdit, nullptr, 330, ROW2_Y, 48, FIELD_H, flags);
-    SetWindowPos(g_unitBtn, nullptr, 384, ROW2_Y, 84, FIELD_H, flags);
+    UiScale::Place(g_textEdit, nullptr, FIELD_X, ROW1_Y, right - FIELD_X, FIELD_H, flags);
+    UiScale::Place(g_dateEdit, nullptr, FIELD_X, ROW2_Y, 130, FIELD_H, flags);
+    UiScale::Place(g_countEdit, nullptr, 330, ROW2_Y, 48, FIELD_H, flags);
+    UiScale::Place(g_unitBtn, nullptr, 384, ROW2_Y, 84, FIELD_H, flags);
     const int saveWidth = 150;
-    SetWindowPos(g_saveBtn, nullptr, right - saveWidth, ROW3_Y, saveWidth, FIELD_H, flags);
-    SetWindowPos(g_cancelBtn, nullptr, right - saveWidth - 6 - 80, ROW3_Y, 80, FIELD_H, flags);
-    if (SyncPicker::HasSources()) SetWindowPos(g_hSyncToggleBtn, nullptr, FIELD_X, ROW3_Y, 31, FIELD_H, flags);
+    UiScale::Place(g_saveBtn, nullptr, right - saveWidth, ROW3_Y, saveWidth, FIELD_H, flags);
+    UiScale::Place(g_cancelBtn, nullptr, right - saveWidth - 6 - 80, ROW3_Y, 80, FIELD_H, flags);
+    if (SyncPicker::HasSources()) UiScale::Place(g_hSyncToggleBtn, nullptr, FIELD_X, ROW3_Y, 31, FIELD_H, flags);
 }
 
 int RecurringView::ListTop() {
@@ -434,7 +434,7 @@ void RecurringView::PaintForm(HDC hdc, int clientWidth) {
     RECT save{};
     GetWindowRect(IsWindowVisible(g_cancelBtn) ? g_cancelBtn : g_saveBtn, &save);
     MapWindowPoints(nullptr, g_hWnd, reinterpret_cast<POINT*>(&save), 2);
-    RECT summary = { hasSources ? FIELD_X + 31 + 10 : FIELD_X, ROW3_Y, save.left - 10, ROW3_Y + FIELD_H };
+    RECT summary = { hasSources ? FIELD_X + 31 + 10 : FIELD_X, ROW3_Y, UiScale::Units(save.left) - 10, ROW3_Y + FIELD_H };
     SetTextColor(hdc, th.textPrimary);
     const std::wstring summaryText = Summary();
     DrawTextW(hdc, summaryText.c_str(), -1, &summary, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS);

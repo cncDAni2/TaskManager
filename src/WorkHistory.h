@@ -5,7 +5,8 @@
 #include <string>
 #include <utility>
 #include <vector>
-#include <ostream>
+
+namespace TaskUtils { class TextBuffer; }
 
 namespace WorkHistory {
     using Records = std::map<std::string, int>;
@@ -20,7 +21,7 @@ namespace WorkHistory {
 
     std::string DateKey(time_t timestamp);
     void LoadFromJson(const std::string& content, Records& records, Records& manualRecords);
-    void WriteJson(std::ostream& out, const Records& records, const Records& manualRecords);
+    void WriteJson(TaskUtils::TextBuffer& out, const Records& records, const Records& manualRecords);
     std::vector<DisplayEntry> GetDisplayEntries(
         const Records& records, const Records& manualRecords, time_t currentDay, int currentSeconds);
 }

@@ -1,4 +1,5 @@
 #include "UIEventHandler.h"
+#include "UndoToast.h"
 #include "TimerHold.h"
 #include "SyncPicker.h"
 #include "Cleanup.h"
@@ -91,24 +92,9 @@ int ShowCenteredMessageBox(HWND owner, const std::wstring& text, const wchar_t* 
 }
 namespace {
 
-void DeleteTaskWithConfirmation(HWND hWnd, int taskId, const std::wstring& initialTaskName) {
-    std::wstring taskName = initialTaskName;
-    if (g_editingTaskId == taskId && g_hInlineEdit) {
-        int textLength = GetWindowTextLengthW(g_hInlineEdit);
-        std::vector<wchar_t> textBuffer(textLength + 1);
-        GetWindowTextW(g_hInlineEdit, textBuffer.data(), textLength + 1);
-        taskName = textBuffer.data();
-    }
-
-    std::wstring confirmText = L"Biztos törli ezt a feladatot?\n" + taskName;
-    int answer = ShowCenteredMessageBox(hWnd, confirmText, L"Feladat törlése",
-        MB_YESNO | MB_ICONQUESTION | MB_DEFBUTTON2);
-    if (answer != IDYES) return;
-
+void DeleteTaskWithUndo(HWND hWnd, int taskId) {
     CommitInlineEdit();
-    g_store.Delete(taskId);
-    auto it = std::find(g_sessionActiveTaskIds.begin(), g_sessionActiveTaskIds.end(), taskId);
-    if (it != g_sessionActiveTaskIds.end()) g_sessionActiveTaskIds.erase(it);
+    UndoToast::DeleteTasks({ taskId });
     UpdateControlsVisibility();
     RecalculateLayout();
     if (g_selectedIndex >= (int)g_displayItems.size()) g_selectedIndex = (int)g_displayItems.size() - 1;
@@ -143,7 +129,7 @@ void ShowTaskOptionsMenu(HWND hWnd, int itemIndex) {
         task.completed ? L"Újra megnyitás (Space)" : L"Késznek jelölés (Space)");
     if (task.completed) EnableMenuItem(menu, MenuEdit, MF_BYCOMMAND | MF_GRAYED);
 
-    POINT menuPoint = { optionsRect.right, optionsRect.top - g_scrollY };
+    POINT menuPoint = { UiScale::Px(optionsRect.right), UiScale::Px(optionsRect.top - g_scrollY) };
     ClientToScreen(hWnd, &menuPoint);
     bool wasInContextMenu = g_inContextMenu;
     g_inContextMenu = true;
@@ -156,7 +142,7 @@ void ShowTaskOptionsMenu(HWND hWnd, int itemIndex) {
     SetFocus(hWnd);
 
     if (command == MenuDelete) {
-        DeleteTaskWithConfirmation(hWnd, task.id, task.text);
+        DeleteTaskWithUndo(hWnd, task.id);
     } else if (command == MenuEdit) {
         StartInlineEdit(resolvedIndex);
     } else if (command == MenuToggleCompleted) {
@@ -255,7 +241,7 @@ bool HandleKeyDown(HWND hWnd, WPARAM wParam) {
         if (g_selectedIndex >= 0 && g_selectedIndex < (int)g_displayItems.size()) {
             const auto& item = g_displayItems[g_selectedIndex];
             if (!item.isHeader) {
-                DeleteTaskWithConfirmation(hWnd, item.task.id, item.task.text);
+                DeleteTaskWithUndo(hWnd, item.task.id);
             }
         }
         return true;
@@ -268,7 +254,7 @@ bool HandleLButtonDown(HWND hWnd, LPARAM lParam) {
         int mx = GET_X_LPARAM(lParam);
         int my = GET_Y_LPARAM(lParam);
         RECT rcClient;
-        GetClientRect(hWnd, &rcClient);
+        UiScale::ClientRect(hWnd, &rcClient);
         if (PinButtons::HandleClick(hWnd, { mx, my }, rcClient.right)) return true;
 
         for (size_t i = 0; i < g_displayItems.size(); ++i) {
@@ -320,7 +306,7 @@ bool HandleLButtonDown(HWND hWnd, LPARAM lParam) {
     }
 
     RECT rcClient;
-    GetClientRect(hWnd, &rcClient);
+    UiScale::ClientRect(hWnd, &rcClient);
     const int workStatusTop = rcClient.bottom - WorkTracking::BottomBarHeight();
     const int timerStatusTop = workStatusTop - TIMER_STATUS_HEIGHT;
     if (g_intervalTimer.IsActive() && clickRawY >= timerStatusTop && clickRawY < workStatusTop) {
@@ -414,7 +400,7 @@ bool HandleLButtonDown(HWND hWnd, LPARAM lParam) {
             StartInlineEdit((int)i);
             return true;
         } else if (PtInRect(&item.deleteRect, { mx, my })) {
-            DeleteTaskWithConfirmation(hWnd, item.task.id, item.task.text);
+            DeleteTaskWithUndo(hWnd, item.task.id);
             return true;
         } else if (PtInRect(&item.rect, { mx, my })) {
             CommitInlineEdit();
@@ -494,7 +480,7 @@ bool HandleMouseMove(HWND hWnd, LPARAM lParam) {
 
     auto sm = GetScrollbarMetrics();
     RECT rcClient;
-    GetClientRect(hWnd, &rcClient);
+    UiScale::ClientRect(hWnd, &rcClient);
     int clientW = rcClient.right - rcClient.left;
     bool isSbHover = (sm.visible && mx >= sm.rcTrack.left - 3 && mx <= clientW && rawY >= sm.rcTrack.top && rawY <= sm.rcTrack.bottom);
     if (isSbHover != g_scrollbarHovered) {
@@ -599,8 +585,7 @@ bool HandleLButtonUp(HWND hWnd, LPARAM) {
         g_hoverItemIndex = -1;
         g_hoverButtonType = 0;
         POINT cursor{};
-        GetCursorPos(&cursor);
-        ScreenToClient(hWnd, &cursor);
+        UiScale::CursorPos(hWnd, &cursor);
         HandleMouseMove(hWnd, MAKELPARAM(cursor.x, cursor.y));
         InvalidateRect(hWnd, nullptr, FALSE);
         return true;
@@ -802,6 +787,12 @@ static COLORREF GetButtonSurfaceColor(UINT ctlId, const ThemeColors& th) {
     }
 }
 
+void FillButtonSurface(const DRAWITEMSTRUCT* pDIS) {
+    HBRUSH surfaceBrush = CreateSolidBrush(GetButtonSurfaceColor(pDIS->CtlID, GetThemeColors(g_themeMode)));
+    FillRect(pDIS->hDC, &pDIS->rcItem, surfaceBrush);
+    DeleteObject(surfaceBrush);
+}
+
 bool HandleDrawItem(HWND /*hWnd*/, DRAWITEMSTRUCT* pDIS) {
     if (!pDIS) return false;
     if (RecurringView::HandleDrawItem(pDIS)) return true;
@@ -810,10 +801,6 @@ bool HandleDrawItem(HWND /*hWnd*/, DRAWITEMSTRUCT* pDIS) {
     bool isPink = g_themeMode == ThemeMode::Pink;
     COLORREF pinkButtonBg = RGB(183, 0, 99);
     COLORREF restingBorder = g_themeMode == ThemeMode::Light ? RGB(148, 163, 184) : th.borderSep;
-
-    HBRUSH surfaceBrush = CreateSolidBrush(GetButtonSurfaceColor(pDIS->CtlID, th));
-    FillRect(pDIS->hDC, &pDIS->rcItem, surfaceBrush);
-    DeleteObject(surfaceBrush);
 
     if (pDIS->CtlID == IDC_TIMER_2020_CHECK || pDIS->CtlID == IDC_TIMER_STRICT_CHECK) {
         const bool isDisabled = (pDIS->itemState & ODS_DISABLED) != 0;

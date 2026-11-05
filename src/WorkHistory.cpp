@@ -1,10 +1,9 @@
 #include "WorkHistory.h"
+#include "TaskUtils.h"
 #include <algorithm>
 #include <cstdio>
-#include <iomanip>
 #include <limits>
 #include <map>
-#include <sstream>
 
 namespace WorkHistory {
     namespace {
@@ -103,7 +102,7 @@ namespace WorkHistory {
         }
     }
 
-    void WriteJson(std::ostream& out, const Records& records, const Records& manualRecords) {
+    void WriteJson(TaskUtils::TextBuffer& out, const Records& records, const Records& manualRecords) {
         out << "  \"work_history\": [";
         bool first = true;
         std::map<std::string, std::pair<int, int>> combined;

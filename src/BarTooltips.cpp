@@ -1,4 +1,5 @@
 #include "BarTooltips.h"
+#include "UiScale.h"
 #include <commctrl.h>
 
 namespace BarTooltips {
@@ -52,7 +53,7 @@ namespace BarTooltips {
             tool.uFlags = TTF_SUBCLASS;
             tool.hwnd = owner;
             tool.uId = i + 1;
-            tool.rect = activeRegions[i].rect;
+            tool.rect = UiScale::Px(activeRegions[i].rect);
             tool.lpszText = LPSTR_TEXTCALLBACKW;
             SendMessageW(tooltip, TTM_ADDTOOLW, 0, (LPARAM)&tool);
         }

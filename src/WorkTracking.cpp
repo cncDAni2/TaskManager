@@ -4,8 +4,12 @@
 #include "Layout.h"
 #include "UIEventHandler.h"
 #include <commctrl.h>
+#include <realtimeapiset.h>
+#include <algorithm>
 
 namespace {
+constexpr ULONGLONG MAX_TICK_MS = 5000;
+
 HWND g_hTrackingBtn = nullptr;
 HWND g_hTrackingTooltip = nullptr;
 
@@ -66,6 +70,24 @@ int WorkTracking::MiniBarHeight() {
     return g_store.work_tracking_enabled ? 3 : 0;
 }
 
+int WorkTracking::TakeCountedSeconds(bool counting) {
+    static ULONGLONG lastMs = 0;
+    static ULONGLONG pendingMs = 0;
+    ULONGLONG interruptTime = 0; // 100 ns units, stops during sleep and hibernation.
+    QueryUnbiasedInterruptTime(&interruptTime);
+    const ULONGLONG nowMs = interruptTime / 10000;
+    const ULONGLONG elapsedMs = lastMs != 0 ? nowMs - lastMs : 1000;
+    lastMs = nowMs;
+    if (!counting) {
+        pendingMs = 0;
+        return 0;
+    }
+    pendingMs += (std::min)(elapsedMs, MAX_TICK_MS);
+    const int seconds = static_cast<int>(pendingMs / 1000);
+    pendingMs %= 1000;
+    return seconds;
+}
+
 void WorkTracking::CreateButton(HWND parent, HINSTANCE instance) {
     g_hTrackingBtn = CreateWindowW(L"BUTTON", ButtonLabel(), WS_CHILD | BS_OWNERDRAW | WS_TABSTOP,
         0, 0, 160, 26, parent, (HMENU)IDC_WORK_TRACKING_BTN, instance, nullptr);
@@ -93,7 +115,7 @@ void WorkTracking::LayoutFooter(bool historyVisible) {
     if (!historyVisible) return;
 
     RECT client{};
-    GetClientRect(g_hWnd, &client);
+    UiScale::ClientRect(g_hWnd, &client);
     constexpr int measureWidth = 132;
     constexpr int trackingWidth = 160;
     constexpr int gap = 8;
@@ -102,9 +124,9 @@ void WorkTracking::LayoutFooter(bool historyVisible) {
     const int left = (client.right - groupWidth) / 2;
     const int top = GetListBottom(client.bottom) + (WORK_MEASURE_FOOTER_HEIGHT - height) / 2;
     if (enabled) {
-        SetWindowPos(g_hWorkMeasureBtn, nullptr, left, top, measureWidth, height, SWP_NOZORDER | SWP_NOACTIVATE);
+        UiScale::Place(g_hWorkMeasureBtn, nullptr, left, top, measureWidth, height, SWP_NOZORDER | SWP_NOACTIVATE);
     }
-    SetWindowPos(g_hTrackingBtn, nullptr, enabled ? left + measureWidth + gap : left, top,
+    UiScale::Place(g_hTrackingBtn, nullptr, enabled ? left + measureWidth + gap : left, top,
         trackingWidth, height, SWP_NOZORDER | SWP_NOACTIVATE);
 }
 

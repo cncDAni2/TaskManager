@@ -130,7 +130,7 @@ std::wstring Recurring::FormatDate(const std::string& date) {
     return text;
 }
 
-void Recurring::WriteJson(std::ostream& out, const std::vector<RecurringRule>& rules) {
+void Recurring::WriteJson(TaskUtils::TextBuffer& out, const std::vector<RecurringRule>& rules) {
     out << "  \"recurring_rules\": [";
     for (size_t i = 0; i < rules.size(); ++i) {
         const RecurringRule& rule = rules[i];

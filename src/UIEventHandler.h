@@ -8,6 +8,8 @@ bool HandleLButtonDown(HWND hWnd, LPARAM lParam);
 bool HandleLButtonUp(HWND hWnd, LPARAM lParam);
 bool HandleMouseMove(HWND hWnd, LPARAM lParam);
 bool HandleCommand(HWND hWnd, int id);
+// Paints what shows around a button's rounded corners; `pDIS->rcItem` still in real pixels.
+void FillButtonSurface(const DRAWITEMSTRUCT* pDIS);
 bool HandleDrawItem(HWND hWnd, DRAWITEMSTRUCT* pDIS);
 bool HandleAppTray(HWND hWnd, LPARAM lParam);
 // Modal message box centered on `owner`; keeps focus-loss handling from hiding the window.
