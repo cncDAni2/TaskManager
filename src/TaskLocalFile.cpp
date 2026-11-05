@@ -5,6 +5,7 @@
 #include <cstring>
 #include <fstream>
 #include <iterator>
+#include <sstream>
 
 namespace {
 std::string Quote(const std::wstring& text) {
@@ -34,8 +35,7 @@ void TaskStore::AddFirstRunSyncSource() {
 }
 
 void TaskStore::SaveLocal() {
-    std::ofstream out(filePath, std::ios::out | std::ios::trunc | std::ios::binary);
-    if (!out.is_open()) return;
+    std::ostringstream out(std::ios::out | std::ios::binary);
 
     out << "{\n  \"work_seconds\": " << work_seconds_today << ",\n"
         << "  \"last_reset\": " << (unsigned long long)last_reset_time << ",\n";
@@ -106,6 +106,11 @@ void TaskStore::SaveLocal() {
         out << "\n    }";
     }
     out << "\n  ]\n}\n";
+
+    // Callers save after every possible change; the disk is touched only if something really did.
+    std::string content = out.str();
+    if (content == savedLocalContent) return;
+    if (TaskUtils::WriteFileAtomic(filePath, content)) savedLocalContent = std::move(content);
 }
 
 void TaskStore::LoadLocal() {
@@ -121,6 +126,7 @@ void TaskStore::LoadLocal() {
 
     std::string content((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
     in.close();
+    savedLocalContent = content;
     WorkHistory::LoadFromJson(content, work_history, manual_work_history);
 
     size_t wsPos = content.find("\"work_seconds\":");

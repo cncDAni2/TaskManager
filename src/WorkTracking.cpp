@@ -46,7 +46,6 @@ void WorkTracking::SetEnabled(bool enabled) {
     g_isWorkActive = false;
     g_isExcludedApp = false;
     g_excludedAppName.clear();
-    g_secondsSinceLastSave = 0;
     if (enabled && g_store.timer_strict_mode && g_intervalTimer.IsActive() && !g_intervalTimer.IsWorkPhase()) {
         SetWorkMeasurementStopped(true);
     }

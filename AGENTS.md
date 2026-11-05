@@ -7,7 +7,7 @@ For feature overview and usage, see [README.md](README.md).
 ## Build & Test
 
 - **Build**: Run [build.bat](build.bat) via terminal (`cmd.exe /c "cd /d C:\work\TaskManager && build.bat"`).
-  - Uses MSVC x64 (`vcvars64.bat`), compiles resources via `rc.exe`, and builds `src\*.cpp` with `/utf-8 /std:c++17 /O2 /MT /W4`.
+  - Uses MSVC x64 (`vcvars64.bat`), compiles resources via `rc.exe`, and builds `src\*.cpp` with `/MP /utf-8 /std:c++17 /O2 /MT /W4`.
   - Intermediate object and resource files: `dist\obj\` and `dist\TaskManager.res` (ignored by Git).
   - Output binary: `TaskManager.exe` (kept beside `tasks-local.json`, which the app locates relative to its executable).
 - **Versioning**:
@@ -83,6 +83,7 @@ The application is modularized under `src/` into focused, single-responsibility 
   - Preserve the event-driven, non-polling design. The README contains approximate resource-use estimates; do not present them as measured values without checking the running process.
   - The render path uses double-buffered GDI. Suppress `WM_ERASEBKGND` (`return 1`) and avoid unnecessary invalidation; use dirty rectangles for small indicator updates.
   - The existing one-second `IDT_WORK_TIMER` drives work-time accrual, idle/excluded-app checks, and interval-timer ticks. Sync is checked every ten ticks and only changed sync files are reloaded (by timestamp). Do not add unrelated periodic work.
+  - Call `Save()` on `tasks-local.json` after a change (identical content is not written). Work seconds are saved every 10 counted minutes and when counting stops (idle, lock, Időstop, hiding, suspend, Windows shutdown, exit), so a power cut loses at most the last 10 minutes.
 - **Character encoding**: Maintain UTF-8 encoding and compile flags (`/utf-8`, `UNICODE`, `_UNICODE`). Use `std::wstring` and wide-character Win32 API functions (`W` suffixes) throughout the UI. Font creation must use `DEFAULT_CHARSET` to properly render Hungarian accents.
 - **Single instance**: Controlled via named mutex `TaskManager_SingleInstance_Mutex_98741`. A second launch signals the existing window via `WM_HOTKEY` and exits immediately.
 - **Two-tier data persistence**:
@@ -90,7 +91,7 @@ The application is modularized under `src/` into focused, single-responsibility 
   - Local `tasks-local.json` stores local tasks, active ordering (as uids), the `recurring_rules` list, current and historical work time (including manual entries), reset timestamp, theme, work-reset time, the `sync_files` list (local `source_id`, name, path, default flag), timer durations/repetitions, the 20-20-20 toggle, timer auto-start preference, sound preference, hotkeys, PIN quick buttons (`pin_buttons`), work-tracking on/off, update-check state (`update_*`: enabled, last check, failures, latest release, dismissed date), and excluded window-title keywords. A legacy `sync_file_path` is migrated to the first `sync_files` entry.
   - Shared sync files store only synchronized tasks with `uid`, `updated_at`, `updated_by`, creator (`author`), assignee, and a `deleted` tombstone flag; keep local settings and work history out of them. The file carries the last writer's `app_version`. Members this version does not know (per task and top-level) are kept as raw JSON (`extras`) and written back unchanged; own edits inherit the task's extras, new tasks have none. Every change bumps `updated_at`, but `updated_by` names only who created or last rewrote the text (ticking, "ÉN" and deleting keep it); the merge relies on `updated_at` alone.
   - Sync writes are always read → merge → write. The newest `updated_at` wins; relaying keeps the winner's original `updated_at`/`updated_by`. Changes are written only to files that already contain the uid. Tombstones are purged after 14 days. Files that fail to parse are never overwritten; own changes wait in `pendingWrites`.
-  - JSON parsing is hand-written. Write operations must use binary/UTF-8 mode and escape strings with `TaskUtils::EscapeJsonString`.
+  - JSON parsing is hand-written. Write operations must go through `TaskUtils::WriteFileAtomic` (temporary `.tmp` file, then swap; a failed sync write stays in `pendingWrites`) and escape strings with `TaskUtils::EscapeJsonString`.
 - **Work timer & focus mode**: Focus mode overrides idle/excluded-app pauses, but session lock always stops counting and disables focus mode; unlocking does not re-enable it. Keep `FocusMode` session-notification registration and unregistration paired.
 - **Work reset vs completed filter**: The daily work reset time is configurable in Settings (default 09:15); the completed-task recent filter has a separate yesterday-09:30 cutoff. Do not conflate these date boundaries.
 - **Context menu & focus loss (`WM_ACTIVATE`)**: `TrackPopupMenu` causes the owner window to receive `WM_ACTIVATE` with `WA_INACTIVE`. Guard focus-loss handling with `g_inContextMenu` to avoid hiding the window or collapsing into mini mode while browsing the context menu.

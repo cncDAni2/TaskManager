@@ -91,7 +91,6 @@ extern bool g_isSessionLocked;
 extern bool g_isIdlePaused;
 extern bool g_isExcludedApp;
 extern std::wstring g_excludedAppName;
-extern int g_secondsSinceLastSave;
 
 // System Settings Helpers
 bool IsAutoRunEnabled();

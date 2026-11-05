@@ -181,6 +181,13 @@ void HideAppWindow() {
 }
 
 LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
+    // Sent when Explorer (re)starts; the new taskbar knows no icons until they are added again.
+    static const UINT s_taskbarCreated = RegisterWindowMessageW(L"TaskbarCreated");
+    if (msg == s_taskbarCreated && s_taskbarCreated != 0) {
+        Shell_NotifyIconW(NIM_ADD, &g_nid);
+        return 0;
+    }
+
     switch (msg) {
         case WM_CREATE: {
             g_hWnd = hWnd;
@@ -493,15 +500,18 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 
                 if (countWork) {
                     g_store.work_seconds_today++;
-                    g_secondsSinceLastSave++;
-                    if (g_secondsSinceLastSave >= 30) {
-                        g_store.Save();
-                        g_secondsSinceLastSave = 0;
-                        if (g_viewMode == ViewMode::WorkHistory && IsWindowVisible(hWnd)) {
-                            InvalidateRect(hWnd, nullptr, FALSE);
-                        }
+                    if (g_store.work_seconds_today % 600 == 0) g_store.Save();
+                    if (g_store.work_seconds_today % 30 == 0 &&
+                        g_viewMode == ViewMode::WorkHistory && IsWindowVisible(hWnd)) {
+                        InvalidateRect(hWnd, nullptr, FALSE);
                     }
                 }
+
+                // Besides every 10 counted minutes, work time is saved when counting stops.
+                static bool s_wasIdleStopped = false;
+                const bool idleStopped = g_isIdlePaused && !countWork;
+                if (idleStopped && !s_wasIdleStopped) g_store.Save();
+                s_wasIdleStopped = idleStopped;
 
                 const bool shouldPauseStrictWorkTimer = tracking && g_store.timer_strict_mode &&
                     g_intervalTimer.IsActive() && g_intervalTimer.IsWorkPhase() &&
@@ -598,6 +608,14 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             }
             return 0;
         }
+
+        case WM_ENDSESSION:
+            if (wParam) g_store.Save();
+            return 0;
+
+        case WM_POWERBROADCAST:
+            if (wParam == PBT_APMSUSPEND) g_store.Save();
+            return TRUE;
 
         case WM_WTSSESSION_CHANGE: {
             if (FocusMode::HandleSessionChange(wParam)) return 0;
@@ -787,6 +805,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         }
 
         case WM_DESTROY: {
+            g_store.Save();
             FocusMode::UnregisterSessionNotifications(hWnd);
             Hotkeys::UnregisterAll(hWnd);
             Shell_NotifyIconW(NIM_DELETE, &g_nid);

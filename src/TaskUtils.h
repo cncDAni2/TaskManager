@@ -17,4 +17,7 @@ namespace TaskUtils {
     std::string UnescapeJsonString(const std::string& s);
     std::wstring GetCleanUserName();
     void EnsureParentDirectoryExists(const std::wstring& path);
+    // Writes a temporary file beside `path`, then swaps it in, so a crash or power cut leaves
+    // either the old or the new content, never a truncated file. False leaves `path` untouched.
+    bool WriteFileAtomic(const std::wstring& path, const std::string& content);
 }

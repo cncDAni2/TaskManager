@@ -64,7 +64,6 @@ void Toggle() {
         g_intervalTimer.Hold();
         g_isWorkActive = false;
         g_store.Save();
-        g_secondsSinceLastSave = 0;
     } else {
         g_intervalTimer.Release();
     }

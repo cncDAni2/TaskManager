@@ -181,6 +181,26 @@ std::wstring GetCleanUserName() {
     return L"Felhasználó";
 }
 
+bool WriteFileAtomic(const std::wstring& path, const std::string& content) {
+    const std::wstring tempPath = path + L".tmp";
+    HANDLE file = CreateFileW(tempPath.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+    if (file == INVALID_HANDLE_VALUE) return false;
+    DWORD written = 0;
+    const DWORD size = static_cast<DWORD>(content.size());
+    // The data must reach the disk before the swap, or a power cut could still leave an empty file.
+    bool ok = WriteFile(file, content.data(), size, &written, nullptr) && written == size && FlushFileBuffers(file);
+    CloseHandle(file);
+
+    if (ok) {
+        // ReplaceFileW keeps the target's permissions and identity, which matters in shared folders.
+        ok = GetFileAttributesW(path.c_str()) != INVALID_FILE_ATTRIBUTES
+            ? ReplaceFileW(path.c_str(), tempPath.c_str(), nullptr, REPLACEFILE_IGNORE_MERGE_ERRORS, nullptr, nullptr) != 0
+            : MoveFileExW(tempPath.c_str(), path.c_str(), MOVEFILE_WRITE_THROUGH) != 0;
+    }
+    if (!ok) DeleteFileW(tempPath.c_str());
+    return ok;
+}
+
 void EnsureParentDirectoryExists(const std::wstring& path) {
     size_t lastSlash = path.find_last_of(L"\\/");
     if (lastSlash != std::wstring::npos) {

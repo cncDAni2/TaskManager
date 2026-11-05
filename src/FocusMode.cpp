@@ -15,6 +15,7 @@ bool HandleSessionChange(WPARAM event) {
         g_isSessionLocked = true;
         g_focusMode = false;
         g_isWorkActive = false;
+        g_store.Save();
         if (g_hFocusModeBtn) InvalidateRect(g_hFocusModeBtn, nullptr, TRUE);
         if (g_hWnd) InvalidateRect(g_hWnd, nullptr, FALSE);
         return true;

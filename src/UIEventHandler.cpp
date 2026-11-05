@@ -28,7 +28,6 @@ void SetWorkMeasurementStopped(bool stopped) {
     SetWindowTextW(g_hWorkMeasureBtn,
         stopped ? L"Mérés indítása" : L"Mérés leállítása");
     g_store.Save();
-    g_secondsSinceLastSave = 0;
     if (g_hWorkMeasureBtn) InvalidateRect(g_hWorkMeasureBtn, nullptr, TRUE);
     if (g_hWnd) InvalidateRect(g_hWnd, nullptr, FALSE);
 }
@@ -594,6 +593,15 @@ bool HandleLButtonUp(HWND hWnd, LPARAM) {
         } else {
             RecalculateLayout();
         }
+        // Both are row indexes from before the move: the click's selection now points at another
+        // task, and hover was frozen during the drag, so take it from the cursor again.
+        g_selectedIndex = -1;
+        g_hoverItemIndex = -1;
+        g_hoverButtonType = 0;
+        POINT cursor{};
+        GetCursorPos(&cursor);
+        ScreenToClient(hWnd, &cursor);
+        HandleMouseMove(hWnd, MAKELPARAM(cursor.x, cursor.y));
         InvalidateRect(hWnd, nullptr, FALSE);
         return true;
     }

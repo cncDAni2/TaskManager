@@ -109,6 +109,7 @@ public:
     void Load();
 
 private:
+    std::string savedLocalContent; // What tasks-local.json holds now, so unchanged saves are skipped.
     std::map<std::string, int> runtimeIds;
     int nextRuntimeId = 1;
     std::map<std::string, std::wstring> knownSyncTexts;

@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <fstream>
 #include <iterator>
+#include <sstream>
 
 namespace {
 constexpr time_t TOMBSTONE_RETENTION_SECONDS = 14 * 24 * 60 * 60;
@@ -69,7 +70,7 @@ bool ParseRecord(const std::string& object, SyncRecord& record, SyncFileInfo& in
     return true;
 }
 
-void WriteExtras(std::ofstream& out, const std::vector<JsonLite::Member>& extras, const char* indent) {
+void WriteExtras(std::ostream& out, const std::vector<JsonLite::Member>& extras, const char* indent) {
     for (const JsonLite::Member& member : extras) {
         out << ",\n" << indent << "\"" << member.first << "\": " << member.second;
     }
@@ -133,8 +134,7 @@ SyncFiles::ReadResult SyncFiles::Read(const std::wstring& path, std::vector<Sync
 bool SyncFiles::Write(const std::wstring& path, const std::vector<SyncRecord>& records, const SyncFileInfo& info,
     FILETIME& writeTime) {
     TaskUtils::EnsureParentDirectoryExists(path);
-    std::ofstream out(path, std::ios::out | std::ios::trunc | std::ios::binary);
-    if (!out.is_open()) return false;
+    std::ostringstream out(std::ios::out | std::ios::binary);
 
     out << "{\n  \"app_version\": \"" TASK_MANAGER_VERSION_STRING "\"";
     WriteExtras(out, info.extras, "  ");
@@ -159,8 +159,7 @@ bool SyncFiles::Write(const std::wstring& path, const std::vector<SyncRecord>& r
         out << "\n    }" << (i + 1 < records.size() ? ",\n" : "\n");
     }
     out << "  ]\n}\n";
-    out.close();
-    if (out.fail()) return false;
+    if (!TaskUtils::WriteFileAtomic(path, out.str())) return false;
     GetWriteTime(path, writeTime);
     return true;
 }

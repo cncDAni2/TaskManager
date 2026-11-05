@@ -87,7 +87,6 @@ bool g_isSessionLocked = false;
 bool g_isIdlePaused = false;
 bool g_isExcludedApp = false;
 std::wstring g_excludedAppName = L"";
-int g_secondsSinceLastSave = 0;
 
 bool IsAutoRunEnabled() {
     HKEY hKey;
