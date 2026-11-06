@@ -18,6 +18,17 @@ std::wstring CompanyOneDriveFolder() {
     if (attributes == INVALID_FILE_ATTRIBUTES || !(attributes & FILE_ATTRIBUTE_DIRECTORY)) return L"";
     return folder;
 }
+
+// Another program (a virus scanner, a backup) may hold the file for a moment at startup.
+bool ReadLocalFile(const std::wstring& path, std::string& content) {
+    for (int attempt = 0; attempt < 5; ++attempt) {
+        if (TaskUtils::ReadFileBytes(path, content)) return true;
+        if (GetFileAttributesW(path.c_str()) == INVALID_FILE_ATTRIBUTES &&
+            GetLastError() == ERROR_FILE_NOT_FOUND) return false;
+        Sleep(200);
+    }
+    return false;
+}
 }
 
 // First start (no local file yet): preconfigure the shared company file only if OneDrive exists.
@@ -32,6 +43,7 @@ void TaskStore::AddFirstRunSyncSource() {
 }
 
 void TaskStore::SaveLocal() {
+    if (localLoadFailed) return;
     TaskUtils::TextBuffer out;
 
     out << "{\n  \"work_seconds\": " << work_seconds_today << ",\n"
@@ -75,6 +87,13 @@ void TaskStore::SaveLocal() {
     }
     out << (syncSources.empty() ? "],\n" : "\n  ],\n");
     Recurring::WriteJson(out, recurring_rules);
+    out << "  \"pin_hidden_tasks\": [";
+    bool firstHidden = true;
+    for (const std::string& uid : pin_hidden_uids) {
+        out << (firstHidden ? "\"" : ", \"") << TaskUtils::EscapeJsonString(uid) << "\"";
+        firstHidden = false;
+    }
+    out << "],\n";
     out << "  \"active_order\": [";
     bool firstOrder = true;
     for (int id : active_order) {
@@ -116,8 +135,22 @@ void TaskStore::LoadLocal() {
     }), tasks.end());
 
     std::string content;
-    if (!TaskUtils::ReadFileBytes(filePath, content)) {
-        AddFirstRunSyncSource();
+    if (!ReadLocalFile(filePath, content)) {
+        const DWORD attributes = GetFileAttributesW(filePath.c_str());
+        const DWORD error = GetLastError();
+        if (attributes == INVALID_FILE_ATTRIBUTES &&
+            (error == ERROR_FILE_NOT_FOUND || error == ERROR_PATH_NOT_FOUND)) {
+            AddFirstRunSyncSource();
+        } else {
+            localLoadFailed = true; // Not a first run: the file is there, only unreadable.
+        }
+        return;
+    }
+    // A damaged task list would load as an empty one, and the next save would make that final.
+    std::vector<std::string> taskObjects;
+    if (!JsonLite::ReadObjectArray(content, "tasks", taskObjects) &&
+        content.find("\"tasks\"") != std::string::npos) {
+        localLoadFailed = true;
         return;
     }
 
@@ -311,8 +344,10 @@ void TaskStore::LoadLocal() {
 
     Recurring::LoadFromJson(content, recurring_rules);
 
-    std::vector<std::string> taskObjects;
-    JsonLite::ReadObjectArray(content, "tasks", taskObjects);
+    std::vector<std::string> hiddenUids;
+    JsonLite::ReadScalarArray(content, "pin_hidden_tasks", hiddenUids);
+    pin_hidden_uids.insert(hiddenUids.begin(), hiddenUids.end());
+
     for (const std::string& object : taskObjects) {
         Task t;
         t.is_sync = false;
@@ -330,6 +365,7 @@ void TaskStore::LoadLocal() {
             t.marker = static_cast<TaskMarker>((std::min)(3LL, (std::max)(0LL, number)));
         }
         JsonLite::GetString(object, "recurring_uid", t.recurring_uid);
+        t.pin_hidden = pin_hidden_uids.count(t.uid) != 0;
         t.id = RuntimeIdFor(t.uid);
         tasks.push_back(t);
     }

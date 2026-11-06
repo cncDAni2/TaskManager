@@ -12,6 +12,7 @@
 #include "UpdateCheck.h"
 #include "UpdateOverlay.h"
 #include "RecurringView.h"
+#include "TaskSearch.h"
 #include <algorithm>
 #include <set>
 
@@ -232,6 +233,7 @@ void RecalculateMiniLayout() {
     const int spacing = 4;
     const time_t now = time(nullptr);
     const auto shouldShowTask = [now](const Task& task) {
+        if (task.pin_hidden) return false;
         return !task.completed || (task.completed_at > 0 && now - task.completed_at < 10 &&
             std::find(g_miniCompletionGraceTaskIds.begin(), g_miniCompletionGraceTaskIds.end(), task.id) !=
                 g_miniCompletionGraceTaskIds.end());
@@ -463,7 +465,7 @@ void RecalculateLayout() {
                     if (t.is_sync) {
                         item.assignRect = { clientWidth - 82, currentY + 10, clientWidth - 40, currentY + 34 };
                     }
-                    int textLeft = 18 + 20 + 10 + (t.is_sync ? 19 : 0);
+                    int textLeft = 18 + 20 + 10 + (t.is_sync ? 19 : 0) + (t.pin_hidden ? 19 : 0);
                     int textRight = t.is_sync ? item.assignRect.left - 6
                         : item.markerRect.left - 6;
                     int textHeight = MeasureTaskTextHeight(hdcMeasure, t.text, textRight - textLeft);
@@ -494,6 +496,7 @@ void RecalculateLayout() {
         std::wstring yestStr = TaskUtils::FormatDate(now - 86400);
 
         for (const auto& t : compTasks) {
+            if (!TaskSearch::Matches(t.text)) continue;
             std::wstring dateStr = TaskUtils::FormatDate(t.completed_at);
             if (dateStr != lastDateStr) {
                 lastDateStr = dateStr;

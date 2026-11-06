@@ -3,6 +3,7 @@
 #include "MainWindow.h"
 #include "Layout.h"
 #include "RecurringView.h"
+#include "TaskSearch.h"
 #include <commctrl.h>
 #include <set>
 
@@ -26,6 +27,15 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR, int) {
         if (hExisting) {
             SendMessageW(hExisting, WM_HOTKEY, ID_HOTKEY_TOGGLE, 0);
         }
+        return 0;
+    }
+
+    if (g_store.localLoadFailed) {
+        MessageBoxW(nullptr,
+            L"A tasks-local.json fájl nem olvasható vagy sérült, ezért a program nem indul el, "
+            L"hogy ne írja felül az adataidat.\n\nZárd be a fájlt használó programot, majd indítsd újra.",
+            L"Feladatkezelő", MB_OK | MB_ICONERROR);
+        if (hMutex) CloseHandle(hMutex);
         return 0;
     }
 
@@ -77,7 +87,9 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR, int) {
     while (GetMessageW(&msg, nullptr, 0, 0)) {
         if (msg.message == WM_KEYDOWN && msg.wParam == VK_ESCAPE &&
             (!g_hInlineEdit || msg.hwnd != g_hInlineEdit) && !RecurringView::IsDropDownOpen()) {
-            if (g_pinMode && !g_isMiniMode) {
+            if (TaskSearch::IsActive()) {
+                TaskSearch::Close();
+            } else if (g_pinMode && !g_isMiniMode) {
                 EnterMiniMode();
             } else if (!g_pinMode) {
                 HideAppWindow();

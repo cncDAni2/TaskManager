@@ -85,6 +85,19 @@ bool SyncFiles::GetWriteTime(const std::wstring& path, FILETIME& writeTime) {
     return true;
 }
 
+bool SyncFiles::NeedsRead(const PollFile& file) {
+    if (file.force) return true;
+    FILETIME current{};
+    if (GetWriteTime(file.path, current)) return CompareFileTime(&current, &file.seenWrite) != 0;
+    return file.seenWrite.dwLowDateTime != 0 || file.seenWrite.dwHighDateTime != 0;
+}
+
+bool SyncFiles::Poll(PollFile& file) {
+    if (!NeedsRead(file)) return false;
+    file.result = Read(file.path, file.records, file.info, file.writeTime);
+    return file.result != ReadResult::Error;
+}
+
 SyncFiles::ReadResult SyncFiles::Read(const std::wstring& path, std::vector<SyncRecord>& records,
     SyncFileInfo& info, FILETIME& writeTime) {
     records.clear();

@@ -311,6 +311,41 @@ void DrawMoreIcon(HDC hdc, const RECT& rc, COLORREF color) {
     DeleteObject(pen);
 }
 
+void DrawSearchIcon(HDC hdc, const RECT& rc, COLORREF color) {
+    int cx = rc.left + (rc.right - rc.left) / 2;
+    int cy = rc.top + (rc.bottom - rc.top) / 2;
+    HPEN pen = CreatePen(PS_SOLID, 2, color);
+    HGDIOBJ oldPen = SelectObject(hdc, pen);
+    HGDIOBJ oldBrush = SelectObject(hdc, GetStockObject(NULL_BRUSH));
+    Ellipse(hdc, cx - 6, cy - 6, cx + 3, cy + 3);
+    MoveToEx(hdc, cx + 2, cy + 2, nullptr);
+    LineTo(hdc, cx + 6, cy + 6);
+    SelectObject(hdc, oldBrush);
+    SelectObject(hdc, oldPen);
+    DeleteObject(pen);
+}
+
+void DrawHiddenEyeIcon(HDC hdc, const RECT& rc, COLORREF color) {
+    int cx = rc.left + (rc.right - rc.left) / 2;
+    int cy = rc.top + (rc.bottom - rc.top) / 2;
+    HPEN pen = CreatePen(PS_SOLID, 1, color);
+    HGDIOBJ oldPen = SelectObject(hdc, pen);
+    HGDIOBJ oldBrush = SelectObject(hdc, GetStockObject(NULL_BRUSH));
+    const POINT upperLid[4] = { { cx - 7, cy }, { cx - 3, cy - 6 }, { cx + 3, cy - 6 }, { cx + 7, cy } };
+    const POINT lowerLid[4] = { { cx - 7, cy }, { cx - 3, cy + 6 }, { cx + 3, cy + 6 }, { cx + 7, cy } };
+    PolyBezier(hdc, upperLid, 4);
+    PolyBezier(hdc, lowerLid, 4);
+    Ellipse(hdc, cx - 2, cy - 2, cx + 3, cy + 3);
+    HPEN slash = CreatePen(PS_SOLID, 2, color);
+    SelectObject(hdc, slash);
+    MoveToEx(hdc, cx - 6, cy + 6, nullptr);
+    LineTo(hdc, cx + 6, cy - 6);
+    SelectObject(hdc, oldBrush);
+    SelectObject(hdc, oldPen);
+    DeleteObject(pen);
+    DeleteObject(slash);
+}
+
 void DrawFocusIcon(HDC hdc, const RECT& rc, COLORREF color) {
     int cx = rc.left + (rc.right - rc.left) / 2;
     int cy = rc.top + (rc.bottom - rc.top) / 2;

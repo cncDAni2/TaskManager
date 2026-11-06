@@ -18,6 +18,7 @@
 #include "AudioCue.h"
 #include "PinButtons.h"
 #include "StateToast.h"
+#include "TaskSearch.h"
 #include <windowsx.h>
 #include <algorithm>
 #include <cwctype>
@@ -102,6 +103,12 @@ void DeleteTaskWithUndo(HWND hWnd, int taskId) {
     InvalidateRect(hWnd, nullptr, TRUE);
 }
 
+void TogglePinHidden(HWND hWnd, int taskId) {
+    g_store.TogglePinHidden(taskId);
+    RecalculateLayout();
+    InvalidateRect(hWnd, nullptr, FALSE);
+}
+
 void ShowTaskOptionsMenu(HWND hWnd, int itemIndex) {
     if (itemIndex < 0 || itemIndex >= (int)g_displayItems.size()) return;
     int taskId = g_displayItems[itemIndex].task.id;
@@ -120,7 +127,7 @@ void ShowTaskOptionsMenu(HWND hWnd, int itemIndex) {
     const RECT optionsRect = g_displayItems[resolvedIndex].optionsRect;
     g_selectedIndex = resolvedIndex;
 
-    enum : UINT { MenuDelete = 1, MenuEdit, MenuToggleCompleted };
+    enum : UINT { MenuDelete = 1, MenuEdit, MenuToggleCompleted, MenuPinHidden };
     HMENU menu = CreatePopupMenu();
     if (!menu) return;
     AppendMenuW(menu, MF_STRING, MenuDelete, L"Törlés (Delete)");
@@ -128,6 +135,10 @@ void ShowTaskOptionsMenu(HWND hWnd, int itemIndex) {
     AppendMenuW(menu, MF_STRING, MenuToggleCompleted,
         task.completed ? L"Újra megnyitás (Space)" : L"Késznek jelölés (Space)");
     if (task.completed) EnableMenuItem(menu, MenuEdit, MF_BYCOMMAND | MF_GRAYED);
+    if (g_viewMode == ViewMode::ActiveTasks) {
+        AppendMenuW(menu, MF_STRING, MenuPinHidden, task.pin_hidden
+            ? L"Megjelenítés a PIN ablakban (Shift+Delete)" : L"Elrejtés a PIN ablak elől (Shift+Delete)");
+    }
 
     POINT menuPoint = { UiScale::Px(optionsRect.right), UiScale::Px(optionsRect.top - g_scrollY) };
     ClientToScreen(hWnd, &menuPoint);
@@ -145,6 +156,8 @@ void ShowTaskOptionsMenu(HWND hWnd, int itemIndex) {
         DeleteTaskWithUndo(hWnd, task.id);
     } else if (command == MenuEdit) {
         StartInlineEdit(resolvedIndex);
+    } else if (command == MenuPinHidden) {
+        TogglePinHidden(hWnd, task.id);
     } else if (command == MenuToggleCompleted) {
         CommitInlineEdit();
         g_store.ToggleCompleted(task.id);
@@ -158,7 +171,9 @@ void ShowTaskOptionsMenu(HWND hWnd, int itemIndex) {
 
 bool HandleKeyDown(HWND hWnd, WPARAM wParam) {
     if (wParam == VK_ESCAPE) {
-        if (g_pinMode && !g_isMiniMode) {
+        if (TaskSearch::IsActive()) {
+            TaskSearch::Close();
+        } else if (g_pinMode && !g_isMiniMode) {
             EnterMiniMode();
         } else if (!g_pinMode) {
             HideAppWindow();
@@ -210,6 +225,8 @@ bool HandleKeyDown(HWND hWnd, WPARAM wParam) {
             g_selectedIndex = -1;
             SetFocus(g_hEdit);
             InvalidateRect(hWnd, nullptr, FALSE);
+        } else if (TaskSearch::IsActive()) {
+            TaskSearch::FocusField();
         }
         return true;
     } else if (wParam == VK_DOWN) {
@@ -240,7 +257,12 @@ bool HandleKeyDown(HWND hWnd, WPARAM wParam) {
     } else if (wParam == VK_DELETE) {
         if (g_selectedIndex >= 0 && g_selectedIndex < (int)g_displayItems.size()) {
             const auto& item = g_displayItems[g_selectedIndex];
-            if (!item.isHeader) {
+            if ((GetKeyState(VK_SHIFT) & 0x8000) != 0) {
+                // Never falls through to deleting: Shift+Delete elsewhere does nothing.
+                if (!item.isHeader && !g_isMiniMode && g_viewMode == ViewMode::ActiveTasks) {
+                    TogglePinHidden(hWnd, item.task.id);
+                }
+            } else if (!item.isHeader) {
                 DeleteTaskWithUndo(hWnd, item.task.id);
             }
         }
@@ -770,6 +792,8 @@ static COLORREF GetButtonSurfaceColor(UINT ctlId, const ThemeColors& th) {
     case IDC_RECURRING_CANCEL_BTN:
         return th.bgSubBar;
     case IDC_CLEANUP_BTN:
+    case IDC_SEARCH_BTN:
+    case IDC_SEARCH_CLOSE_BTN:
         return Cleanup::SurfaceColor();
     case IDC_TIMER_START_BTN:
     case IDC_TIMER_PAUSE_BTN:
@@ -860,6 +884,7 @@ bool HandleDrawItem(HWND /*hWnd*/, DRAWITEMSTRUCT* pDIS) {
         pDIS->CtlID == IDC_TIMER_PAUSE_BTN || pDIS->CtlID == IDC_TIMER_NEXT_BTN ||
         pDIS->CtlID == IDC_CLOSE_BTN ||
         pDIS->CtlID == IDC_ADD_TASK_BTN || pDIS->CtlID == IDC_CLEANUP_BTN ||
+        pDIS->CtlID == IDC_SEARCH_BTN || pDIS->CtlID == IDC_SEARCH_CLOSE_BTN ||
         pDIS->CtlID == IDC_RECURRING_UNIT_BTN || pDIS->CtlID == IDC_RECURRING_SAVE_BTN ||
         pDIS->CtlID == IDC_RECURRING_CANCEL_BTN;
     if (isTextButton) {
@@ -894,6 +919,7 @@ bool HandleDrawItem(HWND /*hWnd*/, DRAWITEMSTRUCT* pDIS) {
         InflateRect(&textRect, -4, -2);
         DrawTextW(pDIS->hDC, label, -1, &textRect,
             DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS);
+        if (pDIS->CtlID == IDC_SEARCH_BTN) DrawSearchIcon(pDIS->hDC, pDIS->rcItem, buttonText);
         if ((pDIS->CtlID == IDC_TIMER_START_BTN || pDIS->CtlID == IDC_TIMER_PAUSE_BTN ||
             pDIS->CtlID == IDC_TIMER_NEXT_BTN || pDIS->CtlID == IDC_RECURRING_UNIT_BTN ||
             pDIS->CtlID == IDC_RECURRING_SAVE_BTN || pDIS->CtlID == IDC_RECURRING_CANCEL_BTN) &&

@@ -3,6 +3,7 @@
 #include "Layout.h"
 #include "UIEventHandler.h"
 #include "UndoToast.h"
+#include "TaskSearch.h"
 #include <commctrl.h>
 #include <algorithm>
 #include <string>
@@ -133,10 +134,13 @@ static int ButtonWidth(const wchar_t* label) {
 
 void Cleanup::UpdateVisibility(int clientWidth) {
     if (!g_hCleanupEdit) return;
-    const bool show = HasControls();
+    const bool show = HasControls() && !TaskSearch::IsActive();
     ShowWindow(g_hCleanupEdit, show ? SW_SHOW : SW_HIDE);
     ShowWindow(g_hCleanupBtn, show ? SW_SHOW : SW_HIDE);
-    if (!show) return;
+    if (!show) {
+        TaskSearch::UpdateVisibility(clientWidth, 0);
+        return;
+    }
 
     const bool history = IsHistoryView();
     const int value = history ? g_store.cleanup_weeks : g_store.cleanup_days;
@@ -155,6 +159,7 @@ void Cleanup::UpdateVisibility(int clientWidth) {
     UiScale::Place(g_hCleanupBtn, HWND_TOP, buttonX, top, buttonWidth, height, SWP_NOACTIVATE);
     UiScale::Place(g_hCleanupEdit, HWND_TOP, buttonX - 4 - 30, top, 30, height, SWP_NOACTIVATE);
     InvalidateRect(g_hCleanupBtn, nullptr, TRUE);
+    TaskSearch::UpdateVisibility(clientWidth, buttonX - 4 - 30);
 }
 
 COLORREF Cleanup::SurfaceColor() {

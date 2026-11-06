@@ -58,10 +58,13 @@ public:
     std::vector<SyncSource> syncSources;
     int next_source_id = 1;
     std::vector<int> active_order;
+    std::set<std::string> pin_hidden_uids; // Local even for synced tasks: it is this user's own view.
     std::vector<RecurringRule> recurring_rules;
     std::vector<int> newRecurringTaskIds; // Created by a work-day rollover; the UI puts them on top.
     std::vector<SyncNotice> pendingNotices;
     std::vector<VersionNotice> pendingVersionNotices; // Queued even when reloading silently.
+    // tasks-local.json exists but could not be read: nothing is saved, so it cannot be overwritten.
+    bool localLoadFailed = false;
 
     TaskStore();
 
@@ -71,6 +74,7 @@ public:
     int Add(const std::wstring& text, const std::vector<int>& sourceIds, const std::string& recurringUid = "");
     void UpdateText(int id, const std::wstring& newText);
     void CycleMarker(int id);
+    void TogglePinHidden(int id);
     void ToggleCompleted(int id);
     std::wstring ToggleAssignment(int id, const std::wstring& userName);
     // Deletes tasks with one write per sync file.
@@ -94,10 +98,13 @@ public:
     void SetSyncSources(const std::vector<SyncSource>& sources);
     const SyncSource* FindSource(int sourceId) const;
     std::vector<int> DefaultSourceIds() const;
-    bool CheckSyncFilesChanged();
     // Reads changed (or all) sync files, merges them, relays newer versions, and
     // queues notices into `pendingNotices` unless `silent`.
     void ReloadSync(bool forceAll, bool silent);
+    // The timed check reads the files on another thread (SyncPoll): this is what it starts from,
+    // and ApplyPolled takes its result. A file written here in the meantime is left for the next check.
+    std::vector<SyncFiles::PollFile> PollSnapshot() const;
+    void ApplyPolled(std::vector<SyncFiles::PollFile>& files);
 
     // Recurring and later tasks (TaskRecurring.cpp)
     // The work day the reset time belongs to (before the reset time: the previous day).
@@ -133,4 +140,7 @@ private:
     SyncRecord MakeSyncRecord(Task& task, bool deleted);
     void RewriteSource(SyncSource& source, const SyncFiles::RecordMap* winners, const SyncRecord* upsert);
     void NoteVersionHint(const SyncSource& source, const SyncFileInfo& info);
+    void StoreRead(SyncSource& source, SyncFiles::ReadResult result, std::vector<SyncRecord>& records,
+        const SyncFileInfo& info, const FILETIME& writeTime);
+    void MergeSources(bool silent);
 };

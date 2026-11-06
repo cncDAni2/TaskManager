@@ -56,6 +56,22 @@ namespace SyncFiles {
         FILETIME& writeTime);
     bool GetWriteTime(const std::wstring& path, FILETIME& writeTime);
 
+    // One file of a background check. In: what the app knows; out: what the file holds now.
+    struct PollFile {
+        int sourceId = 0;
+        std::wstring path;
+        FILETIME seenWrite = { 0, 0 };
+        bool force = false; // Read it even if unchanged (own changes are waiting to be written).
+        ReadResult result = ReadResult::Error;
+        std::vector<SyncRecord> records;
+        SyncFileInfo info;
+        FILETIME writeTime = { 0, 0 };
+    };
+    // Only looks at the timestamp, which is quick even for a cloud file that is not on the disk yet.
+    bool NeedsRead(const PollFile& file);
+    // Touches only `file`, so it is safe off the UI thread. True when there is something to apply.
+    bool Poll(PollFile& file);
+
     // Keeps the most recently updated version of every uid.
     void MergeNewest(RecordMap& winners, const std::vector<SyncRecord>& records);
 

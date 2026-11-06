@@ -27,19 +27,21 @@
 #include "PinButtons.h"
 #include "StateToast.h"
 #include <windowsx.h>
+#include "SyncPoll.h"
+#include "TaskSearch.h"
 #include <commctrl.h>
 #include <algorithm>
 #include <map>
 #include <set>
 
 namespace {
-void ReloadSyncAndNotify() {
+void ApplyPolledSync(std::vector<SyncFiles::PollFile>& files) {
     std::map<int, std::wstring> previousAssignees;
     for (const auto& task : g_store.tasks) {
         if (task.is_sync) previousAssignees.emplace(task.id, task.assignee);
     }
 
-    g_store.ReloadSync(false, false);
+    g_store.ApplyPolled(files);
     for (const SyncNotice& notice : g_store.pendingNotices) {
         if (notice.isNew) ShowNewTaskNotice(notice.text);
         else ShowTaskChangedNotice(notice.text, notice.previousText, notice.changedBy);
@@ -91,6 +93,7 @@ void ToggleWindow() {
 
 void ShowAppWindow() {
     CancelInlineEdit();
+    TaskSearch::Reset();
     UiScale::UpdateFromWindow(g_hWnd); // A hidden window may have missed a display change.
 
     if (g_isMiniMode) {
@@ -109,7 +112,6 @@ void ShowAppWindow() {
     g_fullWinW = winW;
     g_fullWinH = winH;
 
-    ReloadSyncAndNotify();
     std::vector<int> activeOrder;
     std::set<int> seenActiveIds;
     for (int id : g_store.active_order) {
@@ -367,6 +369,7 @@ static LRESULT MainProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             Shell_NotifyIconW(NIM_ADD, &g_nid);
 
             Cleanup::CreateControls(hWnd, hInst);
+            TaskSearch::CreateControls(hWnd, hInst);
             SyncPicker::ResetSelection();
             UpdateControlsVisibility();
             RecalculateLayout();
@@ -537,13 +540,7 @@ static LRESULT MainProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                 s_syncTimer++;
                 if (s_syncTimer >= 10) {
                     s_syncTimer = 0;
-                    if (g_editingTaskId == -1 && g_store.CheckSyncFilesChanged()) {
-                        ReloadSyncAndNotify();
-                        if (IsWindowVisible(hWnd)) {
-                            RecalculateLayout();
-                            InvalidateRect(hWnd, nullptr, FALSE);
-                        }
-                    }
+                    if (g_editingTaskId == -1 && !g_taskDragging) SyncPoll::Request(hWnd);
                 }
 
                 if (IsWindowVisible(hWnd)) {
@@ -552,9 +549,8 @@ static LRESULT MainProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                     if (g_isMiniMode) {
                         RECT rcMiniBottom = { 0, rcClient.bottom - WorkTracking::MiniBarHeight(),
                             rcClient.right, rcClient.bottom };
-                        if (tracking) UiScale::Invalidate(hWnd, &rcMiniBottom, FALSE);
-                        if (visionBreakWasActive != g_intervalTimer.IsVisionBreakActive() ||
-                            g_intervalTimer.IsVisionBreakActive()) {
+                        if (tracking && MiniWorkBarChanged()) UiScale::Invalidate(hWnd, &rcMiniBottom, FALSE);
+                        if (visionBreakWasActive != g_intervalTimer.IsVisionBreakActive()) {
                             RedrawWindow(hWnd, nullptr, nullptr,
                                 RDW_INVALIDATE | RDW_ERASE | RDW_UPDATENOW | RDW_ALLCHILDREN);
                         }
@@ -653,6 +649,17 @@ static LRESULT MainProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             SelfUpdate::HandleResult(hWnd, wParam);
             return 0;
 
+        case WM_APP_SYNC_POLL_RESULT: {
+            std::vector<SyncFiles::PollFile> files = SyncPoll::TakeResult(lParam);
+            if (g_editingTaskId != -1 || g_taskDragging) return 0; // The next check brings it again.
+            ApplyPolledSync(files);
+            if (IsWindowVisible(hWnd)) {
+                RecalculateLayout();
+                InvalidateRect(hWnd, nullptr, FALSE);
+            }
+            return 0;
+        }
+
         case WM_APP_TRAY: {
             if (HandleAppTray(hWnd, lParam)) return 0;
             break;
@@ -683,6 +690,7 @@ static LRESULT MainProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 
         case WM_COMMAND: {
             if (TimerView::HandleCommand(hWnd, wParam)) return 0;
+            if (TaskSearch::HandleCommand(wParam)) return 0;
             if (Cleanup::HandleCommand(hWnd, wParam)) return 0;
             if (RecurringView::HandleCommand(hWnd, wParam)) return 0;
             if (TimerHold::HandleCommand(LOWORD(wParam))) return 0;

@@ -13,6 +13,7 @@ TaskStore::TaskStore() {
         filePath = L"tasks-local.json";
     }
     Load();
+    if (localLoadFailed) return;
     CheckWorkReset();
     RunDueRecurring(); // Also after a restart on the same work day; it creates nothing twice.
     newRecurringTaskIds.clear(); // The startup ordering already has them on top.
@@ -92,6 +93,15 @@ void TaskStore::CycleMarker(int id) {
     SaveLocal();
 }
 
+void TaskStore::TogglePinHidden(int id) {
+    Task* t = FindTask(id);
+    if (!t) return;
+    t->pin_hidden = !t->pin_hidden;
+    if (t->pin_hidden) pin_hidden_uids.insert(t->uid);
+    else pin_hidden_uids.erase(t->uid);
+    SaveLocal();
+}
+
 void TaskStore::ToggleCompleted(int id) {
     Task* t = FindTask(id);
     if (!t) return;
@@ -126,7 +136,9 @@ void TaskStore::DeleteMany(const std::vector<int>& ids) {
     std::vector<SyncSource*> touched;
     for (int id : ids) {
         Task* t = FindTask(id);
-        if (t && t->is_sync) QueueSyncRecord(*t, true, touched);
+        if (!t) continue;
+        pin_hidden_uids.erase(t->uid);
+        if (t->is_sync) QueueSyncRecord(*t, true, touched);
     }
     for (SyncSource* source : touched) RewriteSource(*source, nullptr, nullptr);
 
@@ -213,6 +225,7 @@ void TaskStore::Save() {
 void TaskStore::Load() {
     tasks.clear();
     LoadLocal();
+    if (localLoadFailed) return;
     ReloadSync(true, true);
 
     std::vector<int> reconciled;

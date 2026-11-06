@@ -29,6 +29,8 @@ namespace TaskUtils {
     time_t GetYesterday930Cutoff(time_t now);
     time_t GetLastResetCutoff(time_t now, int hour, int minute);
     std::wstring FormatWorkDuration(int totalSeconds);
+    // Ignores case and accents: "feladat" finds "FELADÁT". An empty query matches everything.
+    bool ContainsText(const std::wstring& text, const std::wstring& query);
     std::string EscapeJsonString(const std::string& s);
     std::string UnescapeJsonString(const std::string& s);
     std::wstring GetCleanUserName();

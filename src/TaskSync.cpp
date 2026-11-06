@@ -53,17 +53,46 @@ std::vector<int> TaskStore::DefaultSourceIds() const {
     return ids;
 }
 
-bool TaskStore::CheckSyncFilesChanged() {
-    for (const SyncSource& source : syncSources) {
-        if (!source.pendingWrites.empty()) return true;
-        FILETIME writeTime{};
-        if (SyncFiles::GetWriteTime(source.path, writeTime)) {
-            if (!SameFileTime(writeTime, source.lastWrite)) return true;
-        } else if (!IsZero(source.lastWrite)) {
-            return true;
+std::vector<SyncFiles::PollFile> TaskStore::PollSnapshot() const {
+    std::vector<SyncFiles::PollFile> files(syncSources.size());
+    for (size_t i = 0; i < syncSources.size(); ++i) {
+        files[i].sourceId = syncSources[i].id;
+        files[i].path = syncSources[i].path;
+        files[i].seenWrite = syncSources[i].lastWrite;
+        files[i].force = !syncSources[i].pendingWrites.empty();
+    }
+    return files;
+}
+
+void TaskStore::ApplyPolled(std::vector<SyncFiles::PollFile>& files) {
+    bool applied = false;
+    for (SyncFiles::PollFile& file : files) {
+        for (SyncSource& source : syncSources) {
+            if (source.id != file.sourceId || source.path != file.path ||
+                !SameFileTime(source.lastWrite, file.seenWrite)) continue;
+            StoreRead(source, file.result, file.records, file.info, file.writeTime);
+            applied = true;
         }
     }
-    return false;
+    if (applied) MergeSources(false);
+}
+
+void TaskStore::StoreRead(SyncSource& source, SyncFiles::ReadResult result, std::vector<SyncRecord>& records,
+    const SyncFileInfo& info, const FILETIME& writeTime) {
+    switch (result) {
+    case SyncFiles::ReadResult::Ok:
+        NoteVersionHint(source, info);
+        for (const SyncRecord& pending : source.pendingWrites) SyncFiles::Upsert(records, pending);
+        source.records = std::move(records);
+        source.lastWrite = writeTime;
+        break;
+    case SyncFiles::ReadResult::Missing:
+        source.records = source.pendingWrites;
+        source.lastWrite = { 0, 0 };
+        break;
+    case SyncFiles::ReadResult::Error:
+        break; // Keep the cached contents and retry on the next check.
+    }
 }
 
 void TaskStore::RewriteSource(SyncSource& source, const SyncFiles::RecordMap* winners, const SyncRecord* upsert) {
@@ -116,22 +145,13 @@ void TaskStore::ReloadSync(bool forceAll, bool silent) {
         std::vector<SyncRecord> records;
         SyncFileInfo info;
         FILETIME writeTime{};
-        switch (SyncFiles::Read(source.path, records, info, writeTime)) {
-        case SyncFiles::ReadResult::Ok:
-            NoteVersionHint(source, info);
-            for (const SyncRecord& pending : source.pendingWrites) SyncFiles::Upsert(records, pending);
-            source.records = std::move(records);
-            source.lastWrite = writeTime;
-            break;
-        case SyncFiles::ReadResult::Missing:
-            source.records = source.pendingWrites;
-            source.lastWrite = { 0, 0 };
-            break;
-        case SyncFiles::ReadResult::Error:
-            break; // Keep the cached contents and retry on the next check.
-        }
+        const SyncFiles::ReadResult result = SyncFiles::Read(source.path, records, info, writeTime);
+        StoreRead(source, result, records, info, writeTime);
     }
+    MergeSources(silent);
+}
 
+void TaskStore::MergeSources(bool silent) {
     SyncFiles::RecordMap winners;
     for (const SyncSource& source : syncSources) {
         SyncFiles::MergeNewest(winners, source.records);
@@ -149,6 +169,7 @@ void TaskStore::ReloadSync(bool forceAll, bool silent) {
     std::vector<const SyncRecord*> visible;
     for (const auto& entry : winners) {
         if (!entry.second.deleted) visible.push_back(&entry.second);
+        else pin_hidden_uids.erase(entry.first);
     }
     std::sort(visible.begin(), visible.end(), [](const SyncRecord* a, const SyncRecord* b) {
         return a->created_at < b->created_at;
@@ -171,6 +192,7 @@ void TaskStore::ReloadSync(bool forceAll, bool silent) {
         t.updated_at = record->updated_at;
         t.updated_by = record->updated_by;
         t.recurring_uid = record->recurring_uid;
+        t.pin_hidden = pin_hidden_uids.count(record->uid) != 0;
         for (const SyncSource& source : syncSources) {
             if (SyncFiles::Contains(source.records, record->uid)) t.sources.push_back(source.id);
         }

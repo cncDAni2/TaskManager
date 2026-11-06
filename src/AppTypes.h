@@ -46,6 +46,9 @@
 #define IDC_RECURRING_UNIT_BTN 2032
 #define IDC_RECURRING_SAVE_BTN 2033
 #define IDC_RECURRING_CANCEL_BTN 2034
+#define IDC_SEARCH_BTN      2035
+#define IDC_SEARCH_EDIT     2036
+#define IDC_SEARCH_CLOSE_BTN 2037
 
 // System Tray and Menu IDs
 #define IDM_TRAY_OPEN       3001
@@ -69,6 +72,7 @@
 #define WM_APP_TRAY         (WM_APP + 100)
 #define WM_APP_UPDATE_RESULT (WM_APP + 101)
 #define WM_APP_SELF_UPDATE_RESULT (WM_APP + 102)
+#define WM_APP_SYNC_POLL_RESULT (WM_APP + 103)
 #define IDT_WORK_TIMER      4001
 #define IDT_MINI_TIMER_FLASH 4002
 #define IDT_MEMORY_TRIM     4003
@@ -112,6 +116,7 @@ struct Task {
     std::vector<int> sources; // Sync source ids whose file contains this task.
     TaskMarker marker = TaskMarker::None;
     std::string recurring_uid; // Uid of the repeating rule that created it (shown as ↻); empty otherwise.
+    bool pin_hidden = false;   // Left out of the PIN window; stored locally (TaskStore::pin_hidden_uids).
 };
 
 struct DisplayItem {

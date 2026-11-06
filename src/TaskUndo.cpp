@@ -4,6 +4,7 @@
 void TaskStore::RestoreTasks(std::vector<Task> saved, const OrderSlots& orderSlots) {
     std::vector<SyncSource*> touched;
     for (Task& task : saved) {
+        if (task.pin_hidden) pin_hidden_uids.insert(task.uid);
         // A sync file removed in the meantime cannot take the task back: it stays here as a local one.
         task.sources.erase(std::remove_if(task.sources.begin(), task.sources.end(),
             [this](int sourceId) { return FindSource(sourceId) == nullptr; }), task.sources.end());

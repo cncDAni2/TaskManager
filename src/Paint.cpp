@@ -14,6 +14,7 @@
 #include "TimerView.h"
 #include "RecurringView.h"
 #include "Hotkeys.h"
+#include "TaskSearch.h"
 
 namespace {
     constexpr int DAILY_WORK_TARGET_SECONDS = 6 * 3600 + 50 * 60;
@@ -69,6 +70,17 @@ static const std::wstring& CurrentUserName() {
 
 static bool IsAssignedToOtherUser(const Task& task) {
     return task.is_sync && !task.assignee.empty() && task.assignee != CurrentUserName();
+}
+
+bool MiniWorkBarChanged() {
+    static int lastMinute = -1;
+    static int lastState = -1;
+    const int minute = g_store.work_seconds_today / 60;
+    const int state = (g_workMeasurementStopped || TimerHold::IsActive() ? 2 : 0) + (g_isWorkActive ? 1 : 0);
+    if (minute == lastMinute && state == lastState) return false;
+    lastMinute = minute;
+    lastState = state;
+    return true;
 }
 
 void PaintMiniWindow(HWND hWnd, HDC hdc, const RECT& dirty) {
@@ -431,7 +443,7 @@ static void PaintListArea(HDC hdcMem, int clientW, int topOffset, int listBottom
         RECT rcEmpty = { 20, topOffset + 60, clientW - 20, topOffset + 140 };
         std::wstring emptyMsg = (g_viewMode == ViewMode::ActiveTasks)
             ? L"Nincs aktív feladat! Írj be egy újat a fenti mezőbe."
-            : L"Nincs megjeleníthető elkészült feladat.";
+            : (TaskSearch::IsActive() ? L"Nincs találat." : L"Nincs megjeleníthető elkészült feladat.");
         DrawTextW(hdcMem, emptyMsg.c_str(), -1, &rcEmpty, DT_CENTER | DT_WORDBREAK);
     } else {
         for (size_t i = 0; i < g_displayItems.size(); ++i) {
@@ -541,8 +553,16 @@ static void PaintListArea(HDC hdcMem, int clientW, int topOffset, int listBottom
                 barToolRegions.push_back({ rcCloudTip, L"Megtalálható itt:\n" + SyncPicker::SourceNames(item.task) });
             }
 
+            if (item.task.pin_hidden && g_viewMode == ViewMode::ActiveTasks) {
+                const int eyeLeft = rcChk.right + 10 + (item.task.is_sync ? 19 : 0);
+                const int cy = rcText.top + 10;
+                RECT rcEye = { eyeLeft, cy - 7, eyeLeft + 15, cy + 7 };
+                DrawHiddenEyeIcon(hdcMem, rcEye, g_themeMode == ThemeMode::Pink ? RGB(255, 230, 242) : th.textSecondary);
+                barToolRegions.push_back({ rcEye, L"PIN mód elől rejtett" });
+            }
+
             if (!isInlineEditingThis) {
-                if (item.task.completed) {
+                if (item.task.completed && !TaskSearch::IsActive()) {
                     SelectObject(hdcMem, g_hFontNormalStrike);
                     SetTextColor(hdcMem, g_themeMode == ThemeMode::Pink
                         ? RGB(255, 211, 235) : th.textCompleted);

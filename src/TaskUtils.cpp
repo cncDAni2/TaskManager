@@ -79,6 +79,7 @@ time_t GetLastResetCutoff(time_t now, int hour, int minute) {
     time_t cutTime = mktime(&cut);
     if (now < cutTime) {
         cut.tm_mday -= 1;
+        cut.tm_isdst = -1; // mktime filled it in for today, which is wrong on a clock-change day.
         cutTime = mktime(&cut);
     }
     return cutTime;
@@ -188,6 +189,14 @@ std::wstring GetCleanUserName() {
         return envBuf;
     }
     return L"Felhasználó";
+}
+
+bool ContainsText(const std::wstring& text, const std::wstring& query) {
+    if (query.empty()) return true;
+    // Invariant locale: Hungarian rules would treat "cs" as one letter, so "c" would not find it.
+    return FindNLSStringEx(LOCALE_NAME_INVARIANT, FIND_FROMSTART | LINGUISTIC_IGNORECASE | LINGUISTIC_IGNOREDIACRITIC,
+        text.c_str(), static_cast<int>(text.size()), query.c_str(), static_cast<int>(query.size()),
+        nullptr, nullptr, nullptr, 0) >= 0;
 }
 
 bool ReadFileBytes(const std::wstring& path, std::string& content) {
