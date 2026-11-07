@@ -59,6 +59,8 @@ public:
     int next_source_id = 1;
     std::vector<int> active_order;
     std::set<std::string> pin_hidden_uids; // Local even for synced tasks: it is this user's own view.
+    std::vector<TaskGroup> task_groups;
+    std::map<std::string, std::string> group_members; // Task uid -> group uid; mirrored in Task::group_uid.
     std::vector<RecurringRule> recurring_rules;
     std::vector<int> newRecurringTaskIds; // Created by a work-day rollover; the UI puts them on top.
     std::vector<SyncNotice> pendingNotices;
@@ -81,7 +83,9 @@ public:
     void DeleteMany(const std::vector<int>& ids);
     // Undo of DeleteMany (TaskUndo.cpp): `saved` are the tasks as they were before it. Synced tasks
     // come back in their files as a newer change, so the delete is undone for the others too.
-    void RestoreTasks(std::vector<Task> saved, const OrderSlots& orderSlots);
+    // `groups` brings back the ones that ended with the delete.
+    void RestoreTasks(std::vector<Task> saved, const OrderSlots& orderSlots,
+        const std::vector<TaskGroup>& groups = {});
     int CountWorkHistoryBefore(const std::string& dateKey) const;
     void PurgeWorkHistoryBefore(const std::string& dateKey);
     void RestoreWorkHistory(const WorkHistory::Records& measured, const WorkHistory::Records& manual);
@@ -93,6 +97,25 @@ public:
     std::vector<Task> GetAllCompletedTasks() const;
     std::vector<WorkHistory::DisplayEntry> GetWorkHistory() const;
     void SetManualWork(const std::string& date, int seconds);
+
+    // Task groups (TaskGroups.cpp). `order` is the list being shown; these change it in place.
+    const TaskGroup* FindGroup(const std::string& uid) const;
+    std::vector<TaskGroup> GroupsOf(const std::vector<Task>& members) const;
+    // Pulls the members of every group next to the first one.
+    void NormalizeGroups(std::vector<int>& order) const;
+    // Puts the task in front of `beforeId` (0 = the end) as a member of `groupUid` (empty = none).
+    void PlaceTask(std::vector<int>& order, int id, int beforeId, const std::string& groupUid);
+    void MoveGroup(std::vector<int>& order, const std::string& groupUid, int beforeId);
+    // Joins the group of the target, right after it; returns the uid when this created the group.
+    std::string GroupWith(std::vector<int>& order, int id, int targetId);
+    // Takes the task out, to right above its group.
+    void RemoveFromGroup(std::vector<int>& order, int id);
+    void RenameGroup(const std::string& uid, const std::wstring& name);
+    // Finished tasks leave their groups when the list session ends. True when anything changed.
+    bool DropCompletedFromGroups();
+    // A drop in the PIN window never changes groups. Returns the task to go in front of (0 = the
+    // end); `wholeGroup`: the task is leaving its group, so all of the group moves there.
+    int ResolvePinDrop(const std::vector<int>& order, int id, int beforeId, bool& wholeGroup) const;
 
     // Sync (TaskSync.cpp)
     void SetSyncSources(const std::vector<SyncSource>& sources);
@@ -133,6 +156,10 @@ private:
     void AddFirstRunSyncSource();
     Task* FindTask(int id);
     bool IsOpenTask(const std::string& uid) const;
+    const Task* GroupedTask(int id) const;
+    void ForgetGroupMember(const std::string& taskUid); // A group ends with its last member.
+    void SetTaskGroup(Task& task, const std::string& groupUid);
+    int SnapOutOfGroup(const std::vector<int>& order, int beforeId) const;
     int CreateRecurringInstance(RecurringRule& rule);
     void PublishSyncTask(Task& task, bool deleted);
     // Records a change in the task's files in memory; RewriteSource on `touched` writes them.

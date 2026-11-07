@@ -7,6 +7,14 @@
 #include <cwctype>
 
 namespace {
+constexpr int kGroupEditId = -2; // In g_editingTaskId: not -1, so sync checks wait for this edit too.
+std::string g_editingGroupUid;
+
+RECT GroupEditRect(const DisplayItem& header) {
+    return { header.rect.left + 5, header.rect.top + 1 - g_scrollY,
+        header.rect.right - 5, header.rect.bottom - 1 - g_scrollY };
+}
+
 void DeletePreviousWord(HWND hEdit) {
     DWORD selectionStart = 0;
     DWORD selectionEnd = 0;
@@ -141,6 +149,36 @@ void StartInlineEdit(int itemIndex) {
     SetFocus(g_hInlineEdit);
 }
 
+void StartGroupRename(const std::string& groupUid) {
+    CommitInlineEdit();
+    int index = -1;
+    for (size_t i = 0; i < g_displayItems.size(); ++i) {
+        if (g_displayItems[i].groupUid == groupUid) {
+            index = static_cast<int>(i);
+            break;
+        }
+    }
+    if (index == -1) return;
+
+    EnsureVisible(index);
+    const DisplayItem& header = g_displayItems[index];
+    g_editingTaskId = kGroupEditId;
+    g_editingGroupUid = groupUid;
+    g_selectedIndex = index; // UpdateInlineEditPos follows this row.
+
+    const RECT r = GroupEditRect(header);
+    g_hInlineEdit = CreateWindowExW(0, L"EDIT", header.headerText.c_str(),
+        WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_AUTOHSCROLL,
+        UiScale::Px(r.left), UiScale::Px(r.top), UiScale::Px(r.right - r.left), UiScale::Px(r.bottom - r.top),
+        g_hWnd, (HMENU)IDC_INLINE_EDIT, GetModuleHandle(nullptr), nullptr);
+    UiScale::SetControlFont(g_hInlineEdit, 15);
+    SendMessageW(g_hInlineEdit, EM_SETSEL, 0, -1);
+    SetWindowSubclass(g_hInlineEdit, InlineEditSubclassProc, 0, 0);
+    InvalidateRect(g_hWnd, nullptr, FALSE);
+    UpdateWindow(g_hWnd);
+    SetFocus(g_hInlineEdit);
+}
+
 void CommitInlineEdit() {
     if (!g_hInlineEdit || g_editingTaskId == -1) return;
 
@@ -160,7 +198,10 @@ void CommitInlineEdit() {
     while (!text.empty() && iswspace(text.front())) text.erase(text.begin());
     while (!text.empty() && iswspace(text.back())) text.pop_back();
 
-    if (!text.empty()) {
+    if (taskId == kGroupEditId) {
+        g_selectedIndex = -1;
+        if (!text.empty()) g_store.RenameGroup(g_editingGroupUid, text);
+    } else if (!text.empty()) {
         g_store.UpdateText(taskId, text);
     }
     RecalculateLayout();
@@ -172,6 +213,7 @@ void CancelInlineEdit() {
     if (!g_hInlineEdit) return;
     HWND hEdit = g_hInlineEdit;
     g_hInlineEdit = nullptr;
+    if (g_editingTaskId == kGroupEditId) g_selectedIndex = -1;
     g_editingTaskId = -1;
     g_lastCommittedTaskId = -1;
     DestroyWindow(hEdit);
@@ -181,6 +223,12 @@ void CancelInlineEdit() {
 
 void UpdateInlineEditPos() {
     if (g_hInlineEdit && g_selectedIndex >= 0 && g_selectedIndex < (int)g_displayItems.size()) {
+        if (g_editingTaskId == kGroupEditId) {
+            const RECT edit = GroupEditRect(g_displayItems[g_selectedIndex]);
+            UiScale::Place(g_hInlineEdit, nullptr, edit.left, edit.top, edit.right - edit.left,
+                edit.bottom - edit.top, SWP_NOZORDER);
+            return;
+        }
         RECT r = g_displayItems[g_selectedIndex].textRect;
         r.top -= g_scrollY;
         r.bottom -= g_scrollY;

@@ -29,6 +29,7 @@
 #include <windowsx.h>
 #include "SyncPoll.h"
 #include "TaskSearch.h"
+#include "GroupDrag.h"
 #include <commctrl.h>
 #include <algorithm>
 #include <map>
@@ -411,6 +412,7 @@ static LRESULT MainProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 
         case WM_TIMER: {
             if (MemoryTrim::HandleTimer(hWnd, wParam)) return 0;
+            if (GroupDrag::HandleTimer(hWnd, wParam)) return 0;
             if (wParam == IDT_MINI_TIMER_FLASH) {
                 if (!g_isMiniMode || !g_pinMode || !IsWindowVisible(hWnd)) {
                     g_miniTimerFlashStep = 0;
@@ -787,8 +789,8 @@ static LRESULT MainProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             if (g_taskDragging || g_dragPotentialSourceIndex != -1) {
                 g_taskDragging = false;
                 g_dragSourceIndex = -1;
-                g_dragInsertIndex = -1;
                 g_dragPotentialSourceIndex = -1;
+                GroupDrag::Reset(hWnd);
                 InvalidateRect(hWnd, nullptr, FALSE);
             }
             break;

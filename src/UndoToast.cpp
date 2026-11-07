@@ -23,6 +23,7 @@ struct DeletedTasks {
     std::vector<Task> tasks;
     OrderSlots activeOrder;
     OrderSlots sessionOrder;
+    std::vector<TaskGroup> groups; // The delete can end a group; undoing it brings the name back.
 };
 
 HWND g_toast = nullptr;
@@ -54,7 +55,7 @@ void ClearDeleted() {
 void Undo() {
     CommitInlineEdit(); // The list is rebuilt below.
     for (auto it = g_deletedTasks.rbegin(); it != g_deletedTasks.rend(); ++it) {
-        g_store.RestoreTasks(std::move(it->tasks), it->activeOrder);
+        g_store.RestoreTasks(std::move(it->tasks), it->activeOrder, it->groups);
         for (const auto& slot : it->sessionOrder) {
             const int index = (std::min)(slot.first, static_cast<int>(g_sessionActiveTaskIds.size()));
             g_sessionActiveTaskIds.insert(g_sessionActiveTaskIds.begin() + index, slot.second);
@@ -226,6 +227,7 @@ void DeleteTasks(const std::vector<int>& ids) {
     }
     deleted.activeOrder = FindSlots(g_store.active_order, ids);
     deleted.sessionOrder = FindSlots(g_sessionActiveTaskIds, ids);
+    deleted.groups = g_store.GroupsOf(deleted.tasks);
 
     g_store.DeleteMany(ids);
     for (const auto& slot : deleted.sessionOrder) {

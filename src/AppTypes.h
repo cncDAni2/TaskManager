@@ -76,6 +76,7 @@
 #define IDT_WORK_TIMER      4001
 #define IDT_MINI_TIMER_FLASH 4002
 #define IDT_MEMORY_TRIM     4003
+#define IDT_GROUP_HOLD      4004
 #define BOTTOM_BAR_HEIGHT   28
 #define WORK_MEASURE_FOOTER_HEIGHT 40
 #define TIMER_STATUS_HEIGHT 22
@@ -117,11 +118,19 @@ struct Task {
     TaskMarker marker = TaskMarker::None;
     std::string recurring_uid; // Uid of the repeating rule that created it (shown as ↻); empty otherwise.
     bool pin_hidden = false;   // Left out of the PIN window; stored locally (TaskStore::pin_hidden_uids).
+    std::string group_uid;     // Its group in the task list; stored locally (TaskStore::group_members).
+};
+
+// A named set of tasks in the list: this user's own view, see TaskGroups.cpp.
+struct TaskGroup {
+    std::string uid;
+    std::wstring name;
 };
 
 struct DisplayItem {
     bool isHeader = false;
     std::wstring headerText;
+    std::string groupUid; // Set on the header row of a task group.
     Task task;
     RECT rect{};
     RECT checkRect{};
@@ -164,6 +173,8 @@ struct ThemeColors {
     COLORREF checkDoneHover;
     COLORREF headerSectionBg;
     COLORREF headerSectionText;
+    COLORREF groupFrame;
+    COLORREF groupHeaderText;
 };
 
 inline ThemeColors GetDarkTheme() {
@@ -191,6 +202,8 @@ inline ThemeColors GetDarkTheme() {
     c.checkDoneHover = RGB(22, 163, 74);   // Green 600
     c.headerSectionBg = RGB(30, 30, 35);
     c.headerSectionText = RGB(148, 163, 184); // Slate 400
+    c.groupFrame = RGB(71, 85, 105);
+    c.groupHeaderText = RGB(241, 245, 249);
     return c;
 }
 
@@ -219,6 +232,8 @@ inline ThemeColors GetLightTheme() {
     c.checkDoneHover = RGB(22, 163, 74);
     c.headerSectionBg = RGB(241, 245, 249);
     c.headerSectionText = RGB(71, 85, 105);
+    c.groupFrame = RGB(100, 116, 139);
+    c.groupHeaderText = RGB(255, 255, 255);
     return c;
 }
 
@@ -247,6 +262,8 @@ inline ThemeColors GetPinkTheme() {
     c.checkDoneHover = RGB(217, 0, 108);
     c.headerSectionBg = RGB(255, 141, 198);
     c.headerSectionText = RGB(79, 0, 72);
+    c.groupFrame = RGB(125, 130, 125);
+    c.groupHeaderText = RGB(255, 255, 255);
     return c;
 }
 

@@ -169,7 +169,10 @@ void TaskStore::MergeSources(bool silent) {
     std::vector<const SyncRecord*> visible;
     for (const auto& entry : winners) {
         if (!entry.second.deleted) visible.push_back(&entry.second);
-        else pin_hidden_uids.erase(entry.first);
+        else {
+            pin_hidden_uids.erase(entry.first);
+            ForgetGroupMember(entry.first);
+        }
     }
     std::sort(visible.begin(), visible.end(), [](const SyncRecord* a, const SyncRecord* b) {
         return a->created_at < b->created_at;
@@ -193,6 +196,8 @@ void TaskStore::MergeSources(bool silent) {
         t.updated_by = record->updated_by;
         t.recurring_uid = record->recurring_uid;
         t.pin_hidden = pin_hidden_uids.count(record->uid) != 0;
+        auto member = group_members.find(record->uid);
+        if (member != group_members.end()) t.group_uid = member->second;
         for (const SyncSource& source : syncSources) {
             if (SyncFiles::Contains(source.records, record->uid)) t.sources.push_back(source.id);
         }

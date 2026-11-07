@@ -71,7 +71,6 @@ extern int g_scrollDragStartScrollY;
 extern bool g_taskDragging;
 extern int g_dragSourceIndex;
 extern int g_dragCurrentY;
-extern int g_dragInsertIndex;
 extern int g_dragStartMouseY;
 extern int g_dragPotentialSourceIndex;
 extern int g_hoverItemIndex;

@@ -94,6 +94,19 @@ void TaskStore::SaveLocal() {
         firstHidden = false;
     }
     out << "],\n";
+    out << "  \"task_groups\": [";
+    for (size_t i = 0; i < task_groups.size(); ++i) {
+        out << (i > 0 ? "," : "") << "\n    { \"uid\": \"" << TaskUtils::EscapeJsonString(task_groups[i].uid) << "\""
+            << ", \"name\": " << Quote(task_groups[i].name) << ", \"members\": [";
+        bool firstMember = true;
+        for (const auto& member : group_members) {
+            if (member.second != task_groups[i].uid) continue;
+            out << (firstMember ? "\"" : ", \"") << TaskUtils::EscapeJsonString(member.first) << "\"";
+            firstMember = false;
+        }
+        out << "] }";
+    }
+    out << (task_groups.empty() ? "],\n" : "\n  ],\n");
     out << "  \"active_order\": [";
     bool firstOrder = true;
     for (int id : active_order) {
@@ -348,6 +361,20 @@ void TaskStore::LoadLocal() {
     JsonLite::ReadScalarArray(content, "pin_hidden_tasks", hiddenUids);
     pin_hidden_uids.insert(hiddenUids.begin(), hiddenUids.end());
 
+    // The key is "members", not "tasks": the task list is looked up by that name in the whole file.
+    std::vector<std::string> groupObjects;
+    JsonLite::ReadObjectArray(content, "task_groups", groupObjects);
+    for (const std::string& object : groupObjects) {
+        TaskGroup group;
+        if (!JsonLite::GetString(object, "uid", group.uid) || group.uid.empty()) continue;
+        JsonLite::GetWideString(object, "name", group.name);
+        std::vector<std::string> memberUids;
+        JsonLite::ReadScalarArray(object, "members", memberUids);
+        if (memberUids.empty()) continue;
+        for (const std::string& uid : memberUids) group_members[uid] = group.uid;
+        task_groups.push_back(std::move(group));
+    }
+
     for (const std::string& object : taskObjects) {
         Task t;
         t.is_sync = false;
@@ -366,6 +393,8 @@ void TaskStore::LoadLocal() {
         }
         JsonLite::GetString(object, "recurring_uid", t.recurring_uid);
         t.pin_hidden = pin_hidden_uids.count(t.uid) != 0;
+        auto member = group_members.find(t.uid);
+        if (member != group_members.end()) t.group_uid = member->second;
         t.id = RuntimeIdFor(t.uid);
         tasks.push_back(t);
     }

@@ -15,6 +15,8 @@
 #include "RecurringView.h"
 #include "Hotkeys.h"
 #include "TaskSearch.h"
+#include "GroupDrag.h"
+#include "GroupView.h"
 
 namespace {
     constexpr int DAILY_WORK_TARGET_SECONDS = 6 * 3600 + 50 * 60;
@@ -108,6 +110,7 @@ void PaintMiniWindow(HWND hWnd, HDC hdc, const RECT& dirty) {
         RECT rcEmpty = { 10, 0, clientW - 10, clientH - 3 };
         DrawTextW(hdcMem, L"Nincs aktív feladat! 🎉", -1, &rcEmpty, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
     } else {
+        GroupView::PaintPin(hdcMem, th);
         for (size_t i = 0; i < g_displayItems.size(); ++i) {
             const auto& item = g_displayItems[i];
             RECT r = item.rect;
@@ -210,17 +213,12 @@ void PaintMiniWindow(HWND hWnd, HDC hdc, const RECT& dirty) {
             }
         }
 
-        if (g_taskDragging && g_dragInsertIndex >= 0) {
-            int lineY = 0;
-            if (g_dragInsertIndex < (int)g_displayItems.size()) {
-                lineY = g_displayItems[g_dragInsertIndex].rect.top - 3;
-            } else if (!g_displayItems.empty()) {
-                lineY = g_displayItems.back().rect.bottom + 2;
-            }
+        if (g_taskDragging && GroupDrag::InsertLine().visible) {
+            const GroupDrag::Line& line = GroupDrag::InsertLine();
             HPEN hPenLine = CreatePen(PS_SOLID, 2, RGB(59, 130, 246));
             HGDIOBJ hPrevPen = SelectObject(hdcMem, hPenLine);
-            MoveToEx(hdcMem, 8, lineY, nullptr);
-            LineTo(hdcMem, clientW - 8, lineY);
+            MoveToEx(hdcMem, line.left, line.y, nullptr);
+            LineTo(hdcMem, line.right, line.y);
             SelectObject(hdcMem, hPrevPen);
             DeleteObject(hPenLine);
         }
@@ -446,6 +444,9 @@ static void PaintListArea(HDC hdcMem, int clientW, int topOffset, int listBottom
             : (TaskSearch::IsActive() ? L"Nincs találat." : L"Nincs megjeleníthető elkészült feladat.");
         DrawTextW(hdcMem, emptyMsg.c_str(), -1, &rcEmpty, DT_CENTER | DT_WORDBREAK);
     } else {
+        if (g_viewMode == ViewMode::ActiveTasks) {
+            GroupView::PaintMain(hdcMem, g_scrollY, th, GroupDrag::DraggedGroup());
+        }
         for (size_t i = 0; i < g_displayItems.size(); ++i) {
             const auto& item = g_displayItems[i];
             RECT r = item.rect;
@@ -453,6 +454,11 @@ static void PaintListArea(HDC hdcMem, int clientW, int topOffset, int listBottom
             r.bottom -= g_scrollY;
 
             if (r.bottom < topOffset || r.top > listBottom) continue;
+
+            if (!item.groupUid.empty()) { // GroupView painted it with the frame.
+                barToolRegions.push_back({ r, L"Kattintás: átnevezés\nHúzás: a csoport mozgatása" });
+                continue;
+            }
 
             if (item.isHeader) {
                 RECT rcHdr = r;
@@ -469,7 +475,7 @@ static void PaintListArea(HDC hdcMem, int clientW, int topOffset, int listBottom
 
             bool isHovered = ((int)i == g_hoverItemIndex);
             bool isSelected = ((int)i == g_selectedIndex);
-            bool isBeingDragged = (g_taskDragging && (int)i == g_dragSourceIndex);
+            bool isBeingDragged = (g_taskDragging && ((int)i == g_dragSourceIndex || (int)i == GroupDrag::MergeTarget()));
             bool isAssignedToOther = IsAssignedToOtherUser(item.task);
 
             COLORREF cardBg = isBeingDragged ? th.bgCardSelected
@@ -651,18 +657,14 @@ static void PaintListArea(HDC hdcMem, int clientW, int topOffset, int listBottom
             }
         }
 
-        if (g_viewMode == ViewMode::ActiveTasks && g_taskDragging && g_dragInsertIndex >= 0) {
-            int lineY = 0;
-            if (g_dragInsertIndex < (int)g_displayItems.size()) {
-                lineY = g_displayItems[g_dragInsertIndex].rect.top - g_scrollY - 3;
-            } else if (!g_displayItems.empty()) {
-                lineY = g_displayItems.back().rect.bottom - g_scrollY + 3;
-            }
-            if (lineY >= topOffset && lineY <= listBottom) {
+        if (g_viewMode == ViewMode::ActiveTasks && g_taskDragging && GroupDrag::InsertLine().visible) {
+            const GroupDrag::Line& line = GroupDrag::InsertLine();
+            const int lineY = (std::max)(line.y - g_scrollY, topOffset + 1); // The top slot is above the list.
+            if (lineY <= listBottom) {
                 HPEN hPenLine = CreatePen(PS_SOLID, 2, th.borderCardSelected);
                 HGDIOBJ hOldPen = SelectObject(hdcMem, hPenLine);
-                MoveToEx(hdcMem, 10, lineY, nullptr);
-                LineTo(hdcMem, clientW - 14, lineY);
+                MoveToEx(hdcMem, line.left, lineY, nullptr);
+                LineTo(hdcMem, line.right, lineY);
                 SelectObject(hdcMem, hOldPen);
                 DeleteObject(hPenLine);
             }

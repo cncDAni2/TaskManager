@@ -19,6 +19,7 @@
 #include "PinButtons.h"
 #include "StateToast.h"
 #include "TaskSearch.h"
+#include "GroupDrag.h"
 #include <windowsx.h>
 #include <algorithm>
 #include <cwctype>
@@ -127,7 +128,7 @@ void ShowTaskOptionsMenu(HWND hWnd, int itemIndex) {
     const RECT optionsRect = g_displayItems[resolvedIndex].optionsRect;
     g_selectedIndex = resolvedIndex;
 
-    enum : UINT { MenuDelete = 1, MenuEdit, MenuToggleCompleted, MenuPinHidden };
+    enum : UINT { MenuDelete = 1, MenuEdit, MenuToggleCompleted, MenuPinHidden, MenuLeaveGroup };
     HMENU menu = CreatePopupMenu();
     if (!menu) return;
     AppendMenuW(menu, MF_STRING, MenuDelete, L"Törlés (Delete)");
@@ -138,6 +139,7 @@ void ShowTaskOptionsMenu(HWND hWnd, int itemIndex) {
     if (g_viewMode == ViewMode::ActiveTasks) {
         AppendMenuW(menu, MF_STRING, MenuPinHidden, task.pin_hidden
             ? L"Megjelenítés a PIN ablakban (Shift+Delete)" : L"Elrejtés a PIN ablak elől (Shift+Delete)");
+        if (!task.group_uid.empty()) AppendMenuW(menu, MF_STRING, MenuLeaveGroup, L"Kivétel a csoportból");
     }
 
     POINT menuPoint = { UiScale::Px(optionsRect.right), UiScale::Px(optionsRect.top - g_scrollY) };
@@ -158,6 +160,13 @@ void ShowTaskOptionsMenu(HWND hWnd, int itemIndex) {
         StartInlineEdit(resolvedIndex);
     } else if (command == MenuPinHidden) {
         TogglePinHidden(hWnd, task.id);
+    } else if (command == MenuLeaveGroup) {
+        g_store.RemoveFromGroup(g_sessionActiveTaskIds, task.id);
+        g_store.active_order = g_sessionActiveTaskIds;
+        g_store.SaveLocal();
+        g_selectedIndex = -1; // A row index from before the move.
+        RecalculateLayout();
+        InvalidateRect(hWnd, nullptr, FALSE);
     } else if (command == MenuToggleCompleted) {
         CommitInlineEdit();
         g_store.ToggleCompleted(task.id);
@@ -383,6 +392,13 @@ bool HandleLButtonDown(HWND hWnd, LPARAM lParam) {
 
     for (size_t i = 0; i < g_displayItems.size(); ++i) {
         const auto& item = g_displayItems[i];
+        if (!item.groupUid.empty() && PtInRect(&item.rect, { mx, my })) {
+            CommitInlineEdit();
+            g_dragPotentialSourceIndex = (int)i; // A click renames, a drag moves the group.
+            g_dragStartMouseY = clickRawY;
+            SetCapture(hWnd);
+            return true;
+        }
         if (item.isHeader) continue;
 
         if (item.assignRect.right > 0 && PtInRect(&item.assignRect, { mx, my })) {
@@ -450,32 +466,13 @@ bool HandleMouseMove(HWND hWnd, LPARAM lParam) {
             g_taskDragging = true;
             g_dragSourceIndex = g_dragPotentialSourceIndex;
             g_dragCurrentY = rawY;
-            g_dragInsertIndex = g_dragSourceIndex;
             InvalidateRect(hWnd, nullptr, FALSE);
         }
     }
 
     if (g_taskDragging) {
         g_dragCurrentY = rawY;
-        int my = rawY + (g_isMiniMode ? 0 : g_scrollY);
-
-        int bestInsertIdx = -1;
-        for (size_t i = 0; i < g_displayItems.size(); ++i) {
-            const auto& itm = g_displayItems[i];
-            if (itm.isHeader) continue;
-            int itemCenterY = (itm.rect.top + itm.rect.bottom) / 2;
-            if (my < itemCenterY) {
-                bestInsertIdx = (int)i;
-                break;
-            }
-        }
-        if (bestInsertIdx == -1) {
-            bestInsertIdx = (int)g_displayItems.size();
-        }
-        if (bestInsertIdx != g_dragInsertIndex) {
-            g_dragInsertIndex = bestInsertIdx;
-            InvalidateRect(hWnd, nullptr, FALSE);
-        }
+        GroupDrag::Update(hWnd, mx, rawY + (g_isMiniMode ? 0 : g_scrollY));
         return true;
     }
 
@@ -553,48 +550,13 @@ bool HandleLButtonUp(HWND hWnd, LPARAM) {
     }
 
     if (g_taskDragging) {
-        int srcIdx = g_dragSourceIndex;
-        int insIdx = g_dragInsertIndex;
+        const std::string newGroup = GroupDrag::Apply(g_dragSourceIndex);
 
         g_taskDragging = false;
         g_dragSourceIndex = -1;
-        g_dragInsertIndex = -1;
         g_dragPotentialSourceIndex = -1;
+        GroupDrag::Reset(hWnd);
         ReleaseCapture();
-
-        if (srcIdx >= 0 && srcIdx < (int)g_displayItems.size()) {
-            int draggedTaskId = g_displayItems[srcIdx].task.id;
-
-            int targetOrderIndex = 0;
-            if (insIdx >= (int)g_displayItems.size()) {
-                targetOrderIndex = (int)g_sessionActiveTaskIds.size();
-            } else if (insIdx > 0) {
-                int refTaskId = g_displayItems[insIdx].task.id;
-                auto it = std::find(g_sessionActiveTaskIds.begin(), g_sessionActiveTaskIds.end(), refTaskId);
-                if (it != g_sessionActiveTaskIds.end()) {
-                    targetOrderIndex = (int)std::distance(g_sessionActiveTaskIds.begin(), it);
-                }
-            }
-
-            auto itSrc = std::find(g_sessionActiveTaskIds.begin(), g_sessionActiveTaskIds.end(), draggedTaskId);
-            if (itSrc != g_sessionActiveTaskIds.end()) {
-                int oldOrderIndex = (int)std::distance(g_sessionActiveTaskIds.begin(), itSrc);
-                g_sessionActiveTaskIds.erase(itSrc);
-                if (targetOrderIndex > oldOrderIndex) {
-                    targetOrderIndex--;
-                }
-                if (targetOrderIndex < 0) {
-                    targetOrderIndex = 0;
-                }
-                if (targetOrderIndex > (int)g_sessionActiveTaskIds.size()) {
-                    targetOrderIndex = (int)g_sessionActiveTaskIds.size();
-                }
-                g_sessionActiveTaskIds.insert(g_sessionActiveTaskIds.begin() + targetOrderIndex, draggedTaskId);
-
-                g_store.active_order = g_sessionActiveTaskIds;
-                g_store.SaveLocal();
-            }
-        }
 
         if (g_isMiniMode) {
             RecalculateMiniLayout();
@@ -610,6 +572,7 @@ bool HandleLButtonUp(HWND hWnd, LPARAM) {
         UiScale::CursorPos(hWnd, &cursor);
         HandleMouseMove(hWnd, MAKELPARAM(cursor.x, cursor.y));
         InvalidateRect(hWnd, nullptr, FALSE);
+        if (!newGroup.empty()) StartGroupRename(newGroup);
         return true;
     }
 
@@ -617,6 +580,12 @@ bool HandleLButtonUp(HWND hWnd, LPARAM) {
         int clickedIdx = g_dragPotentialSourceIndex;
         g_dragPotentialSourceIndex = -1;
         ReleaseCapture();
+
+        if (!g_isMiniMode && clickedIdx >= 0 && clickedIdx < (int)g_displayItems.size() &&
+            !g_displayItems[clickedIdx].groupUid.empty()) {
+            StartGroupRename(std::string(g_displayItems[clickedIdx].groupUid));
+            return true;
+        }
 
         if (g_isMiniMode && clickedIdx >= 0 && clickedIdx < (int)g_displayItems.size()) {
             int targetTaskId = g_displayItems[clickedIdx].task.id;

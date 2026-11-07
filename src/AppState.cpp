@@ -67,7 +67,6 @@ int g_scrollDragStartScrollY = 0;
 bool g_taskDragging = false;
 int g_dragSourceIndex = -1;
 int g_dragCurrentY = 0;
-int g_dragInsertIndex = -1;
 int g_dragStartMouseY = 0;
 int g_dragPotentialSourceIndex = -1;
 int g_hoverItemIndex = -1;

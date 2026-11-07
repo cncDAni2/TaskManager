@@ -59,6 +59,7 @@ SyncRecord Record(const char* uid, const wchar_t* text, time_t updatedAt, bool d
 }
 
 void WriteSync(const std::wstring& path, const std::vector<SyncRecord>& records) {
+    Sleep(20); // Changes are noticed by the file time: two writes in one clock tick would look like one.
     FILETIME written{};
     CHECK(SyncFiles::Write(path, records, SyncFileInfo(), written));
 }
@@ -397,6 +398,170 @@ void TestPinHidden() {
     }
 }
 
+// Five local tasks; returns their ids in list order, like the 1-5 of the PIN example.
+std::vector<int> FiveTasks(TaskStore& store) {
+    std::vector<int> ids;
+    for (const wchar_t* text : { L"5", L"4", L"3", L"2", L"1" }) ids.insert(ids.begin(), store.Add(text, {}));
+    return ids;
+}
+
+const Task* TaskWithId(const TaskStore& store, int id) {
+    for (const Task& task : store.tasks) {
+        if (task.id == id) return &task;
+    }
+    return nullptr;
+}
+
+void TestGroupOrder() {
+    CleanFiles();
+    TaskStore store;
+    const std::vector<int> t = FiveTasks(store);
+    std::vector<int> order = t;
+
+    // Dropping 5 on 2: a new group at the place of 2, the dragged task after it.
+    const std::string group = store.GroupWith(order, t[4], t[1]);
+    CHECK(!group.empty());
+    CHECK(store.FindGroup(group) && store.FindGroup(group)->name == L"Csoport");
+    CHECK((order == std::vector<int>{ t[0], t[1], t[4], t[2], t[3] }));
+
+    // Dropping on a member joins that group and creates nothing.
+    CHECK(store.GroupWith(order, t[3], t[1]).empty());
+    CHECK((order == std::vector<int>{ t[0], t[1], t[3], t[4], t[2] }));
+    CHECK(TaskWithId(store, t[3])->group_uid == group);
+
+    // Taking a task out puts it right above the group, also when it was the first member.
+    store.RemoveFromGroup(order, t[4]);
+    CHECK((order == std::vector<int>{ t[0], t[4], t[1], t[3], t[2] }));
+    CHECK(TaskWithId(store, t[4])->group_uid.empty());
+    store.RemoveFromGroup(order, t[1]);
+    CHECK((order == std::vector<int>{ t[0], t[4], t[1], t[3], t[2] }));
+
+    // Placing inside and outside by the group given; the last member ends the group.
+    store.PlaceTask(order, t[0], t[3], group);
+    CHECK((order == std::vector<int>{ t[4], t[1], t[0], t[3], t[2] }));
+    store.PlaceTask(order, t[0], t[2], "");
+    store.PlaceTask(order, t[3], 0, "");
+    CHECK(store.task_groups.empty());
+    CHECK(store.group_members.empty());
+}
+
+void TestGroupMoveAndNormalize() {
+    CleanFiles();
+    TaskStore store;
+    const std::vector<int> t = FiveTasks(store);
+    std::vector<int> order = t;
+    const std::string group = store.GroupWith(order, t[3], t[2]);
+    store.GroupWith(order, t[4], t[3]);
+
+    store.MoveGroup(order, group, t[0]);
+    CHECK((order == std::vector<int>{ t[2], t[3], t[4], t[0], t[1] }));
+    store.MoveGroup(order, group, t[3]); // On itself: nothing happens.
+    CHECK((order == std::vector<int>{ t[2], t[3], t[4], t[0], t[1] }));
+    store.MoveGroup(order, group, 0);
+    CHECK((order == std::vector<int>{ t[0], t[1], t[2], t[3], t[4] }));
+
+    // A member that got away, like a reopened task at the end, is pulled back.
+    order = { t[2], t[0], t[3], t[1], t[4] };
+    store.NormalizeGroups(order);
+    CHECK((order == std::vector<int>{ t[2], t[3], t[4], t[0], t[1] }));
+}
+
+void TestPinDrop() {
+    CleanFiles();
+    TaskStore store;
+    const std::vector<int> t = FiveTasks(store);
+    std::vector<int> order = t;
+    store.GroupWith(order, t[3], t[2]);
+    store.GroupWith(order, t[4], t[3]); // 1 2 [3 4 5]
+    bool whole = false;
+
+    // 5 between 2 and 3: stays in the group, as its first task.
+    int before = store.ResolvePinDrop(order, t[4], t[2], whole);
+    CHECK(!whole && before == t[2]);
+    // 5 above 1: the whole group goes there.
+    before = store.ResolvePinDrop(order, t[4], t[0], whole);
+    CHECK(whole && before == t[0]);
+    // 3 below the group: its last task.
+    before = store.ResolvePinDrop(order, t[2], 0, whole);
+    CHECK(!whole && before == 0);
+    // An outside task never lands inside: it goes to the nearer end of the group.
+    before = store.ResolvePinDrop(order, t[0], t[3], whole);
+    CHECK(!whole && before == t[2]);
+    before = store.ResolvePinDrop(order, t[0], t[4], whole);
+    CHECK(!whole && before == 0);
+
+    // A task hidden from the PIN window does not count as the slot below the group.
+    order = { t[2], t[3], t[0], t[1], t[4] };
+    store.NormalizeGroups(order); // 3 4 5 1 2
+    store.TogglePinHidden(t[0]);
+    before = store.ResolvePinDrop(order, t[2], t[1], whole);
+    CHECK(!whole && before == t[0]);
+}
+
+void TestGroupPersistence() {
+    CleanFiles();
+    const std::wstring path = SyncPath(L"a.json");
+    WriteSync(path, { Record("x", L"szinkron", 100), Record("y", L"másik", 100) });
+    std::string group;
+    {
+        TaskStore store;
+        store.SetSyncSources({ Source(1, path) });
+        const int local = store.Add(L"helyi \"idézett\"", {});
+        std::vector<int> order = store.active_order;
+        group = store.GroupWith(order, local, FindByUid(store, "x")->id);
+        store.RenameGroup(group, L"Költözés \"A\"");
+        store.active_order = order;
+        store.Save();
+    }
+    CHECK(ReadText(path).find("group") == std::string::npos); // It is this user's own view.
+    {
+        TaskStore store; // The nested "members" must not disturb the task list.
+        CHECK(store.tasks.size() == 3);
+        CHECK(store.FindGroup(group) && store.FindGroup(group)->name == L"Költözés \"A\"");
+        CHECK(FindByUid(store, "x")->group_uid == group);
+
+        // A change from the sync file keeps the task in the group, a delete takes it out.
+        WriteSync(path, { Record("x", L"módosult", 200), Record("y", L"másik", 100) });
+        store.ReloadSync(false, true);
+        CHECK(FindByUid(store, "x")->group_uid == group);
+        WriteSync(path, { Record("x", L"módosult", 300, true), Record("y", L"másik", 100) });
+        store.ReloadSync(false, true);
+        CHECK(store.group_members.count("x") == 0);
+        CHECK(store.FindGroup(group)); // The local task is still in it.
+    }
+}
+
+void TestGroupUndoAndFinish() {
+    CleanFiles();
+    TaskStore store;
+    const std::vector<int> t = FiveTasks(store);
+    std::vector<int> order = t;
+    const std::string group = store.GroupWith(order, t[1], t[0]);
+    store.RenameGroup(group, L"Név");
+
+    // Deleting every member ends the group; undoing it brings back the group and its name.
+    const std::vector<Task> saved = { *TaskWithId(store, t[0]), *TaskWithId(store, t[1]) };
+    const std::vector<TaskGroup> groups = store.GroupsOf(saved);
+    store.DeleteMany({ t[0], t[1] });
+    CHECK(store.task_groups.empty());
+    store.RestoreTasks(saved, {}, groups);
+    CHECK(store.FindGroup(group) && store.FindGroup(group)->name == L"Név");
+    CHECK(TaskWithId(store, t[0])->group_uid == group);
+
+    // A tick can be taken back while the list session lasts; after that the task has left.
+    store.ToggleCompleted(t[0]);
+    CHECK(TaskWithId(store, t[0])->group_uid == group);
+    store.ToggleCompleted(t[0]);
+    CHECK(!store.DropCompletedFromGroups());
+    store.ToggleCompleted(t[0]);
+    CHECK(store.DropCompletedFromGroups());
+    CHECK(TaskWithId(store, t[0])->group_uid.empty());
+    CHECK(store.FindGroup(group));
+    store.ToggleCompleted(t[1]);
+    store.DropCompletedFromGroups();
+    CHECK(!store.FindGroup(group));
+}
+
 void TestJson() {
     std::vector<std::string> objects;
     const std::string text = "{ \"tasks\": [ { \"text\": \"a } ] \\\" b\" }, { \"n\": { \"m\": [1] } } ], \"z\": 1 }";
@@ -512,6 +677,11 @@ int main() {
     Run("apply polled", TestApplyPolled);
     Run("local load", TestLocalLoad);
     Run("pin hidden", TestPinHidden);
+    Run("group order", TestGroupOrder);
+    Run("group move and normalize", TestGroupMoveAndNormalize);
+    Run("pin drop", TestPinDrop);
+    Run("group persistence", TestGroupPersistence);
+    Run("group undo and finish", TestGroupUndoAndFinish);
     Run("json", TestJson);
     Run("recurring dates", TestRecurringDates);
     Run("work day cutoffs", TestWorkDayCutoffs);

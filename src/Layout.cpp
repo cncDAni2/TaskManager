@@ -13,6 +13,7 @@
 #include "UpdateOverlay.h"
 #include "RecurringView.h"
 #include "TaskSearch.h"
+#include "GroupView.h"
 #include <algorithm>
 #include <set>
 
@@ -35,7 +36,7 @@ static int TextButtonWidth(HWND button) {
 }
 
 int GetListTop() {
-    if (g_viewMode == ViewMode::ActiveTasks) return 94;
+    if (g_viewMode == ViewMode::ActiveTasks) return 100; // 6 below the separator of the input row.
     if (g_viewMode == ViewMode::WorkHistory) return 48;
     if (g_viewMode == ViewMode::Recurring) return RecurringView::ListTop();
     return 54;
@@ -225,6 +226,7 @@ void RecalculateMiniLayout() {
     UiScale::ContextScope native(true); // Settings can get here too.
     static int previousMiniHeight = 0;
     g_displayItems.clear();
+    GroupView::BeginLayout();
     int miniW = g_fullWinW / 2;
     if (miniW < 260) miniW = 292;
 
@@ -240,6 +242,7 @@ void RecalculateMiniLayout() {
     };
 
     g_store.PrependUnorderedActive(g_sessionActiveTaskIds);
+    g_store.NormalizeGroups(g_sessionActiveTaskIds);
     std::vector<Task> orderedActiveTasks;
     std::set<int> seenIds;
     for (int id : g_sessionActiveTaskIds) {
@@ -258,24 +261,33 @@ void RecalculateMiniLayout() {
     }
 
     int activeCount = 0;
+    std::string openGroup;
     for (const auto& t : orderedActiveTasks) {
         activeCount++;
+        if (t.group_uid != openGroup) {
+            if (!openGroup.empty()) curY = GroupView::ClosePin(curY);
+            if (!t.group_uid.empty()) curY = GroupView::OpenPin(t.group_uid, curY, miniW);
+            openGroup = t.group_uid;
+        }
+        const int inset = openGroup.empty() ? 0 : GroupView::PIN_INSET;
+        const int rowW = miniW - inset;
         DisplayItem item;
         item.isHeader = false;
         item.task = t;
-        item.rect = { 6, curY, miniW - 6, curY + itemH };
-        item.checkRect = { 14, curY + (itemH - 20) / 2, 14 + 20, curY + (itemH + 20) / 2 };
+        item.rect = { 6 + inset, curY, rowW - 6, curY + itemH };
+        item.checkRect = { 14 + inset, curY + (itemH - 20) / 2, 14 + inset + 20, curY + (itemH + 20) / 2 };
         item.editRect = { 0, 0, 0, 0 };
         item.deleteRect = { 0, 0, 0, 0 };
         if (t.is_sync) {
-            item.assignRect = { miniW - 46, curY + (itemH - 20) / 2, miniW - 10, curY + (itemH + 20) / 2 };
+            item.assignRect = { rowW - 46, curY + (itemH - 20) / 2, rowW - 10, curY + (itemH + 20) / 2 };
         }
         int textLeft = item.checkRect.right + 8 + (t.is_sync ? 18 : 0);
-        int textRight = t.is_sync ? item.assignRect.left - 6 : miniW - 12;
+        int textRight = t.is_sync ? item.assignRect.left - 6 : rowW - 12;
         item.textRect = { textLeft, curY + 1, textRight, curY + itemH - 1 };
         g_displayItems.push_back(item);
-        curY += itemH + spacing;
+        curY += itemH + (openGroup.empty() ? spacing : GroupView::PIN_GAP);
     }
+    if (!openGroup.empty()) curY = GroupView::ClosePin(curY);
 
     int totalH = 0;
     if (activeCount == 0) {
@@ -330,7 +342,8 @@ void FinalizeCompletedTaskSession() {
         isCompletedTask), g_sessionActiveTaskIds.end());
     g_miniCompletionGraceTaskIds.erase(std::remove_if(g_miniCompletionGraceTaskIds.begin(),
         g_miniCompletionGraceTaskIds.end(), isCompletedTask), g_miniCompletionGraceTaskIds.end());
-    if (g_store.active_order.size() != oldOrderSize) g_store.SaveLocal();
+    const bool groupsChanged = g_store.DropCompletedFromGroups();
+    if (g_store.active_order.size() != oldOrderSize || groupsChanged) g_store.SaveLocal();
 }
 
 void EnterMiniMode() {
@@ -414,6 +427,7 @@ void RecalculateLayout() {
         return;
     }
     g_displayItems.clear();
+    GroupView::BeginLayout();
     RECT rcClient;
     UiScale::ClientRect(g_hWnd, &rcClient);
     int clientWidth = rcClient.right - rcClient.left;
@@ -452,26 +466,35 @@ void RecalculateLayout() {
 
     if (g_viewMode == ViewMode::ActiveTasks) {
         g_store.PrependUnorderedActive(g_sessionActiveTaskIds);
+        g_store.NormalizeGroups(g_sessionActiveTaskIds);
+        std::string openGroup;
         for (int id : g_sessionActiveTaskIds) {
             for (const auto& t : g_store.tasks) {
                 if (t.id == id) {
+                    if (t.group_uid != openGroup) {
+                        if (!openGroup.empty()) currentY = GroupView::CloseMain(currentY);
+                        if (!t.group_uid.empty()) currentY = GroupView::OpenMain(t.group_uid, currentY, clientWidth);
+                        openGroup = t.group_uid;
+                    }
+                    const int inset = openGroup.empty() ? 0 : GroupView::MAIN_INSET;
+                    const int rowW = clientWidth - inset;
                     DisplayItem item;
                     item.isHeader = false;
                     item.task = t;
-                    item.optionsRect = { clientWidth - 36, currentY + 10, clientWidth - 12, currentY + 34 };
+                    item.optionsRect = { rowW - 36, currentY + 10, rowW - 12, currentY + 34 };
                     if (!t.is_sync) {
-                        item.markerRect = { clientWidth - 68, currentY + 8, clientWidth - 40, currentY + 36 };
+                        item.markerRect = { rowW - 68, currentY + 8, rowW - 40, currentY + 36 };
                     }
                     if (t.is_sync) {
-                        item.assignRect = { clientWidth - 82, currentY + 10, clientWidth - 40, currentY + 34 };
+                        item.assignRect = { rowW - 82, currentY + 10, rowW - 40, currentY + 34 };
                     }
-                    int textLeft = 18 + 20 + 10 + (t.is_sync ? 19 : 0) + (t.pin_hidden ? 19 : 0);
+                    int textLeft = inset + 18 + 20 + 10 + (t.is_sync ? 19 : 0) + (t.pin_hidden ? 19 : 0);
                     int textRight = t.is_sync ? item.assignRect.left - 6
                         : item.markerRect.left - 6;
                     int textHeight = MeasureTaskTextHeight(hdcMeasure, t.text, textRight - textLeft);
                     int rowHeight = std::max(itemHeight, textHeight + 28);
-                    item.rect = { 10, currentY, clientWidth - 10, currentY + rowHeight };
-                    item.checkRect = { 18, currentY + (rowHeight - 20) / 2, 38, currentY + (rowHeight + 20) / 2 };
+                    item.rect = { 10 + inset, currentY, rowW - 10, currentY + rowHeight };
+                    item.checkRect = { 18 + inset, currentY + (rowHeight - 20) / 2, 38 + inset, currentY + (rowHeight + 20) / 2 };
                     item.optionsRect.top = currentY + (rowHeight - 24) / 2;
                     item.optionsRect.bottom = item.optionsRect.top + 24;
                     if (item.markerRect.right > 0) {
@@ -483,11 +506,12 @@ void RecalculateLayout() {
                     item.textRect = { textLeft, currentY + 5, textRight, currentY + 5 + textHeight };
 
                     g_displayItems.push_back(item);
-                    currentY += rowHeight + 6;
+                    currentY += rowHeight + (openGroup.empty() ? 6 : GroupView::MAIN_GAP);
                     break;
                 }
             }
         }
+        if (!openGroup.empty()) currentY = GroupView::CloseMain(currentY);
     } else {
         auto compTasks = g_store.GetAllCompletedTasks();
         std::wstring lastDateStr = L"";

@@ -138,6 +138,7 @@ void TaskStore::DeleteMany(const std::vector<int>& ids) {
         Task* t = FindTask(id);
         if (!t) continue;
         pin_hidden_uids.erase(t->uid);
+        ForgetGroupMember(t->uid);
         if (t->is_sync) QueueSyncRecord(*t, true, touched);
     }
     for (SyncSource* source : touched) RewriteSource(*source, nullptr, nullptr);
@@ -235,6 +236,8 @@ void TaskStore::Load() {
         if (t && !t->completed && seen.insert(id).second) reconciled.push_back(id);
     }
     PrependUnorderedActive(reconciled);
+    DropCompletedFromGroups();
+    NormalizeGroups(reconciled);
     active_order = reconciled;
     SaveLocal();
 }
