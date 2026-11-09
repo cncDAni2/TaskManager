@@ -1,5 +1,11 @@
 #pragma once
 
+// Floating "N feladat törölve. Visszavonás" bar for 5 seconds after deleting tasks or work history;
+// its DeleteTasks / PurgeWorkHistory do the deleting, so always delete through them.
+// Non-activating, so clicking it does not count as focus loss. Consecutive deletes add up. A synced
+// task comes back as a newer change over its tombstone. A single task has no confirmation dialog;
+// the cleanup bar keeps its own.
+
 #include <string>
 #include <vector>
 

@@ -1,5 +1,11 @@
 #pragma once
 
+// "Ütemezett feladatok" page (ViewMode::Recurring), opened by the repeat button next to "+
+// Hozzáad": form (text, date picker, count, unit menu, shared cloud button, save/cancel) with its
+// own Tab order, and the owner-drawn rule list (click to edit, X to delete).
+// Created tasks carry recurring_uid (also in sync files) and show the repeat mark in the
+// main-window detail line.
+
 #include "AppTypes.h"
 
 // "Ütemezett feladatok" page: form for recurring / later tasks (opened by the repeat button next

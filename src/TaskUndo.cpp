@@ -1,3 +1,5 @@
+// TaskStore: restoring deleted tasks and work history. Deleting itself goes through UndoToast.
+
 #include "Task.h"
 #include <algorithm>
 

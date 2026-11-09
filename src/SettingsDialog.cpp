@@ -13,6 +13,7 @@
 #include "UpdateCheck.h"
 #include "UpdateOverlay.h"
 #include <commctrl.h>
+#include <shellapi.h>
 #include <string>
 #include <vector>
 
@@ -30,6 +31,7 @@ namespace {
     constexpr int IDC_SETTINGS_UPDATE_CHECK = 5111;
     constexpr int IDC_SETTINGS_HOTKEYS = 5112;
     constexpr int IDC_SETTINGS_PIN_BUTTONS = 5113;
+    constexpr int IDC_SETTINGS_VERSION = 5114;
     constexpr int SETTINGS_DIALOG_WIDTH = 560;
     constexpr UINT WM_APP_REBUILD = WM_APP + 1;
     constexpr DWORD DIALOG_STYLE = WS_POPUP | WS_CAPTION | WS_SYSMENU;
@@ -63,6 +65,7 @@ namespace {
         int resetMinute = 15;
         bool timerAutoStart = false;
         std::wstring excludedKeywords;
+        HWND versionLink = nullptr;
     };
 
     DialogState* g_openState = nullptr;
@@ -242,7 +245,13 @@ namespace {
         top += ROW;
 
         const int y = top + 16;
-        CreateChild(hWnd, L"STATIC", APP_VERSION, SS_LEFT, 18, y + 6, 120, 24, 0, g_hFontSmall);
+        INITCOMMONCONTROLSEX linkControls{ sizeof(linkControls), ICC_LINK_CLASS };
+        InitCommonControlsEx(&linkControls);
+        const std::wstring versionLink = std::wstring(L"<a>") + APP_VERSION + L"</a>";
+        state->versionLink = CreateChild(hWnd, WC_LINK, versionLink.c_str(), WS_TABSTOP,
+            18, y + 6, 120, 24, IDC_SETTINGS_VERSION, g_hFontSmall);
+        AddTooltip(state->tooltip, hWnd, state->versionLink,
+            L"Megnyitja a GitHub kiadásait. Ha a frissítések keresése engedélyezett, most ellenőrzi az új verziót is.");
         state->okButton = CreateChild(hWnd, L"BUTTON", state->resetDirty ? L"Mentés" : L"OK",
             WS_TABSTOP | BS_OWNERDRAW, right - 90, y, 90, 30, IDC_SETTINGS_OK, g_hFontNormal);
         AddTooltip(state->tooltip, hWnd, state->okButton,
@@ -461,6 +470,13 @@ namespace {
         }
         case WM_NOTIFY: {
             auto* header = reinterpret_cast<NMHDR*>(lParam);
+            if (header && header->hwndFrom == state->versionLink &&
+                (header->code == NM_CLICK || header->code == NM_RETURN)) {
+                UpdateCheck::Request(true);
+                ShellExecuteW(hWnd, L"open", L"https://github.com/cncDAni2/TaskManager/releases",
+                    nullptr, nullptr, SW_SHOWNORMAL);
+                return 0;
+            }
             if (header && header->hwndFrom == state->resetTime && header->code == DTN_DATETIMECHANGE) {
                 UpdateResetDirty(state);
                 return 0;

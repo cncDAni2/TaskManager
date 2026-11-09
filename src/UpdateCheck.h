@@ -1,5 +1,10 @@
 #pragma once
 
+// GitHub releases/latest lookup via delay-loaded WinHTTP on a thread-pool thread. No timer: it runs
+// on startup / showing the window / entering PIN at most every 12 hours, retries a failure on a
+// later invocation after 5 minutes (max 3 retries), and posts WM_APP_UPDATE_RESULT. Request(true)
+// (the Settings version link) skips the interval and the retry delay.
+
 #include <windows.h>
 
 // Looks up the latest GitHub release (releases/latest -> tag_name) on a thread-pool thread.
@@ -10,6 +15,7 @@
 namespace UpdateCheck {
 constexpr wchar_t DOWNLOAD_URL[] = L"https://github.com/cncDAni2/TaskManager/releases/latest/download/TaskManager.exe";
 
-void Request();
+// force: check now regardless of the interval and retry delay (still not while one is running).
+void Request(bool force = false);
 void HandleResult(WPARAM wParam, LPARAM lParam);
 }

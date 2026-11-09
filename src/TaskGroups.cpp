@@ -1,3 +1,12 @@
+// TaskStore side of task groups. Local only, never in sync files: task_groups + group_members (task
+// uid -> group uid, mirrored in Task::group_uid, like pin_hidden).
+// - The order lists stay flat with a group's members next to each other; NormalizeGroups pulls
+//   strays back.
+// - A group ends with its last member; finished tasks leave when the list session ends
+//   (DropCompletedFromGroups), so a tick can be taken back until then.
+// - ResolvePinDrop: the PIN window never changes groups, a task dragged out of its group moves the
+//   whole group.
+
 // Task groups: this user's own view, like the order of the list. They live in tasks-local.json and
 // never reach a sync file. A group's tasks stand next to each other in the flat order lists.
 #include "Task.h"

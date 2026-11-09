@@ -1,5 +1,8 @@
 #pragma once
 
+// Drop target of every list drag in both windows: insertion line, the half-second hold on the
+// middle of a task that groups the two (one-shot IDT_GROUP_HOLD, only while holding), header drags.
+
 #include "AppTypes.h"
 #include <string>
 

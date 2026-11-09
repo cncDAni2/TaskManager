@@ -1,5 +1,20 @@
 #pragma once
 
+// Shared sync-file records, safe read/write (truncated files are never overwritten), newest-wins
+// merge, tombstone purge and UID generation.
+// - Sync files store only synchronized tasks with uid, updated_at, updated_by, creator (author),
+//   assignee and a deleted tombstone flag; keep local settings and work history out of them. The
+//   file carries the last writer's app_version.
+// - Members this version does not know (per task and top-level) are kept as raw JSON (extras) and
+//   written back unchanged; own edits inherit the task's extras, new tasks have none.
+// - Every change bumps updated_at, but updated_by names only who created or last rewrote the text
+//   (ticking, "ÉN" and deleting keep it); the merge relies on updated_at alone.
+// - Sync writes are always read, merge, write. The newest updated_at wins; relaying keeps the
+//   winner's original updated_at/updated_by. Changes are written only to files that already contain
+//   the uid.
+// - Tombstones are purged after 14 days. Files that fail to parse are never overwritten; own
+//   changes wait in pendingWrites, and so does a failed sync write.
+
 #include <windows.h>
 #include "JsonLite.h"
 #include <ctime>

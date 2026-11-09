@@ -1,3 +1,5 @@
+// TaskStore: multi-file sync (read, merge, relay, notices). Sync rules: see SyncFiles.h.
+
 #include "Task.h"
 #include <algorithm>
 

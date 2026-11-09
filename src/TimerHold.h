@@ -1,5 +1,8 @@
 #pragma once
 
+// "Időstop" toggle (hotkey, tray item, hand button) that freezes work-time measurement, the
+// interval timer and the 20-20-20 reminder; runtime-only, the 20-20-20 cycle restarts on release.
+
 #include <windows.h>
 #include <string>
 

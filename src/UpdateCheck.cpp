@@ -2,6 +2,7 @@
 #include "AppState.h"
 #include "JsonLite.h"
 #include "MemoryTrim.h"
+#include "SelfUpdate.h"
 #include "UpdateOverlay.h"
 #include "Version.h"
 #include <winhttp.h>
@@ -83,13 +84,13 @@ void CALLBACK CheckCallback(PTP_CALLBACK_INSTANCE, void* context) {
 }
 }
 
-void UpdateCheck::Request() {
+void UpdateCheck::Request(bool force) {
     if (!g_store.update_check_enabled || g_inFlight || !g_hWnd) return;
     const time_t now = time(nullptr);
     const TaskStore& store = g_store;
-    if (store.update_last_check > 0 && store.update_last_check <= now &&
+    if (!force && store.update_last_check > 0 && store.update_last_check <= now &&
         now - store.update_last_check < CHECK_INTERVAL_SECONDS) return;
-    if (store.update_failures > 0 && store.update_last_failure <= now &&
+    if (!force && store.update_failures > 0 && store.update_last_failure <= now &&
         now - store.update_last_failure < RETRY_DELAY_SECONDS) return;
 
     g_inFlight = TrySubmitThreadpoolCallback(CheckCallback, g_hWnd, nullptr) != FALSE;
@@ -102,6 +103,7 @@ void UpdateCheck::HandleResult(WPARAM wParam, LPARAM lParam) {
     if (wParam && version) {
         g_store.update_last_check = now;
         g_store.update_failures = 0;
+        if (g_store.update_latest_version != *version) SelfUpdate::ResetFailure();
         g_store.update_latest_version = *version;
     } else if (++g_store.update_failures > MAX_RETRIES) {
         // Out of retries: wait for the next regular check instead of nagging the network.

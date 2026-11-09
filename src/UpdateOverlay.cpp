@@ -2,6 +2,7 @@
 #include "AppState.h"
 #include "Drawing.h"
 #include "Layout.h"
+#include "PinButtons.h"
 #include "SelfUpdate.h"
 #include "UpdateCheck.h"
 #include "Version.h"
@@ -13,7 +14,6 @@
 
 namespace {
 constexpr COLORREF ACCENT = RGB(37, 99, 235);
-constexpr int FULL_LAYOUT_MIN_HEIGHT = 150; // Below this (a short PIN view) everything fits on two lines.
 
 enum class Hover { None, Close, Download };
 Hover g_hover = Hover::None;
@@ -30,21 +30,23 @@ struct Geometry {
 
 Geometry Measure(const RECT& client) {
     Geometry g;
+    // The PIN window's region starts below its button strip; lay out in the visible part.
+    const int top = g_isMiniMode ? PinButtons::STRIP_BOTTOM : 0;
     const int w = client.right - client.left;
-    const int h = client.bottom - client.top;
+    const int h = client.bottom - top;
     const int cx = w / 2;
-    const int cy = h / 2;
-    g.compact = h < FULL_LAYOUT_MIN_HEIGHT;
+    const int cy = top + h / 2;
+    g.compact = h < UpdateOverlay::FULL_LAYOUT_MIN_HEIGHT;
     if (g.compact) {
-        g.close = { w - 24, 4, w - 6, 22 };
+        g.close = { w - 24, top + 4, w - 6, top + 22 };
         g.title = { 10, cy - 21, w - 28, cy - 2 };
         g.download = { cx - 62, cy + 1, cx + 62, cy + 23 };
         g.icon = { g.download.left + 10, g.download.top + 3, g.download.left + 26, g.download.top + 19 };
         g.label = { g.icon.right + 6, g.download.top, g.download.right - 8, g.download.bottom };
     } else {
-        g.close = { w - 40, 10, w - 10, 40 };
+        g.close = { w - 40, top + 10, w - 10, top + 40 };
         g.title = { 16, cy - 104, w - 16, cy - 72 };
-        g.version = { 16, cy - 70, w - 16, cy - 48 };
+        g.version = { 16, cy - 70, w - 16, cy - 38 }; // Two lines for a failure reason.
         g.download = { cx - 72, cy - 34, cx + 72, cy + 74 };
         g.icon = { cx - 28, cy - 24, cx + 28, cy + 32 };
         g.label = { g.download.left, cy + 38, g.download.right, cy + 64 };
@@ -55,6 +57,7 @@ Geometry Measure(const RECT& client) {
 void Dismiss() {
     g_store.update_dismissed_date = WorkHistory::DateKey(time(nullptr));
     g_store.SaveLocal();
+    SelfUpdate::ResetFailure();
     g_hover = Hover::None;
     UpdateOverlay::Refresh();
 }
@@ -106,6 +109,8 @@ bool UpdateOverlay::IsVisible() {
 void UpdateOverlay::Refresh() {
     if (!g_hWnd) return;
     UpdateControlsVisibility(); // Shows the right controls again, or hides them all via HideChildren.
+    // The PIN window grows to FULL_LAYOUT_MIN_HEIGHT while covered and shrinks back afterwards.
+    if (g_isMiniMode && IsWindowVisible(g_hWnd)) RecalculateMiniLayout();
     InvalidateRect(g_hWnd, nullptr, TRUE);
 }
 
@@ -126,9 +131,11 @@ void UpdateOverlay::Paint(HDC hdc, const RECT& client) {
     SetBkMode(hdc, TRANSPARENT);
 
     const std::wstring latest = TaskUtils::Utf8ToWide(g_store.update_latest_version);
+    const wchar_t* failure = SelfUpdate::FailureText();
     HGDIOBJ oldFont = SelectObject(hdc, g.compact ? g_hFontHeader : g_hFontTitle);
     SetTextColor(hdc, th.textTitle);
-    const std::wstring title = g.compact ? L"Új verzió érhető el: " + latest : L"Új verzió érhető el";
+    const std::wstring title = failure ? L"Sikertelen frissítés" :
+        (g.compact ? L"Új verzió érhető el: " + latest : L"Új verzió érhető el");
     RECT titleRect = g.title;
     DrawTextW(hdc, title.c_str(), -1, &titleRect, DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS | DT_NOPREFIX);
 
@@ -138,7 +145,8 @@ void UpdateOverlay::Paint(HDC hdc, const RECT& client) {
         const std::wstring version = latest + L"  (nálad " +
             TaskUtils::Utf8ToWide(TASK_MANAGER_VERSION_STRING) + L")";
         RECT versionRect = g.version;
-        DrawTextW(hdc, version.c_str(), -1, &versionRect, DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
+        DrawTextW(hdc, failure ? failure : version.c_str(), -1, &versionRect, DT_CENTER | DT_TOP |
+            (failure ? DT_WORDBREAK : DT_SINGLELINE) | DT_END_ELLIPSIS | DT_NOPREFIX);
     }
 
     // Download button: icon with the label below (compact: beside it).
@@ -157,7 +165,9 @@ void UpdateOverlay::Paint(HDC hdc, const RECT& client) {
     SelectObject(hdc, g.compact ? g_hFontNormal : g_hFontHeader);
     SetTextColor(hdc, ACCENT);
     RECT labelRect = g.label;
-    DrawTextW(hdc, SelfUpdate::IsBusy() ? L"Letöltés…" : L"Frissítés", -1, &labelRect,
+    const wchar_t* label = SelfUpdate::IsBusy() ? L"Letöltés…" :
+        SelfUpdate::OfferBrowser() ? L"Böngészőben" : (failure ? L"Újrapróba" : L"Frissítés");
+    DrawTextW(hdc, label, -1, &labelRect,
         (g.compact ? DT_LEFT : DT_CENTER) | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
 
     DrawClose(hdc, g.close, th.textSecondary, th.bgCardHover, g_hover == Hover::Close);
@@ -168,7 +178,8 @@ bool UpdateOverlay::HandleLButtonDown(HWND hWnd, LPARAM lParam) {
     if (!IsVisible()) return false;
     const Hover hit = HitTest(hWnd, { GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam) });
     if (hit == Hover::Download) {
-        if (!SelfUpdate::Start(hWnd)) OpenDownloadPage();
+        if (SelfUpdate::OfferBrowser() && !SelfUpdate::IsBusy()) OpenDownloadPage();
+        else SelfUpdate::Start(hWnd);
     } else if (hit == Hover::Close) {
         Dismiss();
     }

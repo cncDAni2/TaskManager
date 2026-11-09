@@ -296,6 +296,10 @@ void RecalculateMiniLayout() {
         totalH = curY - spacing + 6 + WorkTracking::MiniBarHeight();
     }
 
+    if (UpdateOverlay::IsVisible()) {
+        totalH = std::max(totalH, PinButtons::STRIP_BOTTOM + UpdateOverlay::FULL_LAYOUT_MIN_HEIGHT);
+    }
+
     RECT rcWork;
     SystemParametersInfoW(SPI_GETWORKAREA, 0, &rcWork, 0);
     int maxH = UiScale::Units(rcWork.bottom - rcWork.top) - 30;

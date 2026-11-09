@@ -1,5 +1,8 @@
 #pragma once
 
+// Cleanup bar below the header in the completed (old tasks, days) and work-history (old work time,
+// weeks) views, with confirmation; remembered values cleanup_days / cleanup_weeks.
+
 #include <windows.h>
 
 // "Takarítás": deletes old completed tasks (Elkészült view) and old work history (Idők view)

@@ -31,6 +31,14 @@ constexpr wchar_t UPDATED_ARG[] = L"--updated";
 constexpr wchar_t USER_AGENT[] = L"TaskManager/" TASK_MANAGER_WIDEN(TASK_MANAGER_VERSION_STRING);
 
 bool g_busy = false;
+enum class Result : WPARAM { DownloadFailed, InvalidFile, WriteFailed, WrongVersion, Ready };
+const wchar_t* g_failureText = nullptr;
+int g_failures = 0; // In a row for the current release; the overlay offers the browser after BROWSER_AFTER.
+
+void Fail(const wchar_t* text) {
+    g_failureText = text;
+    ++g_failures;
+}
 
 struct Job {
     HWND owner = nullptr;
@@ -129,11 +137,16 @@ bool HasVersion(const std::wstring& path, const std::string& version) {
 void CALLBACK DownloadCallback(PTP_CALLBACK_INSTANCE, void* context) {
     std::unique_ptr<Job> job(static_cast<Job*>(context));
     std::string data;
-    bool ok = Download(job->version, data) && IsX64Exe(data) && WriteWhole(job->newPath, data);
+    Result result = Result::DownloadFailed;
+    if (Download(job->version, data)) {
+        if (!IsX64Exe(data)) result = Result::InvalidFile;
+        else if (!WriteWhole(job->newPath, data)) result = Result::WriteFailed;
+        else result = Result::Ready;
+    }
     std::string().swap(data);
-    if (ok) ok = HasVersion(job->newPath, job->version);
-    if (!ok) DeleteFileW(job->newPath.c_str());
-    PostMessageW(job->owner, WM_APP_SELF_UPDATE_RESULT, ok ? 1 : 0, 0);
+    if (result == Result::Ready && !HasVersion(job->newPath, job->version)) result = Result::WrongVersion;
+    if (result != Result::Ready) DeleteFileW(job->newPath.c_str());
+    PostMessageW(job->owner, WM_APP_SELF_UPDATE_RESULT, static_cast<WPARAM>(result), 0);
 }
 
 // Puts ".new" in place of the running exe and starts it; on failure the files are as before.
@@ -193,15 +206,31 @@ bool SelfUpdate::IsBusy() {
     return g_busy;
 }
 
+const wchar_t* SelfUpdate::FailureText() {
+    return g_failureText;
+}
+
+bool SelfUpdate::OfferBrowser() {
+    return g_failures >= BROWSER_AFTER;
+}
+
+void SelfUpdate::ResetFailure() {
+    g_failureText = nullptr;
+    g_failures = 0;
+}
+
 bool SelfUpdate::Start(HWND owner) {
     if (g_busy) return true;
     const std::wstring exe = ExePath();
-    if (exe.empty() || g_store.update_latest_version.empty()) return false;
-    auto* job = new Job{ owner, g_store.update_latest_version, exe + L".new" };
-    if (!TrySubmitThreadpoolCallback(DownloadCallback, job, nullptr)) {
+    auto* job = exe.empty() || g_store.update_latest_version.empty() ? nullptr :
+        new Job{ owner, g_store.update_latest_version, exe + L".new" };
+    if (!job || !TrySubmitThreadpoolCallback(DownloadCallback, job, nullptr)) {
         delete job;
+        Fail(L"A frissítés nem indítható el.");
+        UpdateOverlay::Refresh();
         return false;
     }
+    g_failureText = nullptr;
     g_busy = true;
     UpdateOverlay::Refresh();
     return true;
@@ -209,14 +238,23 @@ bool SelfUpdate::Start(HWND owner) {
 
 void SelfUpdate::HandleResult(HWND hWnd, WPARAM wParam) {
     g_busy = false;
-    if (wParam) {
+    const Result result = static_cast<Result>(wParam);
+    if (result == Result::Ready) {
         CommitInlineEdit();
         g_store.SaveLocal();
         if (SwapAndStart()) {
             DestroyWindow(hWnd);
             return;
         }
+        Fail(L"A program cseréje vagy újraindítása nem sikerült.");
+    } else {
+        switch (result) {
+        case Result::InvalidFile: Fail(L"A letöltött fájl nem érvényes program."); break;
+        case Result::WriteFailed: Fail(L"A letöltött fájl mentése nem sikerült."); break;
+        case Result::WrongVersion: Fail(L"A letöltött fájl verziója nem megfelelő."); break;
+        default: Fail(L"A letöltés nem sikerült. Ellenőrizd az internetkapcsolatot."); break;
+        }
     }
-    UpdateOverlay::OpenDownloadPage();
+    UpdateOverlay::Refresh();
     if (g_isMiniMode || !IsWindowVisible(hWnd)) MemoryTrim::Request(hWnd);
 }

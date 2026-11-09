@@ -1,5 +1,9 @@
 #pragma once
 
+// Magnifier beside the cleanup controls in the completed view; while open it replaces them with a
+// search field, filters the list as you type (TaskUtils::ContainsText ignores case and accents;
+// invariant locale) and nothing is struck through. Esc closes it first (both Escape paths).
+
 #include <windows.h>
 #include <string>
 

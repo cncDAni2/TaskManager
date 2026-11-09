@@ -1,3 +1,6 @@
+// TaskStore: local JSON load/save and legacy migration. File contents and load-failure rules: see
+// Task.h.
+
 #include "Task.h"
 #include "JsonLite.h"
 #include "PinButtons.h"

@@ -1,5 +1,9 @@
 #pragma once
 
+// Subclassed system date picker painted in theme colors (the control itself always paints white),
+// whole-date keys (Up/Down day, PgUp/PgDn month, Home today; click/Space/F4 opens the calendar),
+// minimum date today, and a classic-styled calendar pop-up recolored on DTN_DROPDOWN.
+
 #include "AppTypes.h"
 #include <string>
 

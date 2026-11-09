@@ -1,5 +1,11 @@
 #pragma once
 
+// WndProc dispatcher and window lifecycle (ShowAppWindow, HideAppWindow, ToggleWindow).
+// MainWindow.cpp is oversized: put new behavior in its owning module.
+// TrackPopupMenu causes the owner window to receive WM_ACTIVATE with WA_INACTIVE. Guard focus-loss
+// handling with g_inContextMenu to avoid hiding the window or collapsing into mini mode while
+// browsing the context menu.
+
 #include "AppTypes.h"
 
 void ToggleWindow();

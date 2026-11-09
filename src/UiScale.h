@@ -1,5 +1,20 @@
 #pragma once
 
+// Display scaling. The main window (with PIN) and the toasts are per-monitor native and sharp;
+// Settings, its sub-windows, the work-time dialog and PopupNotice are scaled by Windows
+// (ContextScope(false) around their entry functions; slightly soft).
+// All app code stays in fixed 96-DPI "units": real pixels appear only in UiScale (ClientRect,
+// Place, Invalidate, CursorPos, Buffer, DrawScope, SetControlFont), in WndProc (mouse lParam), in
+// the window's own position/size and regions, and in BarTooltips. At 100% all of it is a no-op.
+// - In main-window code use these instead of GetClientRect / child SetWindowPos / InvalidateRect
+//   with a rect / GetCursorPos.
+// - Self-drawing controls (EDIT, date picker) need SetControlFont; owner-drawn ones use the plain
+//   fonts under the DrawScope of WM_DRAWITEM.
+// - Code reachable from Settings must not assume the thread's DPI context (layout entry points open
+//   a ContextScope(true)).
+// - Keep DPI settings out of app.manifest: InitProcess sets them by API, which would fail otherwise
+//   (the manifest's gdiScaling alone does not take effect).
+
 #include <windows.h>
 
 // The main window (with the PIN view) and the toasts scale natively, so they stay sharp at any

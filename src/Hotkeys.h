@@ -1,5 +1,9 @@
 #pragma once
 
+// Configurable global hotkeys (window, PIN, Időstop, mute, focus mode; stored as hotkey_* = (MOD_*
+// << 16) | vk, 0 = unset; defaults Ctrl+F1/F2/F3, mute and focus unset), registration, display text
+// (Suffix for menu/tooltip labels: never hard-code combos) and the tray tip.
+
 #include "AppTypes.h"
 #include <array>
 #include <string>

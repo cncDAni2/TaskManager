@@ -1,5 +1,9 @@
 #pragma once
 
+// UTF-8/wide conversion, JSON escaping, TextBuffer (JSON text building) and ReadFileBytes (no
+// iostreams: they cost about 90 KB of the EXE), date/time formatting, configurable work-reset
+// cutoffs, and user/path helpers.
+
 #include "AppTypes.h"
 #include <string>
 #include <ctime>

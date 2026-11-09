@@ -1,5 +1,11 @@
 #pragma once
 
+// Keyboard/mouse handling, task reordering, commands and tray interactions.
+// Main-window WM_DRAWITEM handling is centralized in HandleDrawItem. Match child control
+// backgrounds to the parent ThemeColors surface and use the actual item rectangle; compile success
+// does not verify alignment or appearance. Stateful owner-drawn toggles must update model state on
+// BN_CLICKED and invalidate the control.
+
 #include "AppTypes.h"
 #include <string>
 

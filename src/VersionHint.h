@@ -1,5 +1,8 @@
 #pragma once
 
+// Offline guess from a sync file's app_version stamp and unknown members that a colleague runs a
+// newer/older version; shown once per run via PopupNotice.
+
 #include "SyncFiles.h"
 #include <string>
 

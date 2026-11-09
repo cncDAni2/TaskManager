@@ -1,5 +1,9 @@
 #pragma once
 
+// Group frames: Layout opens and closes them around the rows (the header is an isHeader row with
+// groupUid; the PIN window gets a frame only), and they are painted under the cards.
+// Renaming is StartGroupRename in InlineEdit (g_editingTaskId is -2 meanwhile).
+
 #include "AppTypes.h"
 #include <string>
 #include <vector>

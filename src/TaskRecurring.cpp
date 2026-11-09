@@ -1,3 +1,9 @@
+// TaskStore side of recurring rules.
+// - SaveRecurringRule: a start date of today creates the task at once.
+// - RunDueRecurring runs on startup and on the work-day rollover in CheckWorkReset, so no extra
+//   timer. No new instance while the last one is open, missed periods give one instance, removed
+//   target files fall back to a local task.
+
 #include "Task.h"
 #include <algorithm>
 

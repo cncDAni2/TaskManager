@@ -1,6 +1,6 @@
 # Ultra-könnyű Windows Feladatkezelő (TaskManager)
 
-Az alkalmazás elsősorban a teendők gyors és egyszerű kezelésére szolgál, másodsorban pedig a munkaidőd nyomon követésére. Indítása a `TaskManager.exe` fájllal történik. Ha a GitHubon újabb verzió jelenik meg, a program jelzi, és a "Frissítés" gombbal magát frissíti, majd újraindul (a Beállításokban kikapcsolható).
+Az alkalmazás elsősorban a teendők gyors és egyszerű kezelésére szolgál, másodsorban pedig a munkaidőd nyomon követésére. Indítása a `TaskManager.exe` fájllal történik. Ha a GitHubon újabb verzió jelenik meg, a program jelzi, és a "Frissítés" gombbal magát frissíti, majd újraindul (a Beállításokban kikapcsolható). A Beállításokban a verzióra kattintva megnyílik a kiadások oldala, és engedélyezett frissítéskeresés mellett azonnali ellenőrzés is indul.
 
 ## Feladatok kezelése
 

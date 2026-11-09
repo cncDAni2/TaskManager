@@ -1,5 +1,10 @@
 #pragma once
 
+// PIN-window top strip (timer badge, focus, mute, Időstop, unpin, move handle): configured order
+// and visibility (pin_buttons, e.g. "timer,focus,-mute,-hold,-pin,drag", - = hidden), right-aligned
+// layout, rounded window-region tabs, painting (idle = no fill or border, on = blue), tooltips via
+// BarTooltips, clicks.
+
 #include "BarTooltips.h"
 #include <windows.h>
 #include <array>

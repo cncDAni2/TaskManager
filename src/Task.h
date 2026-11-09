@@ -1,5 +1,28 @@
 #pragma once
 
+// TaskStore core: task operations, runtime-id mapping, active-task ordering, work tracking and
+// settings. Split across TaskLocalFile.cpp, TaskSync.cpp, TaskUndo.cpp, TaskGroups.cpp and
+// TaskRecurring.cpp.
+// - Every task has a persistent string uid (new tasks: GUID; legacy numeric ids are kept as their
+//   decimal string, sync ids normalized to 1,000,000+). Task::id is a runtime-only handle from
+//   TaskStore::RuntimeIdFor; never persist it.
+// - Local tasks-local.json stores local tasks, active ordering (as uids), pin_hidden_tasks (uids
+//   left out of the PIN window; local even for synced tasks, mirrored in Task::pin_hidden),
+//   task_groups (uid, name, members: never call that key "tasks", the task list is looked up by
+//   name in the whole file), the recurring_rules list, current and historical work time (including
+//   manual entries), reset timestamp, theme, work-reset time, the sync_files list (local source_id,
+//   name, path, default flag), timer durations/repetitions, the 20-20-20 toggle, timer auto-start
+//   preference, sound preference, hotkeys, PIN quick buttons (pin_buttons), work-tracking on/off,
+//   update-check state (update_*: enabled, last check, failures, latest release, dismissed date),
+//   and excluded window-title keywords. A legacy sync_file_path is migrated to the first sync_files
+//   entry.
+// - Only a missing file is a first run: if it exists but cannot be read, or its task list is
+//   damaged, localLoadFailed blocks every save and wWinMain exits with a message, so it is never
+//   overwritten.
+// - Call Save() after a change (identical content is not written). Work seconds are saved every 10
+//   counted minutes and when counting stops (idle, lock, Időstop, hiding, suspend, Windows
+//   shutdown, exit), so a power cut loses at most the last 10 minutes.
+
 #include "AppTypes.h"
 #include "ExcludedApps.h"
 #include "Hotkeys.h"

@@ -1,5 +1,13 @@
 #pragma once
 
+// Work-time measurement on/off (work_tracking_enabled; Settings checkbox and the history-view
+// footer button). Off skips the foreground-title check and accrual, hides the work bar in full and
+// mini views (BottomBarHeight() / MiniBarHeight() return 0) and hides/ignores STRICT MODE; history
+// is kept.
+// The one-second IDT_WORK_TIMER drives work-time accrual (by real elapsed time via
+// TakeCountedSeconds, since the timer itself runs late), idle/excluded-app checks and
+// interval-timer ticks.
+
 #include <windows.h>
 
 // Switches work-time measurement on or off (Settings and the work-history view). When off, no

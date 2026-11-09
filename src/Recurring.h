@@ -1,5 +1,9 @@
 #pragma once
 
+// RecurringRule (local task writer: text, start date, repeat count + day/week/month, sync targets,
+// next due date, last created task uid), pure date math (Occurrence, NextAfter; months clamp to the
+// month's length) and its JSON.
+
 #include <ctime>
 #include <string>
 #include <vector>

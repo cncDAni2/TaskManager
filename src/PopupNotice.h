@@ -1,5 +1,8 @@
 #pragma once
 
+// Non-activating notices: new tasks (stay until clicked) and changed tasks (auto-close countdown,
+// paused on hover).
+
 #include <string>
 
 // Stays until clicked or closed.

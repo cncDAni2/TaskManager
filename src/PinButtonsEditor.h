@@ -1,5 +1,8 @@
 #pragma once
 
+// The Settings icon row for PinButtons (click toggles, drag or Ctrl+Left/Right reorders, applies
+// instantly).
+
 #include <windows.h>
 
 // Settings row of the PIN window's quick buttons: click toggles one, dragging reorders them.
