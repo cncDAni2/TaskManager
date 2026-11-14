@@ -25,6 +25,7 @@
 #include "Hotkeys.h"
 #include "AudioCue.h"
 #include "PinButtons.h"
+#include "PinList.h"
 #include "StateToast.h"
 #include <windowsx.h>
 #include "SyncPoll.h"
@@ -413,6 +414,7 @@ static LRESULT MainProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         case WM_TIMER: {
             if (MemoryTrim::HandleTimer(hWnd, wParam)) return 0;
             if (GroupDrag::HandleTimer(hWnd, wParam)) return 0;
+            if (PinList::HandleTimer(hWnd, wParam)) return 0;
             if (wParam == IDT_MINI_TIMER_FLASH) {
                 if (!g_isMiniMode || !g_pinMode || !IsWindowVisible(hWnd)) {
                     g_miniTimerFlashStep = 0;
@@ -736,10 +738,15 @@ static LRESULT MainProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         }
 
         case WM_MOUSEMOVE: {
+            PinList::HandleMouseMove(hWnd);
             if (UpdateOverlay::HandleMouseMove(hWnd, lParam)) return 0;
             if (HandleMouseMove(hWnd, lParam)) return 0;
             break;
         }
+
+        case WM_MOUSELEAVE:
+            PinList::HandleMouseLeave(hWnd);
+            return 0;
 
         case WM_LBUTTONDOWN: {
             if (UpdateOverlay::HandleLButtonDown(hWnd, lParam)) return 0;

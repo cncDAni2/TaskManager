@@ -318,13 +318,17 @@ void TestLocalLoad() {
     {
         TaskStore store; // First run.
         CHECK(!store.localLoadFailed);
+        CHECK(store.pin_list_mode == 2 && store.pin_list_count == 0); // Defaults keep the old PIN list.
         store.Add(L"Első feladat ő", {});
         store.work_seconds_today = 1234;
+        store.pin_list_mode = 1;
+        store.pin_list_count = 5;
         store.Save();
     }
     {
         TaskStore store;
         CHECK(!store.localLoadFailed);
+        CHECK(store.pin_list_mode == 1 && store.pin_list_count == 5);
         CHECK(store.tasks.size() == 1 && store.tasks[0].text == L"Első feladat ő");
         CHECK(store.active_order.size() == 1 && store.active_order[0] == store.tasks[0].id);
     }

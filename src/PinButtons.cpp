@@ -7,11 +7,12 @@
 #include "IntervalTimer.h"
 #include "Layout.h"
 #include "MainWindow.h"
+#include "PinList.h"
 #include "TimerHold.h"
 
 namespace PinButtons {
 namespace {
-constexpr const char* KEYS[COUNT] = { "timer", "focus", "mute", "hold", "pin", "drag" };
+constexpr const char* KEYS[COUNT] = { "timer", "focus", "mute", "hold", "pin", "drag", "add" };
 constexpr COLORREF ACTIVE_BG = RGB(30, 58, 138); // Same blue as the main window's toggles.
 constexpr int GAP = 3;
 
@@ -47,6 +48,10 @@ std::vector<Placed> Place(int clientWidth) {
         placed.insert(placed.begin(), { it->id, rect });
         right -= width + GAP;
     }
+    // Without the task list an empty strip would leave nothing to show that PIN mode is on.
+    if (placed.empty() && PinList::CurrentMode() != PinList::Always) {
+        placed.push_back({ Status, RECT{ right - 30, 0, right, STRIP_BOTTOM } });
+    }
     return placed;
 }
 
@@ -79,6 +84,36 @@ void PaintTimer(HDC hdc, const RECT& rc) {
     SelectObject(hdc, oldFont);
 }
 
+void DrawPlusIcon(HDC hdc, const RECT& rc, COLORREF color) {
+    const int cx = (rc.left + rc.right) / 2;
+    const int cy = (rc.top + rc.bottom) / 2;
+    // Two filled bars of the same size around the same center: equal arms in every direction.
+    HBRUSH brush = CreateSolidBrush(color);
+    const RECT across = { cx - 6, cy - 1, cx + 6, cy + 1 };
+    const RECT down = { cx - 1, cy - 6, cx + 1, cy + 6 };
+    FillRect(hdc, &across, brush);
+    FillRect(hdc, &down, brush);
+    DeleteObject(brush);
+}
+
+// A ring with a dot in its middle.
+void DrawStatusIcon(HDC hdc, const RECT& rc, COLORREF color) {
+    const int cx = (rc.left + rc.right) / 2;
+    const int cy = (rc.top + rc.bottom) / 2 + 1;
+    HPEN pen = CreatePen(PS_SOLID, 2, color);
+    HBRUSH brush = CreateSolidBrush(color);
+    HGDIOBJ oldPen = SelectObject(hdc, pen);
+    HGDIOBJ oldBrush = SelectObject(hdc, GetStockObject(NULL_BRUSH));
+    Ellipse(hdc, cx - 6, cy - 6, cx + 7, cy + 7);
+    SelectObject(hdc, brush);
+    SelectObject(hdc, GetStockObject(NULL_PEN));
+    Ellipse(hdc, cx - 2, cy - 2, cx + 4, cy + 4);
+    SelectObject(hdc, oldBrush);
+    SelectObject(hdc, oldPen);
+    DeleteObject(brush);
+    DeleteObject(pen);
+}
+
 void DrawIcon(HDC hdc, const RECT& rc, Id id, COLORREF color, bool muted) {
     switch (id) {
     case Timer: DrawTimerIcon(hdc, rc, color); break;
@@ -87,6 +122,8 @@ void DrawIcon(HDC hdc, const RECT& rc, Id id, COLORREF color, bool muted) {
     case Hold: DrawHandIcon(hdc, rc, color); break;
     case Pin: DrawPinIcon(hdc, rc, color, true); break;
     case Drag: DrawGripIcon(hdc, rc, color); break;
+    case Add: DrawPlusIcon(hdc, rc, color); break;
+    case Status: DrawStatusIcon(hdc, rc, color); break;
     default: break;
     }
 }
@@ -102,6 +139,12 @@ std::wstring TooltipText(Id id) {
     case Pin: return L"PIN mód kikapcsolása" + Hotkeys::Suffix(Hotkeys::ActionPin) +
         L"\nA kitűzött ablak bezárul, a program a tálcán fut tovább.";
     case Drag: return L"Húzással az ablak áthelyezhető";
+    case Add: return L"Új feladat\nMegnyílik a főablak, és rögtön írhatod a feladatot.";
+    case Status: {
+        const std::wstring combo = Hotkeys::Format(g_store.hotkeys[Hotkeys::ActionPin]);
+        return L"PIN mód aktív, kikapcsolása: " + (combo.empty() ? L"főablakból vagy a tálca menüjéből" : combo) +
+            L"\nKattintásra megnyílik a főablak.";
+    }
     default: return L"";
     }
 }
@@ -127,9 +170,19 @@ Config Parse(const std::string& text) {
         }
         start = end + 1;
     }
-    // Buttons missing from the text (older or hand-edited files) go to the end, hidden.
+    // Buttons missing from the text (older or hand-edited files) come hidden: the new-task button
+    // right after the timer, like for new users, the others at the end.
     for (int i = 0; i < COUNT; ++i) {
-        if (!used[i]) config[count++] = { static_cast<Id>(i), false };
+        if (used[i]) continue;
+        size_t at = count;
+        if (i == Add) {
+            for (size_t j = 0; j < count; ++j) {
+                if (config[j].id == Timer) at = j + 1;
+            }
+        }
+        for (size_t j = count; j > at; --j) config[j] = config[j - 1];
+        config[at] = { static_cast<Id>(i), false };
+        ++count;
     }
     return config;
 }
@@ -165,6 +218,7 @@ const wchar_t* Name(Id id) {
     case Hold: return L"Időstop";
     case Pin: return L"PIN mód ki/be";
     case Drag: return L"Ablak mozgatása (fogantyú)";
+    case Add: return L"Új feladat";
     default: return L"";
     }
 }
@@ -262,6 +316,12 @@ bool HandleClick(HWND hWnd, POINT point, int clientWidth) {
         case Drag:
             ReleaseCapture();
             SendMessageW(hWnd, WM_NCLBUTTONDOWN, HTCAPTION, 0);
+            return true;
+        case Add:
+            ToggleWindow(); // The main window opens with the new-task box focused.
+            return true;
+        case Status:
+            ToggleWindow(); // Like a click on the empty area below the strip.
             return true;
         default:
             return false;

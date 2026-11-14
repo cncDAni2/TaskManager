@@ -77,6 +77,8 @@ void TaskStore::SaveLocal() {
         << "  \"update_dismissed_date\": \"" << TaskUtils::EscapeJsonString(update_dismissed_date) << "\",\n"
         << "  \"excluded_window_keywords\": " << Quote(excluded_window_keywords) << ",\n"
         << "  \"pin_buttons\": \"" << TaskUtils::EscapeJsonString(pin_buttons) << "\",\n"
+        << "  \"pin_list_mode\": " << pin_list_mode << ",\n"
+        << "  \"pin_list_count\": " << pin_list_count << ",\n"
         << "  \"cleanup_days\": " << cleanup_days << ",\n"
         << "  \"cleanup_weeks\": " << cleanup_weeks << ",\n"
         << "  \"next_source_id\": " << next_source_id << ",\n"
@@ -298,6 +300,13 @@ void TaskStore::LoadLocal() {
     JsonLite::GetString(content, "update_latest_version", update_latest_version);
     JsonLite::GetString(content, "update_dismissed_date", update_dismissed_date);
     if (!JsonLite::GetString(content, "pin_buttons", pin_buttons)) pin_buttons = PinButtons::LEGACY_CONFIG;
+    long long pinListNumber = 0;
+    if (JsonLite::GetInt64(content, "pin_list_mode", pinListNumber) && pinListNumber >= 0 && pinListNumber <= 2) {
+        pin_list_mode = static_cast<int>(pinListNumber);
+    }
+    if (JsonLite::GetInt64(content, "pin_list_count", pinListNumber) && pinListNumber >= 0 && pinListNumber <= 99) {
+        pin_list_count = static_cast<int>(pinListNumber);
+    }
 
     size_t soundsEnabledPos = content.find("\"sounds_enabled\":");
     if (soundsEnabledPos != std::string::npos) {

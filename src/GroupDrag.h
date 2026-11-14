@@ -2,6 +2,7 @@
 
 // Drop target of every list drag in both windows: insertion line, the half-second hold on the
 // middle of a task that groups the two (one-shot IDT_GROUP_HOLD, only while holding), header drags.
+// Below the last row of a limited PIN list (PinList) a drop lands above the tasks left out.
 
 #include "AppTypes.h"
 #include <string>

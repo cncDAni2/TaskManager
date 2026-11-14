@@ -12,7 +12,8 @@
 //   name in the whole file), the recurring_rules list, current and historical work time (including
 //   manual entries), reset timestamp, theme, work-reset time, the sync_files list (local source_id,
 //   name, path, default flag), timer durations/repetitions, the 20-20-20 toggle, timer auto-start
-//   preference, sound preference, hotkeys, PIN quick buttons (pin_buttons), work-tracking on/off,
+//   preference, sound preference, hotkeys, PIN quick buttons (pin_buttons), PIN task list display
+//   (pin_list_mode, pin_list_count), work-tracking on/off,
 //   update-check state (update_*: enabled, last check, failures, latest release, dismissed date),
 //   and excluded window-title keywords. A legacy sync_file_path is migrated to the first sync_files
 //   entry.
@@ -71,7 +72,9 @@ public:
     std::string update_latest_version; // Latest release seen, e.g. "1.18.0".
     std::string update_dismissed_date; // YYYY-MM-DD when the overlay was closed.
     std::wstring excluded_window_keywords = ExcludedApps::DEFAULT_KEYWORDS;
-    std::string pin_buttons = "timer,-focus,-mute,-hold,pin,drag"; // PinButtons::DEFAULT_CONFIG; "-" = hidden.
+    std::string pin_buttons = "timer,-add,-focus,-mute,-hold,pin,drag"; // PinButtons::DEFAULT_CONFIG; "-" = hidden.
+    int pin_list_mode = 2;  // PIN task list: 0 = never, 1 = while the mouse is over it, 2 = always (PinList::Mode).
+    int pin_list_count = 0; // The first this many tasks of the PIN list; 0 = all.
     int cleanup_days = 14;
     int cleanup_weeks = 8;
     ThemeMode theme_mode = ThemeMode::Dark;

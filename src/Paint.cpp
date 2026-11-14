@@ -7,6 +7,7 @@
 #include "BarTooltips.h"
 #include "Marker.h"
 #include "PinButtons.h"
+#include "PinList.h"
 #include "IntervalTimer.h"
 #include "TimerHold.h"
 #include "WorkTracking.h"
@@ -103,7 +104,9 @@ void PaintMiniWindow(HWND hWnd, HDC hdc, const RECT& dirty) {
 
     PinButtons::Paint(hdcMem, clientW);
 
-    if (g_displayItems.empty()) {
+    if (!PinList::IsShown()) {
+        // Only the top strip and the work bar.
+    } else if (g_displayItems.empty()) {
         SelectObject(hdcMem, g_hFontNormal);
         SetTextColor(hdcMem, th.textEmpty);
         SetBkMode(hdcMem, TRANSPARENT);

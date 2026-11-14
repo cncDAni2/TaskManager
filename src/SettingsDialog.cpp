@@ -6,6 +6,7 @@
 #include "Hotkeys.h"
 #include "Layout.h"
 #include "PinButtonsEditor.h"
+#include "PinList.h"
 #include "SettingsSyncRows.h"
 #include "SyncPicker.h"
 #include "Version.h"
@@ -32,6 +33,8 @@ namespace {
     constexpr int IDC_SETTINGS_HOTKEYS = 5112;
     constexpr int IDC_SETTINGS_PIN_BUTTONS = 5113;
     constexpr int IDC_SETTINGS_VERSION = 5114;
+    constexpr int IDC_SETTINGS_PIN_LIST_MODE = 5115;
+    constexpr int IDC_SETTINGS_PIN_LIST_COUNT = 5116;
     constexpr int SETTINGS_DIALOG_WIDTH = 560;
     constexpr UINT WM_APP_REBUILD = WM_APP + 1;
     constexpr DWORD DIALOG_STYLE = WS_POPUP | WS_CAPTION | WS_SYSMENU;
@@ -55,6 +58,8 @@ namespace {
         HWND workTrackingCheckbox = nullptr;
         HWND updateCheckCheckbox = nullptr;
         HWND excludedKeywordsEdit = nullptr;
+        HWND pinListModeCombo = nullptr;
+        HWND pinListCountEdit = nullptr;
         HWND okButton = nullptr;
         HBRUSH backgroundBrush = nullptr;
         bool building = false;
@@ -200,6 +205,40 @@ namespace {
         AddTooltip(state->tooltip, hWnd, pinButtonsLabel,
             L"A kitűzött (PIN) ablak tetején megjelenő gombok. Kattintással be- és kikapcsolhatók, "
             L"húzással átrendezhetők; a kék gombok látszanak.");
+        top += ROW;
+
+        HWND pinListLabel = CreateRow(hWnd, L"PIN feladatlista", top, ROW, true);
+        state->pinListModeCombo = CreateChild(hWnd, L"COMBOBOX", L"",
+            WS_TABSTOP | CBS_DROPDOWNLIST | WS_VSCROLL, 184, controlY(ROW), 150, 150,
+            IDC_SETTINGS_PIN_LIST_MODE, g_hFontNormal);
+        SendMessageW(state->pinListModeCombo, CB_ADDSTRING, 0, (LPARAM)L"Nincs");
+        SendMessageW(state->pinListModeCombo, CB_ADDSTRING, 0, (LPARAM)L"Egérmozgatásra");
+        SendMessageW(state->pinListModeCombo, CB_ADDSTRING, 0, (LPARAM)L"Mindig");
+        SendMessageW(state->pinListModeCombo, CB_SETCURSEL, static_cast<WPARAM>(PinList::CurrentMode()), 0);
+        INITCOMMONCONTROLSEX upDownControls{ sizeof(upDownControls), ICC_UPDOWN_CLASS };
+        InitCommonControlsEx(&upDownControls);
+        state->pinListCountEdit = CreateChild(hWnd, L"EDIT", std::to_wstring(PinList::Limit()).c_str(),
+            WS_TABSTOP | ES_NUMBER | ES_RIGHT, 346, controlY(ROW), 56, 28,
+            IDC_SETTINGS_PIN_LIST_COUNT, g_hFontNormal, WS_EX_CLIENTEDGE);
+        SendMessageW(state->pinListCountEdit, EM_SETLIMITTEXT, 2, 0);
+        HWND pinListUpDown = CreateChild(hWnd, UPDOWN_CLASSW, L"",
+            UDS_SETBUDDYINT | UDS_ALIGNRIGHT | UDS_ARROWKEYS | UDS_NOTHOUSANDS, 0, 0, 0, 0, 0, nullptr);
+        SendMessageW(pinListUpDown, UDM_SETBUDDY, (WPARAM)state->pinListCountEdit, 0);
+        SendMessageW(pinListUpDown, UDM_SETRANGE32, 0, 99);
+        SendMessageW(pinListUpDown, UDM_SETPOS32, 0, PinList::Limit());
+        HWND pinListCountLabel = CreateChild(hWnd, L"STATIC", L"db (0 = mind)", SS_LEFT | SS_NOTIFY,
+            416, controlY(ROW) + 5, 120, 24, 0, g_hFontNormal);
+        EnableWindow(state->pinListCountEdit, PinList::CurrentMode() != PinList::Never);
+        EnableWindow(pinListUpDown, PinList::CurrentMode() != PinList::Never);
+        static constexpr wchar_t pinListHelp[] =
+            L"Mikor látszanak a feladatok a kitűzött (PIN) ablakban. Egérmozgatásra: az ablak fölé "
+            L"húzott egérrel megjelennek, és az egér elvitele után 2 másodperccel eltűnnek.";
+        AddTooltip(state->tooltip, hWnd, pinListLabel, pinListHelp);
+        AddTooltip(state->tooltip, hWnd, state->pinListModeCombo, pinListHelp);
+        static constexpr wchar_t pinListCountHelp[] =
+            L"A PIN lista első ennyi feladata látszik, a sorrend a PIN ablakéval egyezik. 0 = mind.";
+        AddTooltip(state->tooltip, hWnd, state->pinListCountEdit, pinListCountHelp);
+        AddTooltip(state->tooltip, hWnd, pinListCountLabel, pinListCountHelp);
         top += ROW;
 
         CreateRow(hWnd, L"Munkaidő mérése", top, ROW, false);
@@ -425,6 +464,24 @@ namespace {
                 state->excludedKeywords = ReadText(state->excludedKeywordsEdit);
                 g_store.excluded_window_keywords = ExcludedApps::Normalize(state->excludedKeywords);
                 g_store.SaveLocal();
+                return 0;
+            }
+            if (id == IDC_SETTINGS_PIN_LIST_MODE && code == CBN_SELCHANGE) {
+                const int selection = static_cast<int>(SendMessageW(state->pinListModeCombo, CB_GETCURSEL, 0, 0));
+                if (selection >= PinList::Never && selection <= PinList::Always) {
+                    PinList::Apply(static_cast<PinList::Mode>(selection), PinList::Limit());
+                    const bool counts = selection != PinList::Never;
+                    EnableWindow(state->pinListCountEdit, counts);
+                    EnableWindow(GetWindow(state->pinListCountEdit, GW_HWNDNEXT), counts); // Its arrows.
+                }
+                return 0;
+            }
+            if (id == IDC_SETTINGS_PIN_LIST_COUNT && code == EN_CHANGE) {
+                BOOL valid = FALSE;
+                const UINT count = GetDlgItemInt(hWnd, IDC_SETTINGS_PIN_LIST_COUNT, &valid, FALSE);
+                if (valid && count <= 99 && static_cast<int>(count) != PinList::Limit()) {
+                    PinList::Apply(PinList::CurrentMode(), static_cast<int>(count));
+                }
                 return 0;
             }
             if (id == IDC_SETTINGS_UPDATE_CHECK && code == BN_CLICKED) {

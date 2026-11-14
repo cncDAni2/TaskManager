@@ -44,7 +44,7 @@ Everything is in `src/`, as `.h` / `.cpp` pairs unless noted. Keep new modules u
 - `WorkTracking`: measurement on/off and the one-second tick. `ExcludedApps`: title keywords that pause counting. `IntervalTimer`: work/rest cycles, 20-20-20 reminder. `TimerView`: timer controls. `TimerHold`: "Időstop". `FocusMode`: focus mode, session lock. `WorkTimeDialog`: manual work entries.
 
 **Other windows and feedback**
-- `SettingsDialog`, `SettingsSyncRows` (sync file table), `HotkeyDialog`, `Hotkeys` (global hotkeys), `PinButtons` (PIN top strip), `PinButtonsEditor`.
+- `SettingsDialog`, `SettingsSyncRows` (sync file table), `HotkeyDialog`, `Hotkeys` (global hotkeys), `PinButtons` (PIN top strip), `PinButtonsEditor`, `PinList` (PIN task list display).
 - `PopupNotice`, `StateToast`, `UndoToast`, `BarTooltips` (dynamic tooltip regions), `AudioCue`.
 - `UpdateCheck`, `UpdateOverlay`, `SelfUpdate`, `Version.h`.
 

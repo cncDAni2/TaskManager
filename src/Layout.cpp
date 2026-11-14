@@ -6,6 +6,7 @@
 #include "TimerView.h"
 #include "MemoryTrim.h"
 #include "PinButtons.h"
+#include "PinList.h"
 #include "SyncPicker.h"
 #include "Cleanup.h"
 #include "WorkTracking.h"
@@ -260,9 +261,14 @@ void RecalculateMiniLayout() {
         }
     }
 
+    // The list may be switched off or limited to the first tasks (PinList); a partly shown group
+    // still moves as a whole, its hidden members are in g_sessionActiveTaskIds.
+    const bool listShown = PinList::IsShown();
+    const int limit = PinList::Limit();
     int activeCount = 0;
     std::string openGroup;
     for (const auto& t : orderedActiveTasks) {
+        if (!listShown || (limit > 0 && activeCount >= limit)) break;
         activeCount++;
         if (t.group_uid != openGroup) {
             if (!openGroup.empty()) curY = GroupView::ClosePin(curY);
@@ -290,7 +296,9 @@ void RecalculateMiniLayout() {
     if (!openGroup.empty()) curY = GroupView::ClosePin(curY);
 
     int totalH = 0;
-    if (activeCount == 0) {
+    if (!listShown) {
+        totalH = PinButtons::STRIP_BOTTOM + 6 + WorkTracking::MiniBarHeight(); // The strip's tabs sit on it.
+    } else if (activeCount == 0) {
         totalH = 70 + WorkTracking::MiniBarHeight();
     } else {
         totalH = curY - spacing + 6 + WorkTracking::MiniBarHeight();
@@ -369,6 +377,7 @@ void EnterMiniMode() {
     g_fullWinH = defaultH;
 
     g_isMiniMode = true;
+    PinList::Reset(g_hWnd);
     g_scrollbarHovered = false;
     g_scrollbarDragging = false;
 
@@ -401,6 +410,7 @@ void ExitMiniMode(bool toHidden) {
         }
     }
     g_isMiniMode = false;
+    PinList::Reset(g_hWnd);
     SetWindowRgn(g_hWnd, nullptr, TRUE);
     SetWindowLongPtrW(g_hWnd, GWL_STYLE, GetWindowLongPtrW(g_hWnd, GWL_STYLE) | WS_BORDER);
     SetWindowPos(g_hWnd, nullptr, 0, 0, 0, 0,

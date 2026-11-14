@@ -20,7 +20,7 @@ A PIN nézet egy mini, kissé áttetsző lebegő ablak, amely mindig a képerny�
 **Jelölőnégyzetek:** Ebben a nézetben is késznek jelölheted a feladatokat. A kész feladatok még 10 másodpercig láthatók, így marad időd ellenőrizni vagy visszavonni a jelölést; ezután a PIN és a főablak aktív listájából is eltűnnek, és az "Elkészült" nézetben találhatók meg.
 **Feladat címe:** Csak annyi szöveg látszik, amennyi kifér. Kattints a címre a főablak megnyitásához és a feladat szerkesztéséhez; a teljes szöveg ki lesz jelölve.
 **Jelölések:** Látható a feladat jelölőikonja, globálisan szinkronizált feladatnál pedig a felhőikon és az "ÉN" gomb.  
-**Felső fülek:** Alapból itt látható a visszaszámlálás (piros háttér = munka, kék = pihenés, szem ikon = szem pihentetése), a PIN mód kikapcsolója és a lebegő ablak mozgatófogantyúja. A Beállítások "PIN mód gyorsgombok" sorában a Fókusz mód, a némítás és az Időstop is ide tehető; a gombok kattintással ki-be kapcsolhatók, húzással átrendezhetők.
+**Felső fülek:** Alapból itt látható a visszaszámlálás (piros háttér = munka, kék = pihenés, szem ikon = szem pihentetése), a PIN mód kikapcsolója és a lebegő ablak mozgatófogantyúja. A Beállítások "PIN mód gyorsgombok" sorában a Fókusz mód, a némítás, az Időstop és egy új feladat (+) gomb is ide tehető; a gombok kattintással ki-be kapcsolhatók, húzással átrendezhetők. A "PIN feladatlista" sorban beállítható, hogy a feladatok mindig, csak egérmozgatásra vagy soha ne látszódjanak, és hogy legfeljebb hány.
 
 ### Főablak nézet - alapértelmezett nézet
 

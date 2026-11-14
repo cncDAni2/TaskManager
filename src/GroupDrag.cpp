@@ -103,14 +103,35 @@ void TargetTopLevel(int y) {
     g_line = TopLevelLine(ListEndLine());
 }
 
+// Below the last row of a limited PIN list: the first open task the limit left out, so the drop
+// stays above the rest instead of going to the very end. 0 when every task is shown. The hidden
+// rest of the last, partly shown group counts only for its own members: others go after all of it.
+int FirstUnlistedTask(const std::string& sourceGroup) {
+    if (g_displayItems.empty()) return 0;
+    const Task& last = g_displayItems.back().task;
+    const std::vector<int>& order = g_sessionActiveTaskIds;
+    auto position = std::find(order.begin(), order.end(), last.id);
+    if (position == order.end()) return 0;
+    for (++position; position != order.end(); ++position) {
+        const int id = *position;
+        auto task = std::find_if(g_store.tasks.begin(), g_store.tasks.end(),
+            [id](const Task& t) { return t.id == id; });
+        if (task == g_store.tasks.end() || task->completed || task->pin_hidden) continue;
+        if (!last.group_uid.empty() && task->group_uid == last.group_uid && sourceGroup != last.group_uid) continue;
+        return id;
+    }
+    return 0;
+}
+
 void UpdatePinTarget(const DisplayItem& source, int y) {
-    int beforeId = 0;
+    int beforeId = -1;
     for (const DisplayItem& item : g_displayItems) {
         if (y < (item.rect.top + item.rect.bottom) / 2) {
             beforeId = item.task.id;
             break;
         }
     }
+    if (beforeId == -1) beforeId = FirstUnlistedTask(source.task.group_uid);
     bool wholeGroup = false;
     g_target.beforeId = g_store.ResolvePinDrop(g_sessionActiveTaskIds, source.task.id, beforeId, wholeGroup);
     g_target.groupUid = wholeGroup ? "" : source.task.group_uid;

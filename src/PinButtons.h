@@ -1,9 +1,12 @@
 #pragma once
 
-// PIN-window top strip (timer badge, focus, mute, Időstop, unpin, move handle): configured order
-// and visibility (pin_buttons, e.g. "timer,focus,-mute,-hold,-pin,drag", - = hidden), right-aligned
+// PIN-window top strip (timer badge, new task, focus, mute, Időstop, unpin, move handle): configured
+// order and visibility (pin_buttons, e.g. "timer,-add,focus,-mute,-hold,-pin,drag", - = hidden; a
+// file without "add" gets it hidden right after the timer), right-aligned
 // layout, rounded window-region tabs, painting (idle = no fill or border, on = blue), tooltips via
-// BarTooltips, clicks.
+// BarTooltips, clicks. While the task list can be hidden (PinList mode other than always) and no
+// button is on the strip, a status ring stands there instead: its tooltip tells how to leave PIN
+// mode, a click opens the main window.
 
 #include "BarTooltips.h"
 #include <windows.h>
@@ -14,7 +17,8 @@
 // Quick buttons on the top strip of the PIN (mini) window: which ones show and in what order
 // (`pin_buttons` in tasks-local.json, e.g. "timer,focus,-mute,-hold,-pin,drag"; "-" = hidden).
 namespace PinButtons {
-enum Id { Timer, Focus, Mute, Hold, Pin, Drag, COUNT };
+enum Id { Timer, Focus, Mute, Hold, Pin, Drag, Add, COUNT,
+    Status = COUNT }; // The status ring: never in the configuration.
 
 struct Slot {
     Id id;
@@ -23,8 +27,8 @@ struct Slot {
 using Config = std::array<Slot, COUNT>;
 
 // New users; a file from before this setting existed keeps the old strip (LEGACY_CONFIG).
-constexpr char DEFAULT_CONFIG[] = "timer,-focus,-mute,-hold,pin,drag";
-constexpr char LEGACY_CONFIG[] = "timer,focus,-mute,-hold,-pin,drag";
+constexpr char DEFAULT_CONFIG[] = "timer,-add,-focus,-mute,-hold,pin,drag";
+constexpr char LEGACY_CONFIG[] = "timer,-add,focus,-mute,-hold,-pin,drag";
 // Top edge of the window body: the strip's tabs sit on it, the task list starts below.
 constexpr int STRIP_BOTTOM = 20;
 
