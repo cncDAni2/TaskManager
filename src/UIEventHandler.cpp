@@ -1,6 +1,5 @@
 #include "UIEventHandler.h"
 #include "UndoToast.h"
-#include "TimerHold.h"
 #include "SyncPicker.h"
 #include "Cleanup.h"
 #include "AppState.h"
@@ -908,12 +907,6 @@ bool HandleDrawItem(HWND /*hWnd*/, DRAWITEMSTRUCT* pDIS) {
     const COLORREF iconButtonBorder = isSelected ? th.borderCardHover
         : (isDarkTheme ? RGB(82, 82, 82) : restingBorder);
 
-    if (pDIS->CtlID == IDC_TIMER_HOLD_BTN) {
-        TimerHold::DrawButton(pDIS, iconButtonBg, iconButtonBorder,
-            isPink ? RGB(255, 255, 255) : (isSelected ? th.textPrimary : th.textSecondary));
-        return true;
-    }
-
     if (pDIS->CtlID == IDC_FOCUS_MODE_BTN) {
         COLORREF bgBtn = g_focusMode ? RGB(30, 58, 138) : iconButtonBg;
         COLORREF borderBtn = g_focusMode ? RGB(30, 64, 175) : iconButtonBorder;
@@ -1078,22 +1071,18 @@ bool HandleAppTray(HWND hWnd, LPARAM lParam) {
         const std::wstring pinLabel = L"PIN mód" + Hotkeys::Suffix(Hotkeys::ActionPin);
         InsertMenuW(hMenu, 4, MF_BYPOSITION | MF_STRING | uPinCheck, IDM_TRAY_PIN, pinLabel.c_str());
 
-        UINT uHoldCheck = TimerHold::IsActive() ? MF_CHECKED : MF_UNCHECKED;
-        const std::wstring holdLabel = TimerHold::MenuLabel();
-        InsertMenuW(hMenu, 5, MF_BYPOSITION | MF_STRING | uHoldCheck, IDM_TRAY_HOLD, holdLabel.c_str());
-
         UINT uMuteCheck = g_store.sounds_enabled ? MF_UNCHECKED : MF_CHECKED;
         const std::wstring muteLabel = L"Hangok némítása" + Hotkeys::Suffix(Hotkeys::ActionMute);
-        InsertMenuW(hMenu, 6, MF_BYPOSITION | MF_STRING | uMuteCheck, IDM_TRAY_MUTE, muteLabel.c_str());
+        InsertMenuW(hMenu, 5, MF_BYPOSITION | MF_STRING | uMuteCheck, IDM_TRAY_MUTE, muteLabel.c_str());
 
         UINT uFocusCheck = g_focusMode ? MF_CHECKED : MF_UNCHECKED;
         const std::wstring focusLabel = L"Fókusz mód" + Hotkeys::Suffix(Hotkeys::ActionFocus);
-        InsertMenuW(hMenu, 7, MF_BYPOSITION | MF_STRING | uFocusCheck, IDM_TRAY_FOCUS, focusLabel.c_str());
+        InsertMenuW(hMenu, 6, MF_BYPOSITION | MF_STRING | uFocusCheck, IDM_TRAY_FOCUS, focusLabel.c_str());
 
-        InsertMenuW(hMenu, 8, MF_BYPOSITION | MF_SEPARATOR, 0, nullptr);
+        InsertMenuW(hMenu, 7, MF_BYPOSITION | MF_SEPARATOR, 0, nullptr);
         UINT uCheck = IsAutoRunEnabled() ? MF_CHECKED : MF_UNCHECKED;
-        InsertMenuW(hMenu, 9, MF_BYPOSITION | MF_STRING | uCheck, IDM_TRAY_AUTORUN, L"Indítás a Windows-zal");
-        InsertMenuW(hMenu, 10, MF_BYPOSITION | MF_STRING, IDM_TRAY_EXIT, L"Kilépés");
+        InsertMenuW(hMenu, 8, MF_BYPOSITION | MF_STRING | uCheck, IDM_TRAY_AUTORUN, L"Indítás a Windows-zal");
+        InsertMenuW(hMenu, 9, MF_BYPOSITION | MF_STRING, IDM_TRAY_EXIT, L"Kilépés");
 
         SetForegroundWindow(hWnd);
         TrackPopupMenu(hMenu, TPM_RIGHTALIGN | TPM_BOTTOMALIGN, pt.x, pt.y, 0, hWnd, nullptr);

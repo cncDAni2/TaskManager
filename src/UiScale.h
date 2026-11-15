@@ -42,7 +42,6 @@ private:
 // Takes over the DPI of the main window; false if it did not change.
 bool UpdateFromWindow(HWND hWnd);
 void SetDpi(UINT dpi);
-double Factor();
 
 int Px(int units);
 int Units(int pixels);

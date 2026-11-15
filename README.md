@@ -6,7 +6,6 @@ Az alkalmazás elsősorban a teendők gyors és egyszerű kezelésére szolgál,
 
 - Ctrl+F1: Feladatkezelő főablak megnyitása
 - Ctrl+F2: PIN mód bekapcsolása / kikapcsolása
-- Ctrl+F3: Összes időzítő megállítása / folytatása (Időstop)
 
 Ezek az alapértelmezett kombinációk; a Beállítások **Gyorsbillentyűk** gombjával módosíthatók vagy törölhetők, és itt a hangok némításához és a fókusz módhoz is megadhatsz egyet (Ctrl, Alt, Shift vagy AltGr + billentyű). A hangok a tálcaikon helyi menüjéből is némíthatók.
 
@@ -20,7 +19,7 @@ A PIN nézet egy mini, kissé áttetsző lebegő ablak, amely mindig a képerny�
 **Jelölőnégyzetek:** Ebben a nézetben is késznek jelölheted a feladatokat. A kész feladatok még 10 másodpercig láthatók, így marad időd ellenőrizni vagy visszavonni a jelölést; ezután a PIN és a főablak aktív listájából is eltűnnek, és az "Elkészült" nézetben találhatók meg.
 **Feladat címe:** Csak annyi szöveg látszik, amennyi kifér. Kattints a címre a főablak megnyitásához és a feladat szerkesztéséhez; a teljes szöveg ki lesz jelölve.
 **Jelölések:** Látható a feladat jelölőikonja, globálisan szinkronizált feladatnál pedig a felhőikon és az "ÉN" gomb.  
-**Felső fülek:** Alapból itt látható a visszaszámlálás (piros háttér = munka, kék = pihenés, szem ikon = szem pihentetése), a PIN mód kikapcsolója és a lebegő ablak mozgatófogantyúja. A Beállítások "PIN mód gyorsgombok" sorában a Fókusz mód, a némítás, az Időstop és egy új feladat (+) gomb is ide tehető; a gombok kattintással ki-be kapcsolhatók, húzással átrendezhetők. A "PIN feladatlista" sorban beállítható, hogy a feladatok mindig, csak egérmozgatásra vagy soha ne látszódjanak, és hogy legfeljebb hány.
+**Felső fülek:** Alapból itt látható a visszaszámlálás (piros háttér = munka, kék = pihenés, szem ikon = szem pihentetése), a PIN mód kikapcsolója és a lebegő ablak mozgatófogantyúja. A Beállítások "PIN mód gyorsgombok" sorában a Fókusz mód, a némítás, egy új feladat (+) gomb, valamint az időzítő szünet/folytatás és "Következő" gombja is ide tehető (leállt időzítőnél mindkettő újraindítja); a gombok kattintással ki-be kapcsolhatók, húzással átrendezhetők. A "PIN feladatlista" sorban beállítható, hogy a feladatok mindig, csak egérmozgatásra vagy soha ne látszódjanak, és hogy legfeljebb hány.
 
 ### Főablak nézet - alapértelmezett nézet
 
@@ -96,15 +95,13 @@ STRICT MODE: Ha ezt is bepipálod, akkor az időzítő kihatással lesz a munkai
 
 20-20-20 szabály: A szem egészségének megőrzése érdekében minden 20 perc képernyőnézés után nézz 20 másodpercig 20 láb (kb. 6 méter) távolságra. A program hangjelzéssel emlékeztet, amikor ideje szünetet tartani (2 csippanás), és mikor vissza kell térni (1 csippanás). A PIN ablakban a számláló szem ikonra vált a szem-pihenő alatt.
 
+### Laura hangasszisztens
+
+Ha a gépen fut Laura, a TaskManager magától kapcsolódik hozzá: Laurának szólva felvehetsz feladatot, késznek jelölheted a nevével ("pipáld ki a számla befizetést"), indíthatod és leállíthatod a mérést és az időzítőt, megnyithatod a főablakot vagy a PIN ablakot, és csipogás helyett Laura mondja be az időzítő eseményeit. A kapcsolatot a Beállítások bal alsó Laura gombjával bonthatod és kapcsolhatod vissza.
+
 ### Fókusz mód
 
 Fókusz mód a főablakban és a PIN ablakban is elérhető (célkereszt ikon), valamint a tálcaikon helyi menüjéből. Bekapcsolásakor a program az inaktivitás és a kizárt alkalmazások ellenére is méri az időt, amíg a gépet le nem zárolod, vagy ki nem kapcsolod a fókusz módot. A bekapcsolt mód ikonja kék.
-
-### Időstop (időzítők megállítása)
-
-Egy különleges állapot, amely egyszerre megállít mindent, ami az időt számolja: a munkaidő-mérést, a munka/pihenés időzítőt és a 20-20-20 szabályt. Bekapcsolható a Ctrl+F3 billentyűkombinációval, a főablak tenyér ikonjával (a fókusz mód gombja mellett) vagy a tálca helyi menüjéből ("Időzítők megállítása" / "Időzítők folytatása"). Bekapcsolva a gomb kék hátteret kap, a munkaidő-sáv szürke és "Időstop" feliratot mutat.
-
-Ez nem azonos a gombok egyenkénti leállításával: az időzítő és a mérés saját állapota megmarad. Az időzítő gombjai Időstop alatt is használhatók, de a visszaszámlálás csak folytatáskor indul. Folytatáskor a munkaidő-mérés újraindul (ha nem állítottad le kézzel), az időzítő onnan folytatódik, ahol megállt, a 20-20-20 szabály pedig újrakezdődik egy teljes 20 perces képernyőidővel. Az állapot nem mentődik: újraindításkor az alkalmazás normál állapotban indul.
 
 ## Erőforrásigény és fordítás
 

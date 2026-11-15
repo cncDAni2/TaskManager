@@ -1,7 +1,6 @@
 #include "StateToast.h"
 #include "AppState.h"
 #include "Drawing.h"
-#include "TimerHold.h"
 #include <string>
 
 namespace StateToast {
@@ -9,7 +8,9 @@ namespace {
 constexpr wchar_t kClassName[] = L"TaskManager_State_Toast_Class";
 constexpr UINT_PTR kFadeTimer = 1;
 constexpr DWORD kFadeInMs = 250;
-constexpr DWORD kHoldMs = 500;
+constexpr DWORD kToggleHoldMs = 500;
+constexpr DWORD kLauraHoldMs = 3000;
+DWORD g_holdMs = kToggleHoldMs; // Of the toast now shown.
 constexpr DWORD kFadeOutMs = 250;
 constexpr int kPadding = 8;
 constexpr int kIconSize = 30;
@@ -21,6 +22,8 @@ DWORD g_shownAt = 0;
 bool g_active = false; // The toggle is on: blue icon box.
 bool g_muted = false;
 PinButtons::Id g_id = PinButtons::Mute;
+bool g_laura = false; // The Laura link toast instead of a toggle.
+bool g_lauraConnected = false;
 std::wstring g_text;
 
 HFONT ToastFont() {
@@ -68,7 +71,7 @@ void Paint(HWND hWnd, HDC hdc) {
     if (iconBrush) DeleteObject(iconBrush);
 
     const COLORREF iconColor = g_active ? RGB(255, 255, 255) : TextColor(theme);
-    if (g_id == PinButtons::Hold) DrawHandIcon(mem, icon, iconColor);
+    if (g_laura) DrawLauraIcon(mem, icon, kIconSize, !g_lauraConnected);
     else if (g_id == PinButtons::Focus) DrawFocusIcon(mem, icon, iconColor);
     else DrawSpeakerIcon(mem, icon, iconColor, g_muted);
 
@@ -86,8 +89,8 @@ void Paint(HWND hWnd, HDC hdc) {
 int AlphaAt(DWORD elapsed) {
     if (elapsed < kFadeInMs) return static_cast<int>(255 * elapsed / kFadeInMs);
     elapsed -= kFadeInMs;
-    if (elapsed < kHoldMs) return 255;
-    elapsed -= kHoldMs;
+    if (elapsed < g_holdMs) return 255;
+    elapsed -= g_holdMs;
     if (elapsed < kFadeOutMs) return static_cast<int>(255 * (kFadeOutMs - elapsed) / kFadeOutMs);
     return -1;
 }
@@ -141,14 +144,15 @@ bool EnsureWindow() {
 }
 }
 
+void Show();
+
 void ShowToggled(PinButtons::Id id) {
-    if (id != PinButtons::Mute && id != PinButtons::Hold && id != PinButtons::Focus) return;
+    if (id != PinButtons::Mute && id != PinButtons::Focus) return;
     if (PinButtons::IsOnScreen(id)) return;
     g_id = id;
-    if (id == PinButtons::Hold) {
-        g_active = TimerHold::IsActive();
-        g_text = g_active ? L"Időstop aktiválva" : L"Időstop kikapcsolva";
-    } else if (id == PinButtons::Focus) {
+    g_laura = false;
+    g_holdMs = kToggleHoldMs;
+    if (id == PinButtons::Focus) {
         g_active = g_focusMode;
         g_text = g_active ? L"Fókusz mód aktiválva" : L"Fókusz mód kikapcsolva";
     } else {
@@ -156,6 +160,19 @@ void ShowToggled(PinButtons::Id id) {
         g_active = g_muted;
         g_text = g_muted ? L"Hangok kikapcsolva" : L"Hangok aktiválva";
     }
+    Show();
+}
+
+void ShowLaura(bool connected) {
+    g_laura = true;
+    g_lauraConnected = connected;
+    g_active = false;
+    g_holdMs = kLauraHoldMs;
+    g_text = connected ? L"Laura kapcsolódott" : L"Elveszett a kapcsolat Laurával";
+    Show();
+}
+
+void Show() {
     const bool restarting = g_toast != nullptr;
     if (!EnsureWindow()) return;
 

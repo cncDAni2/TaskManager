@@ -2,7 +2,6 @@
 #include "AppState.h"
 #include "Drawing.h"
 #include "Hotkeys.h"
-#include "TimerHold.h"
 #include <commctrl.h>
 #include <string>
 
@@ -316,7 +315,6 @@ void ShowHotkeyDialog(HWND owner) {
     SetForegroundWindow(owner);
     Hotkeys::RegisterAll(g_hWnd);
     Hotkeys::UpdateTrayTip();
-    TimerHold::RefreshTooltip();
     if (g_hWnd) InvalidateRect(g_hWnd, nullptr, FALSE);
     DeleteObject(state.backgroundBrush);
     DeleteObject(state.listeningBrush);

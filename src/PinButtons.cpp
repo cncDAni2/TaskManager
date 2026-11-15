@@ -8,11 +8,13 @@
 #include "Layout.h"
 #include "MainWindow.h"
 #include "PinList.h"
-#include "TimerHold.h"
+#include "PinTimerButtons.h"
+#include "TimerView.h"
+#include <cmath>
 
 namespace PinButtons {
 namespace {
-constexpr const char* KEYS[COUNT] = { "timer", "focus", "mute", "hold", "pin", "drag", "add" };
+constexpr const char* KEYS[COUNT] = { "timer", "focus", "mute", "pin", "drag", "add", "playpause", "next" };
 constexpr COLORREF ACTIVE_BG = RGB(30, 58, 138); // Same blue as the main window's toggles.
 constexpr int GAP = 3;
 
@@ -29,8 +31,8 @@ bool IsOn(Id id) {
     switch (id) {
     case Focus: return g_focusMode;
     case Mute: return !g_store.sounds_enabled;
-    case Hold: return TimerHold::IsActive();
     case Pin: return g_pinMode;
+    case PlayPause: return g_intervalTimer.IsActive() && g_intervalTimer.IsPaused();
     default: return false;
     }
 }
@@ -62,9 +64,8 @@ COLORREF IdleIconColor() {
 
 void PaintTimer(HDC hdc, const RECT& rc) {
     const bool workPhase = g_intervalTimer.IsWorkPhase();
-    const bool held = TimerHold::IsActive();
-    const COLORREF fill = held ? RGB(107, 114, 128) : (workPhase ? RGB(220, 38, 38) : RGB(37, 99, 235));
-    const COLORREF border = held ? RGB(75, 85, 99) : (workPhase ? RGB(185, 28, 28) : RGB(29, 78, 216));
+    const COLORREF fill = workPhase ? RGB(220, 38, 38) : RGB(37, 99, 235);
+    const COLORREF border = workPhase ? RGB(185, 28, 28) : RGB(29, 78, 216);
     HBRUSH brush = CreateSolidBrush(fill);
     HPEN pen = CreatePen(PS_SOLID, 1, border);
     HGDIOBJ oldBrush = SelectObject(hdc, brush);
@@ -77,8 +78,8 @@ void PaintTimer(HDC hdc, const RECT& rc) {
     HGDIOBJ oldFont = SelectObject(hdc, g_hFontMiniTimer);
     SetTextColor(hdc, RGB(255, 255, 255));
     SetBkMode(hdc, TRANSPARENT);
-    const std::wstring remaining = held ? L"ÁLL"
-        : (g_intervalTimer.IsVisionBreakActive() ? L"👁️" : FormatTimerTime(g_intervalTimer.SecondsRemaining()));
+    const std::wstring remaining = g_intervalTimer.IsVisionBreakActive() ? L"👁️"
+        : FormatTimerTime(g_intervalTimer.SecondsRemaining());
     RECT textRect = rc;
     DrawTextW(hdc, remaining.c_str(), -1, &textRect, DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
     SelectObject(hdc, oldFont);
@@ -114,12 +115,83 @@ void DrawStatusIcon(HDC hdc, const RECT& rc, COLORREF color) {
     DeleteObject(pen);
 }
 
-void DrawIcon(HDC hdc, const RECT& rc, Id id, COLORREF color, bool muted) {
+void DrawPlayIcon(HDC hdc, const RECT& rc, COLORREF color) {
+    DrawSmoothIcon(hdc, rc, color, [](HDC dc) {
+        const POINT tri[3] = { { 25, 17 }, { 25, 63 }, { 63, 40 } };
+        Polygon(dc, tri, 3);
+    });
+}
+
+void DrawPauseIcon(HDC hdc, const RECT& rc, COLORREF color) {
+    DrawSmoothIcon(hdc, rc, color, [](HDC dc) {
+        Rectangle(dc, 22, 18, 35, 62);
+        Rectangle(dc, 45, 18, 58, 62);
+    });
+}
+
+void DrawNextIcon(HDC hdc, const RECT& rc, COLORREF color) {
+    DrawSmoothIcon(hdc, rc, color, [](HDC dc) {
+        const POINT first[3] = { { 12, 20 }, { 12, 60 }, { 40, 40 } };
+        const POINT second[3] = { { 40, 20 }, { 40, 60 }, { 68, 40 } };
+        Polygon(dc, first, 3);
+        Polygon(dc, second, 3);
+    });
+}
+
+// A single clockwise circular arrow.
+void DrawRestartIcon(HDC hdc, const RECT& rc, COLORREF color) {
+    DrawSmoothIcon(hdc, rc, color, [](HDC dc) {
+        constexpr double pi = 3.14159265358979323846;
+        constexpr double cx = 40.0, cy = 42.0, radius = 23.0;
+        constexpr double startDeg = -40.0, endDeg = 235.0; // Angles grow clockwise (y points down).
+        LOGBRUSH lb{ BS_SOLID, RGB(255, 255, 255), 0 };
+        HPEN pen = ExtCreatePen(PS_GEOMETRIC | PS_SOLID | PS_ENDCAP_FLAT, 9, &lb, 0, nullptr);
+        HGDIOBJ oldPen = SelectObject(dc, pen);
+        POINT arc[32];
+        for (int i = 0; i < 32; ++i) {
+            const double a = (startDeg + (endDeg - startDeg) * i / 31.0) * pi / 180.0;
+            arc[i] = { static_cast<LONG>(std::lround(cx + radius * std::cos(a))),
+                static_cast<LONG>(std::lround(cy + radius * std::sin(a))) };
+        }
+        Polyline(dc, arc, 32);
+        const double e = endDeg * pi / 180.0;
+        const double ex = cx + radius * std::cos(e), ey = cy + radius * std::sin(e);
+        const double tx = -std::sin(e), ty = std::cos(e); // Clockwise tangent.
+        const double nx = std::cos(e), ny = std::sin(e);  // Outward normal.
+        SelectObject(dc, GetStockObject(NULL_PEN));
+        const POINT head[3] = {
+            { static_cast<LONG>(std::lround(ex + tx * 17)), static_cast<LONG>(std::lround(ey + ty * 17)) },
+            { static_cast<LONG>(std::lround(ex + nx * 15 - tx * 2)), static_cast<LONG>(std::lround(ey + ny * 15 - ty * 2)) },
+            { static_cast<LONG>(std::lround(ex - nx * 15 - tx * 2)), static_cast<LONG>(std::lround(ey - ny * 15 - ty * 2)) } };
+        Polygon(dc, head, 3);
+        SelectObject(dc, oldPen);
+        DeleteObject(pen);
+    });
+}
+
+int TimerRunState() {
+    if (!g_intervalTimer.IsActive()) return 0;
+    return g_intervalTimer.IsPaused() ? 2 : 1;
+}
+
+// `muted` picks the mute slot's muted speaker; `preview` is the settings editor's fixed icon.
+void DrawIcon(HDC hdc, const RECT& rc, Id id, COLORREF color, bool muted, bool preview = false) {
     switch (id) {
+    case PlayPause:
+    case Next: {
+        const bool next = id == Next;
+        using PinTimerButtons::Icon;
+        const Icon icon = preview ? (next ? Icon::Next : Icon::Pause)
+            : PinTimerButtons::IconFor(next, g_intervalTimer);
+        if (icon == Icon::Restart) DrawRestartIcon(hdc, rc, color);
+        else if (icon == Icon::Pause) DrawPauseIcon(hdc, rc, color);
+        else if (icon == Icon::Play) DrawPlayIcon(hdc, rc, color);
+        else DrawNextIcon(hdc, rc, color);
+        break;
+    }
     case Timer: DrawTimerIcon(hdc, rc, color); break;
     case Focus: DrawFocusIcon(hdc, rc, color); break;
     case Mute: DrawSpeakerIcon(hdc, rc, color, muted); break;
-    case Hold: DrawHandIcon(hdc, rc, color); break;
     case Pin: DrawPinIcon(hdc, rc, color, true); break;
     case Drag: DrawGripIcon(hdc, rc, color); break;
     case Add: DrawPlusIcon(hdc, rc, color); break;
@@ -135,7 +207,6 @@ std::wstring TooltipText(Id id) {
         : L"Fókusz mód bekapcsolása\nTétlenség és kizárt ablakok alatt is méri a munkaidőt.";
     case Mute: return (g_store.sounds_enabled ? L"Hangok némítása" : L"Hangok visszakapcsolása") +
         Hotkeys::Suffix(Hotkeys::ActionMute);
-    case Hold: return TimerHold::MenuLabel();
     case Pin: return L"PIN mód kikapcsolása" + Hotkeys::Suffix(Hotkeys::ActionPin) +
         L"\nA kitűzött ablak bezárul, a program a tálcán fut tovább.";
     case Drag: return L"Húzással az ablak áthelyezhető";
@@ -215,10 +286,11 @@ const wchar_t* Name(Id id) {
     case Timer: return L"Időinformációk (időzítő)";
     case Focus: return L"Fókusz mód";
     case Mute: return L"Némítás";
-    case Hold: return L"Időstop";
     case Pin: return L"PIN mód ki/be";
     case Drag: return L"Ablak mozgatása (fogantyú)";
     case Add: return L"Új feladat";
+    case PlayPause: return L"Időzítő szünet / folytatás";
+    case Next: return L"Időzítő következő szakasz";
     default: return L"";
     }
 }
@@ -232,7 +304,15 @@ bool IsOnScreen(Id id) {
 }
 
 void DrawPreviewIcon(HDC hdc, const RECT& rc, Id id, COLORREF color) {
-    DrawIcon(hdc, rc, id, color, true);
+    DrawIcon(hdc, rc, id, color, true, true);
+}
+
+bool TimerStateChanged() {
+    static int last = -1;
+    const int state = TimerRunState();
+    if (state == last) return false;
+    last = state;
+    return true;
 }
 
 bool GetRect(int clientWidth, Id id, RECT& rect) {
@@ -304,9 +384,6 @@ bool HandleClick(HWND hWnd, POINT point, int clientWidth) {
         case Mute:
             AudioCue::ToggleSounds();
             return true;
-        case Hold:
-            TimerHold::Toggle();
-            return true;
         case Pin:
             g_pinMode = false;
             g_miniPositionValid = false;
@@ -322,6 +399,23 @@ bool HandleClick(HWND hWnd, POINT point, int clientWidth) {
             return true;
         case Status:
             ToggleWindow(); // Like a click on the empty area below the strip.
+            return true;
+        case PlayPause:
+        case Next:
+            switch (PinTimerButtons::PressFor(placed.id == Next, g_intervalTimer)) {
+            case PinTimerButtons::Press::Start:
+                TimerView::StartConfiguredTimer(); // The timer view's Start with its saved values.
+                RecalculateLayout();
+                InvalidateRect(hWnd, nullptr, FALSE);
+                break;
+            case PinTimerButtons::Press::PauseResume:
+                TimerView::HandleCommand(hWnd, MAKEWPARAM(IDC_TIMER_PAUSE_BTN, BN_CLICKED));
+                break;
+            case PinTimerButtons::Press::Next:
+                TimerView::HandleCommand(hWnd, MAKEWPARAM(IDC_TIMER_NEXT_BTN, BN_CLICKED));
+                break;
+            }
+            TimerStateChanged(); // Already repainted.
             return true;
         default:
             return false;

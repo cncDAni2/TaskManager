@@ -28,9 +28,7 @@ namespace TaskUtils {
     std::string WideToUtf8(const std::wstring& wstr);
     std::wstring Utf8ToWide(const std::string& str);
     std::wstring FormatDate(time_t t);
-    std::wstring FormatTime(time_t t);
     std::wstring FormatDateTime(time_t t);
-    time_t GetYesterday930Cutoff(time_t now);
     time_t GetLastResetCutoff(time_t now, int hour, int minute);
     std::wstring FormatWorkDuration(int totalSeconds);
     // Ignores case and accents: "feladat" finds "FELADÁT". An empty query matches everything.

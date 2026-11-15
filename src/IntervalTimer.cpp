@@ -1,5 +1,6 @@
 #include "IntervalTimer.h"
 #include "AudioCue.h"
+#include "Clock.h"
 #include <windows.h>
 #include <algorithm>
 
@@ -10,32 +11,8 @@ constexpr unsigned long long kVisionBreakIntervalMs = 20ULL * 60 * 1000;
 constexpr unsigned long long kVisionBreakDurationMs = 25ULL * 1000;
 }
 
-// While held, every countdown reads the frozen hold moment instead of the clock.
 unsigned long long IntervalTimer::Now() const {
-    return held ? holdTick : GetTickCount64();
-}
-
-void IntervalTimer::Hold() {
-    if (held) return;
-    holdTick = GetTickCount64();
-    held = true;
-    if (visionBreakActive || visionBreakAwaitingInput) {
-        visionBreakActive = false;
-        visionBreakAwaitingInput = false;
-        nextVisionBreakTick = holdTick + kVisionBreakIntervalMs;
-    }
-}
-
-void IntervalTimer::Release() {
-    if (!held) return;
-    const unsigned long long now = GetTickCount64();
-    phaseEndTick += now - holdTick;
-    held = false;
-    // The 20-20-20 cycle restarts with a full 20 minutes of screen time.
-    visionBreakActive = false;
-    visionBreakAwaitingInput = false;
-    nextVisionBreakTick = now + kVisionBreakIntervalMs;
-    if (visionBreakClockPaused) visionBreakPauseTick = now;
+    return Clock::Ms();
 }
 
 void IntervalTimer::Start(int newWorkSeconds, int newRestSeconds, int newRepetitions,
@@ -108,7 +85,7 @@ void IntervalTimer::ResumeFromMeasurement() {
 
 void IntervalTimer::SetUserActive(bool active) {
     userActive = active;
-    if (!active || !awaitingActivity || held) return;
+    if (!active || !awaitingActivity) return;
     // The work countdown starts only once the user is back after a rest phase.
     phaseEndTick = Now() + static_cast<unsigned long long>(pausedSecondsRemaining) * 1000;
     pausedSecondsRemaining = 0;
@@ -158,19 +135,18 @@ void IntervalTimer::SetVisionBreakEnabled(bool enabled) {
 }
 
 bool IntervalTimer::Tick() {
-    if (held) return false;
     const unsigned long long now = Now();
     if (visionBreakEnabled && !visionBreakClockPaused) {
         if (visionBreakActive && now >= visionBreakEndTick) {
             // The next 20 minutes start only with the first input after the break.
             visionBreakActive = false;
             visionBreakAwaitingInput = true;
-            visionBreakEndInputTick = GetTickCount();
+            visionBreakEndInputTick = Clock::InputTick();
             AudioCue::PlayVisionBreakEnd();
         } else if (visionBreakAwaitingInput) {
-            LASTINPUTINFO lii = { sizeof(LASTINPUTINFO) };
-            if (GetLastInputInfo(&lii) &&
-                static_cast<long>(lii.dwTime - visionBreakEndInputTick) > 0) {
+            DWORD lastInput = 0;
+            if (Clock::LastInputTick(lastInput) &&
+                static_cast<long>(lastInput - visionBreakEndInputTick) > 0) {
                 visionBreakAwaitingInput = false;
                 nextVisionBreakTick = now + kVisionBreakIntervalMs;
             }
@@ -240,10 +216,6 @@ bool IntervalTimer::IsPaused() const {
     return paused || measurementPaused;
 }
 
-bool IntervalTimer::IsHeld() const {
-    return held;
-}
-
 bool IntervalTimer::IsAwaitingActivity() const {
     return awaitingActivity;
 }
@@ -262,19 +234,6 @@ int IntervalTimer::SecondsRemaining() const {
 
 bool IntervalTimer::IsVisionBreakActive() const {
     return visionBreakActive;
-}
-
-bool IntervalTimer::IsVisionBreakEnabled() const {
-    return visionBreakEnabled;
-}
-
-int IntervalTimer::VisionBreakSecondsRemaining() const {
-    if (!visionBreakEnabled) return 0;
-    if (visionBreakAwaitingInput) return static_cast<int>(kVisionBreakIntervalMs / 1000);
-    const unsigned long long now = visionBreakClockPaused ? visionBreakPauseTick : Now();
-    const unsigned long long target = visionBreakActive ? visionBreakEndTick : nextVisionBreakTick;
-    if (now >= target) return 0;
-    return static_cast<int>((target - now + 999) / 1000);
 }
 
 int IntervalTimer::CurrentRepetition() const {

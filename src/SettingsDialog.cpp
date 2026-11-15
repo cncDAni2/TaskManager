@@ -3,6 +3,7 @@
 #include "Drawing.h"
 #include "ExcludedApps.h"
 #include "HotkeyDialog.h"
+#include "LauraLink.h"
 #include "Hotkeys.h"
 #include "Layout.h"
 #include "PinButtonsEditor.h"
@@ -35,6 +36,8 @@ namespace {
     constexpr int IDC_SETTINGS_VERSION = 5114;
     constexpr int IDC_SETTINGS_PIN_LIST_MODE = 5115;
     constexpr int IDC_SETTINGS_PIN_LIST_COUNT = 5116;
+    constexpr int IDC_SETTINGS_LAURA = 5117;
+    constexpr int LAURA_BUTTON_SIZE = 50;
     constexpr int SETTINGS_DIALOG_WIDTH = 560;
     constexpr UINT WM_APP_REBUILD = WM_APP + 1;
     constexpr DWORD DIALOG_STYLE = WS_POPUP | WS_CAPTION | WS_SYSMENU;
@@ -71,6 +74,7 @@ namespace {
         bool timerAutoStart = false;
         std::wstring excludedKeywords;
         HWND versionLink = nullptr;
+        HWND lauraButton = nullptr; // Only while Laura is detected.
     };
 
     DialogState* g_openState = nullptr;
@@ -197,7 +201,7 @@ namespace {
         HWND hotkeysButton = CreateChild(hWnd, L"BUTTON", L"Beállítás...",
             WS_TABSTOP | BS_PUSHBUTTON, 184, controlY(ROW), 120, 28, IDC_SETTINGS_HOTKEYS, g_hFontNormal);
         AddTooltip(state->tooltip, hWnd, hotkeysButton,
-            L"A főablak, a PIN mód, az Időstop, a hangok némításának és a fókusz módnak bárhonnan működő billentyűkombinációi.");
+            L"A főablak, a PIN mód, a hangok némításának és a fókusz módnak bárhonnan működő billentyűkombinációi.");
         top += ROW;
 
         HWND pinButtonsLabel = CreateRow(hWnd, L"PIN mód gyorsgombok", top, ROW, true);
@@ -288,9 +292,14 @@ namespace {
         InitCommonControlsEx(&linkControls);
         const std::wstring versionLink = std::wstring(L"<a>") + APP_VERSION + L"</a>";
         state->versionLink = CreateChild(hWnd, WC_LINK, versionLink.c_str(), WS_TABSTOP,
-            18, y + 6, 120, 24, IDC_SETTINGS_VERSION, g_hFontSmall);
+            18, y + 6, 60, 24, IDC_SETTINGS_VERSION, g_hFontSmall);
         AddTooltip(state->tooltip, hWnd, state->versionLink,
             L"Megnyitja a GitHub kiadásait. Ha a frissítések keresése engedélyezett, most ellenőrzi az új verziót is.");
+        // Floats beside the version, a bit taller than the bottom row.
+        state->lauraButton = CreateChild(hWnd, L"BUTTON", L"Laura", WS_TABSTOP | BS_OWNERDRAW,
+            84, y - 10, LAURA_BUTTON_SIZE, LAURA_BUTTON_SIZE, IDC_SETTINGS_LAURA, nullptr);
+        if (!LauraLink::IsDetected()) ShowWindow(state->lauraButton, SW_HIDE);
+        AddTooltip(state->tooltip, hWnd, state->lauraButton, LPSTR_TEXTCALLBACKW); // Depends on the state.
         state->okButton = CreateChild(hWnd, L"BUTTON", state->resetDirty ? L"Mentés" : L"OK",
             WS_TABSTOP | BS_OWNERDRAW, right - 90, y, 90, 30, IDC_SETTINGS_OK, g_hFontNormal);
         AddTooltip(state->tooltip, hWnd, state->okButton,
@@ -404,6 +413,28 @@ namespace {
         }
     }
 
+    // Laura's sign on a white rounded square; a red X while the link is off.
+    void DrawLauraButton(const DRAWITEMSTRUCT* item, const DialogState* state) {
+        const bool pressed = (item->itemState & ODS_SELECTED) != 0;
+        HDC dc = item->hDC;
+        FillRect(dc, &item->rcItem, state->backgroundBrush);
+        HBRUSH brush = CreateSolidBrush(pressed ? RGB(229, 231, 235) : RGB(255, 255, 255));
+        HPEN pen = CreatePen(PS_SOLID, 1, RGB(160, 160, 160));
+        HGDIOBJ oldBrush = SelectObject(dc, brush);
+        HGDIOBJ oldPen = SelectObject(dc, pen);
+        RoundRect(dc, item->rcItem.left, item->rcItem.top, item->rcItem.right, item->rcItem.bottom, 12, 12);
+        SelectObject(dc, oldPen);
+        SelectObject(dc, oldBrush);
+        DeleteObject(pen);
+        DeleteObject(brush);
+        DrawLauraIcon(dc, item->rcItem, LAURA_BUTTON_SIZE - 10, !LauraLink::IsConnected());
+        if (item->itemState & ODS_FOCUS) {
+            RECT focusRect = item->rcItem;
+            InflateRect(&focusRect, -3, -3);
+            DrawFocusRect(dc, &focusRect);
+        }
+    }
+
     LRESULT CALLBACK SettingsDialogProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) {
         auto* state = reinterpret_cast<DialogState*>(GetWindowLongPtrW(hWnd, GWLP_USERDATA));
         if (message == WM_NCCREATE) {
@@ -496,6 +527,11 @@ namespace {
                 WorkTracking::SetEnabled(SendMessageW(state->workTrackingCheckbox, BM_GETCHECK, 0, 0) == BST_CHECKED);
                 return 0;
             }
+            if (id == IDC_SETTINGS_LAURA && code == BN_CLICKED) {
+                LauraLink::ToggleEnabled();
+                InvalidateRect(state->lauraButton, nullptr, TRUE);
+                return 0;
+            }
             if (id == IDC_SETTINGS_HOTKEYS && code == BN_CLICKED) {
                 ShowHotkeyDialog(hWnd);
                 return 0;
@@ -534,6 +570,15 @@ namespace {
                     nullptr, nullptr, SW_SHOWNORMAL);
                 return 0;
             }
+            if (header && header->code == TTN_GETDISPINFOW &&
+                header->idFrom == reinterpret_cast<UINT_PTR>(state->lauraButton)) {
+                reinterpret_cast<NMTTDISPINFOW*>(lParam)->lpszText = const_cast<LPWSTR>(LauraLink::IsConnected()
+                    ? L"Laura kapcsolódott: a parancsaidat végrehajtja, és csipogás helyett ő mondja be az időzítőt. "
+                      L"Kattintásra bontja a kapcsolatot."
+                    : L"A Laura kapcsolat bontva: csipogás szól, és Laura parancsai nem jutnak el ide. "
+                      L"Kattintásra újra kapcsolódik.");
+                return 0;
+            }
             if (header && header->hwndFrom == state->resetTime && header->code == DTN_DATETIMECHANGE) {
                 UpdateResetDirty(state);
                 return 0;
@@ -544,6 +589,10 @@ namespace {
             auto* item = reinterpret_cast<DRAWITEMSTRUCT*>(lParam);
             if (item && item->CtlID == IDC_SETTINGS_OK) {
                 DrawOkButton(item, state);
+                return TRUE;
+            }
+            if (item && item->CtlID == IDC_SETTINGS_LAURA) {
+                DrawLauraButton(item, state);
                 return TRUE;
             }
             break;
@@ -642,4 +691,10 @@ void ShowSettingsDialog(HWND owner) {
 void RefreshSettingsSounds() {
     if (!g_openState || !g_openState->soundsCheckbox) return;
     SendMessageW(g_openState->soundsCheckbox, BM_SETCHECK, g_store.sounds_enabled ? BST_CHECKED : BST_UNCHECKED, 0);
+}
+
+void RefreshSettingsLaura() {
+    if (!g_openState || !g_openState->lauraButton) return;
+    ShowWindow(g_openState->lauraButton, LauraLink::IsDetected() ? SW_SHOWNA : SW_HIDE);
+    InvalidateRect(g_openState->lauraButton, nullptr, TRUE);
 }

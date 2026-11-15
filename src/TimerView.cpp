@@ -3,6 +3,7 @@
 #include "IntervalTimer.h"
 #include "Layout.h"
 #include "UIEventHandler.h"
+#include "WorkTick.h"
 #include "WorkTracking.h"
 #include <commctrl.h>
 #include <string>
@@ -284,14 +285,8 @@ bool TimerView::ShouldShowAutoStartWarning() {
 }
 
 void TimerView::HandlePhaseChange() {
-    if (!StrictModeActive()) return;
-    if (g_intervalTimer.IsWorkPhase()) {
-        if (g_intervalTimer.IsRunning() || g_intervalTimer.IsAwaitingActivity()) {
-            SetWorkMeasurementStopped(false);
-        }
-    } else {
-        SetWorkMeasurementStopped(true);
-    }
+    bool stop = false;
+    if (WorkTick::StrictStopAfterPhaseChange(g_store, g_intervalTimer, stop)) SetWorkMeasurementStopped(stop);
 }
 
 void TimerView::StartConfiguredTimer() {

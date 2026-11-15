@@ -1,5 +1,4 @@
 #include "Layout.h"
-#include "TimerHold.h"
 #include "AppState.h"
 #include "InlineEdit.h"
 #include "IntervalTimer.h"
@@ -143,7 +142,6 @@ void UpdateControlsVisibility() {
         ShowWindow(g_hTimeHistoryBtn, SW_HIDE);
         ShowWindow(g_hWorkMeasureBtn, SW_HIDE);
         ShowWindow(g_hFocusModeBtn, SW_HIDE);
-        TimerHold::UpdateVisibility(false);
         ShowWindow(g_hManualWorkBtn, SW_HIDE);
         ShowWindow(g_hCloseBtn, SW_HIDE);
         ShowWindow(g_hPinBtn, SW_HIDE);
@@ -162,7 +160,6 @@ void UpdateControlsVisibility() {
     ShowWindow(g_hCloseBtn, SW_SHOW);
     ShowWindow(g_hPinBtn, SW_SHOW);
     ShowWindow(g_hFocusModeBtn, SW_SHOW);
-    TimerHold::UpdateVisibility(true);
     ShowWindow(g_hSettingsBtn, SW_SHOW);
     ShowWindow(g_hTimerBtn, SW_SHOW);
     ShowWindow(g_hToggleViewBtn, SW_SHOW);
@@ -204,7 +201,7 @@ void UpdateControlsVisibility() {
         SetWindowTextW(g_hToggleViewBtn, L"← Aktívak");
     }
     // The header buttons line up right-to-left from the timer button: the view toggle (just wide
-    // enough for its label, ~10px padding), "Idők", then the focus and timer-hold buttons.
+    // enough for its label, ~10px padding), "Idők", then the focus button.
     int leftmostX = 286;
     if (isHistory) {
         UiScale::Place(g_hToggleViewBtn, nullptr, 286, 10, 104, 28, SWP_NOZORDER | SWP_NOACTIVATE);
@@ -216,8 +213,6 @@ void UpdateControlsVisibility() {
         UiScale::Place(g_hTimeHistoryBtn, nullptr, leftmostX, 10, 54, 28, SWP_NOZORDER | SWP_NOACTIVATE);
     }
     UiScale::Place(g_hFocusModeBtn, nullptr, leftmostX - 6 - 28, 10, 28, 28, SWP_NOZORDER | SWP_NOACTIVATE);
-    UiScale::Place(GetDlgItem(g_hWnd, IDC_TIMER_HOLD_BTN), nullptr, leftmostX - 2 * (6 + 28), 10, 28, 28,
-        SWP_NOZORDER | SWP_NOACTIVATE);
     TimerView::UpdateVisibility(isTimer);
     RecurringView::UpdateVisibility(isRecurring);
     if (UpdateOverlay::IsVisible()) UpdateOverlay::HideChildren(g_hWnd);
@@ -297,7 +292,9 @@ void RecalculateMiniLayout() {
 
     int totalH = 0;
     if (!listShown) {
-        totalH = PinButtons::STRIP_BOTTOM + 6 + WorkTracking::MiniBarHeight(); // The strip's tabs sit on it.
+        // The strip's tabs sit on a thin body; with no work bar either, only the tabs remain.
+        const int bar = WorkTracking::MiniBarHeight();
+        totalH = PinButtons::STRIP_BOTTOM + (bar > 0 ? 6 + bar : 0);
     } else if (activeCount == 0) {
         totalH = 70 + WorkTracking::MiniBarHeight();
     } else {

@@ -70,6 +70,7 @@ void TaskStore::SaveLocal() {
     }
     out << "  \"work_tracking_enabled\": " << (work_tracking_enabled ? "true" : "false") << ",\n"
         << "  \"update_check_enabled\": " << (update_check_enabled ? "true" : "false") << ",\n"
+        << "  \"laura_enabled\": " << (laura_enabled ? "true" : "false") << ",\n"
         << "  \"update_last_check\": " << static_cast<long long>(update_last_check) << ",\n"
         << "  \"update_failures\": " << update_failures << ",\n"
         << "  \"update_last_failure\": " << static_cast<long long>(update_last_failure) << ",\n"
@@ -293,6 +294,7 @@ void TaskStore::LoadLocal() {
 
     JsonLite::GetBool(content, "work_tracking_enabled", work_tracking_enabled);
     JsonLite::GetBool(content, "update_check_enabled", update_check_enabled);
+    JsonLite::GetBool(content, "laura_enabled", laura_enabled);
     long long updateNumber = 0;
     if (JsonLite::GetInt64(content, "update_last_check", updateNumber)) update_last_check = static_cast<time_t>(updateNumber);
     if (JsonLite::GetInt64(content, "update_failures", updateNumber)) update_failures = static_cast<int>(updateNumber);

@@ -167,28 +167,6 @@ void TaskStore::PurgeWorkHistoryBefore(const std::string& dateKey) {
     SaveLocal();
 }
 
-std::vector<Task> TaskStore::GetActiveTasks() const {
-    std::vector<Task> res;
-    for (const auto& t : tasks) {
-        if (!t.completed) res.push_back(t);
-    }
-    return res;
-}
-
-std::vector<Task> TaskStore::GetRecentCompletedTasks() const {
-    time_t cutoff = TaskUtils::GetYesterday930Cutoff(time(nullptr));
-    std::vector<Task> res;
-    for (const auto& t : tasks) {
-        if (t.completed && t.completed_at >= cutoff) {
-            res.push_back(t);
-        }
-    }
-    std::sort(res.begin(), res.end(), [](const Task& a, const Task& b) {
-        return a.completed_at > b.completed_at;
-    });
-    return res;
-}
-
 std::vector<Task> TaskStore::GetAllCompletedTasks() const {
     std::vector<Task> res;
     for (const auto& t : tasks) {

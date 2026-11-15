@@ -5,7 +5,7 @@
 // the PIN order show (0 = all). In the mouse mode the list opens on the first mouse move over the
 // window (the window grows upwards, it is anchored at the bottom) and closes 2 s after the mouse
 // left it (one-shot IDT_PIN_LIST_HIDE, re-armed while a drag still runs). Without the list only the
-// top strip and the work bar show; PinButtons draws a status ring when the strip would be empty.
+// top strip and the work bar show (with work tracking off, only the strip's tabs); PinButtons draws a status ring when the strip would be empty.
 
 #include <windows.h>
 

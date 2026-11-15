@@ -4,12 +4,8 @@
 #include "Layout.h"
 #include "UIEventHandler.h"
 #include <commctrl.h>
-#include <realtimeapiset.h>
-#include <algorithm>
 
 namespace {
-constexpr ULONGLONG MAX_TICK_MS = 5000;
-
 HWND g_hTrackingBtn = nullptr;
 HWND g_hTrackingTooltip = nullptr;
 
@@ -68,24 +64,6 @@ int WorkTracking::BottomBarHeight() {
 
 int WorkTracking::MiniBarHeight() {
     return g_store.work_tracking_enabled ? 3 : 0;
-}
-
-int WorkTracking::TakeCountedSeconds(bool counting) {
-    static ULONGLONG lastMs = 0;
-    static ULONGLONG pendingMs = 0;
-    ULONGLONG interruptTime = 0; // 100 ns units, stops during sleep and hibernation.
-    QueryUnbiasedInterruptTime(&interruptTime);
-    const ULONGLONG nowMs = interruptTime / 10000;
-    const ULONGLONG elapsedMs = lastMs != 0 ? nowMs - lastMs : 1000;
-    lastMs = nowMs;
-    if (!counting) {
-        pendingMs = 0;
-        return 0;
-    }
-    pendingMs += (std::min)(elapsedMs, MAX_TICK_MS);
-    const int seconds = static_cast<int>(pendingMs / 1000);
-    pendingMs %= 1000;
-    return seconds;
 }
 
 void WorkTracking::CreateButton(HWND parent, HINSTANCE instance) {

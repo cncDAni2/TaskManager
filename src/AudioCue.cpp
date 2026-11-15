@@ -1,6 +1,8 @@
 #include "AudioCue.h"
 #include "AppState.h"
 #include "Hotkeys.h"
+#include "IntervalTimer.h"
+#include "LauraLink.h"
 #include "SettingsDialog.h"
 #include <windows.h>
 #include <mmsystem.h>
@@ -138,22 +140,40 @@ void SubmitMelody(std::uintptr_t melody) {
         g_isPlaying.clear(std::memory_order_release);
     }
 }
+
+// While Laura is connected she says it instead of the melody; muted sounds silence her too.
+void Cue(std::uintptr_t melody, const char* event, const std::wstring& text) {
+    if (!g_store.sounds_enabled) return;
+    if (LauraLink::Say(event, text)) return;
+    SubmitMelody(melody);
 }
 
+std::wstring Minutes(double minutes) {
+    wchar_t text[32]{};
+    swprintf_s(text, L"%g", minutes);
+    return text;
+}
+}
+
+// Called before the timer counts the finished round, so the last round is still the current one.
 void AudioCue::PlayTimerWorkMelody() {
-    SubmitMelody(1);
+    if (g_intervalTimer.CurrentRepetition() >= g_intervalTimer.RepetitionCount()) {
+        Cue(1, "idozito_vege", L"Lejárt az időzítő, minden kör kész.");
+    } else {
+        Cue(1, "munka", L"Vége a pihenőnek, jöhet a munka.");
+    }
 }
 
 void AudioCue::PlayTimerRestMelody() {
-    SubmitMelody(2);
+    Cue(2, "pihenes", L"Lejárt a munkaidő, pihenj " + Minutes(g_store.timer_rest_minutes) + L" percet.");
 }
 
 void AudioCue::PlayVisionBreakStart() {
-    SubmitMelody(3);
+    Cue(3, "szem_pihenes", L"Pihentesd a szemed, nézz húsz másodpercig a távolba.");
 }
 
 void AudioCue::PlayVisionBreakEnd() {
-    SubmitMelody(4);
+    Cue(4, "szem_pihenes_vege", L"Letelt a húsz másodperc.");
 }
 
 void AudioCue::ToggleSounds() {

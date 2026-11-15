@@ -20,13 +20,14 @@ constexpr int kBig = kSize * kScale;
 
 // GDI has no anti-aliasing: `drawShape` paints a white shape on an 80x80 black canvas, which is
 // shrunk with HALFTONE averaging and used as coverage to blend `color` over the 20x20 target.
-void DrawSmoothShape(HDC hdc, const RECT& rc, COLORREF color, void (*drawShape)(HDC)) {
+// `units`: the drawn size (the canvas is still 80x80, so 40 is drawn at 2x).
+void DrawSmoothShape(HDC hdc, const RECT& rc, COLORREF color, void (*drawShape)(HDC), int units = kSize) {
     // Blended in real pixels, so the icon stays smooth at any display scale.
     const bool scaled = UiScale::IsScaled(hdc);
     UiScale::PixelScope pixels(hdc);
-    const int size = scaled ? UiScale::Px(kSize) : kSize;
-    const int unitsLeft = rc.left + (rc.right - rc.left - kSize) / 2;
-    const int unitsTop = rc.top + (rc.bottom - rc.top - kSize) / 2;
+    const int size = scaled ? UiScale::Px(units) : units;
+    const int unitsLeft = rc.left + (rc.right - rc.left - units) / 2;
+    const int unitsTop = rc.top + (rc.bottom - rc.top - units) / 2;
     const int left = scaled ? UiScale::Px(unitsLeft) : unitsLeft;
     const int top = scaled ? UiScale::Px(unitsTop) : unitsTop;
 
@@ -88,33 +89,8 @@ void DrawSmoothShape(HDC hdc, const RECT& rc, COLORREF color, void (*drawShape)(
 }
 }
 
-void DrawHandIcon(HDC hdc, const RECT& rc, COLORREF color) {
-    DrawSmoothShape(hdc, rc, color, [](HDC bigDc) {
-        LOGBRUSH lb{ BS_SOLID, RGB(255, 255, 255), 0 };
-        HPEN fingerPen = ExtCreatePen(PS_GEOMETRIC | PS_SOLID | PS_ENDCAP_ROUND, 11, &lb, 0, nullptr);
-        HGDIOBJ oldPen = SelectObject(bigDc, fingerPen);
-        const POINT fingers[4][2] = {
-            { { 12, 30 }, { 12, 52 } }, { { 28, 14 }, { 28, 52 } },
-            { { 44, 11 }, { 44, 52 } }, { { 60, 18 }, { 60, 52 } } };
-        for (const auto& finger : fingers) {
-            MoveToEx(bigDc, finger[0].x, finger[0].y, nullptr);
-            LineTo(bigDc, finger[1].x, finger[1].y);
-        }
-        MoveToEx(bigDc, 56, 64, nullptr);
-        LineTo(bigDc, 73, 43);
-        SelectObject(bigDc, GetStockObject(NULL_PEN));
-        HBRUSH white = CreateSolidBrush(RGB(255, 255, 255));
-        HGDIOBJ oldBrush = SelectObject(bigDc, white);
-        RoundRect(bigDc, 6, 40, 67, 79, 30, 30);
-        Rectangle(bigDc, 6, 40, 67, 60);
-        // Straight edge from the thumb's underside, tangent to the palm's rounded corner.
-        const POINT thumbBase[] = { { 73, 43 }, { 77, 47 }, { 66, 71 }, { 52, 64 } };
-        Polygon(bigDc, thumbBase, 4);
-        SelectObject(bigDc, oldBrush);
-        SelectObject(bigDc, oldPen);
-        DeleteObject(white);
-        DeleteObject(fingerPen);
-    });
+void DrawSmoothIcon(HDC hdc, const RECT& rc, COLORREF color, void (*drawShape)(HDC)) {
+    DrawSmoothShape(hdc, rc, color, drawShape);
 }
 
 // Two arcs chasing each other clockwise, each ending in an arrowhead.
@@ -267,32 +243,6 @@ HICON GenerateAppIcon() {
     DeleteObject(hBmpColor);
     DeleteObject(hBmpMask);
     return hIcon;
-}
-
-void DrawPencilIcon(HDC hdc, const RECT& rc, COLORREF color) {
-    int cx = rc.left + (rc.right - rc.left) / 2;
-    int cy = rc.top + (rc.bottom - rc.top) / 2;
-
-    HPEN hPen = CreatePen(PS_SOLID, 2, color);
-    HGDIOBJ hOldPen = SelectObject(hdc, hPen);
-
-    // Pencil barrel slanted from bottom-left to top-right
-    MoveToEx(hdc, cx - 5, cy + 4, nullptr);
-    LineTo(hdc, cx + 3, cy - 4);
-
-    MoveToEx(hdc, cx - 3, cy + 6, nullptr);
-    LineTo(hdc, cx + 5, cy - 2);
-
-    // Tip
-    MoveToEx(hdc, cx - 6, cy + 6, nullptr);
-    LineTo(hdc, cx - 5, cy + 4);
-
-    // Eraser cap top
-    MoveToEx(hdc, cx + 3, cy - 4, nullptr);
-    LineTo(hdc, cx + 5, cy - 2);
-
-    SelectObject(hdc, hOldPen);
-    DeleteObject(hPen);
 }
 
 void DrawMoreIcon(HDC hdc, const RECT& rc, COLORREF color) {
@@ -531,3 +481,69 @@ void DrawDownloadIcon(HDC hdc, const RECT& rc, COLORREF color) {
     DeleteObject(brush);
     DeleteObject(pen);
 }
+
+// Laura's sign: a green rounded L with a small tilted white bow (black outline and knot) on the
+// left of its stem's top;
+// `crossed` adds a red X (link switched off). Each color is a separate smooth layer.
+void DrawLauraIcon(HDC hdc, const RECT& rc, int size, bool crossed) {
+    DrawSmoothShape(hdc, rc, RGB(22, 163, 74), [](HDC bigDc) {
+        HPEN pen = CreateRoundPen(15);
+        HGDIOBJ oldPen = SelectObject(bigDc, pen);
+        MoveToEx(bigDc, 30, 34, nullptr);
+        LineTo(bigDc, 30, 66);
+        LineTo(bigDc, 62, 66);
+        SelectObject(bigDc, oldPen);
+        DeleteObject(pen);
+    }, size);
+    static void (*const bowWings)(HDC, int) = [](HDC bigDc, int outline) {
+        HBRUSH white = CreateSolidBrush(RGB(255, 255, 255));
+        LOGBRUSH lb{ BS_SOLID, RGB(255, 255, 255), 0 };
+        HPEN pen = outline > 0 ? ExtCreatePen(PS_GEOMETRIC | PS_SOLID | PS_JOIN_ROUND, outline, &lb, 0, nullptr)
+                               : nullptr;
+        HGDIOBJ oldBrush = SelectObject(bigDc, white);
+        HGDIOBJ oldPen = SelectObject(bigDc, pen ? pen : GetStockObject(NULL_PEN));
+        // Small bow on the left of the stem's top, tilted 20° counterclockwise (y points down).
+        constexpr double cx = 23.0, cy = 24.0;
+        const double c = std::cos(20.0 * 3.14159265358979323846 / 180.0);
+        const double s = std::sin(20.0 * 3.14159265358979323846 / 180.0);
+        auto at = [&](double x, double y) {
+            return POINT{ static_cast<LONG>(std::lround(cx + x * c + y * s)),
+                static_cast<LONG>(std::lround(cy - x * s + y * c)) };
+        };
+        const POINT left[3] = { at(0, 0), at(-12, -7), at(-12, 7) };
+        const POINT right[3] = { at(0, 0), at(12, -7), at(12, 7) };
+        Polygon(bigDc, left, 3);
+        Polygon(bigDc, right, 3);
+        SelectObject(bigDc, oldPen);
+        SelectObject(bigDc, oldBrush);
+        if (pen) DeleteObject(pen);
+        DeleteObject(white);
+    };
+    DrawSmoothShape(hdc, rc, RGB(0, 0, 0), [](HDC bigDc) {
+        bowWings(bigDc, 5);
+    }, size);
+    DrawSmoothShape(hdc, rc, RGB(255, 255, 255), [](HDC bigDc) {
+        bowWings(bigDc, 0);
+    }, size);
+    DrawSmoothShape(hdc, rc, RGB(0, 0, 0), [](HDC bigDc) {
+        HBRUSH white = CreateSolidBrush(RGB(255, 255, 255));
+        HGDIOBJ oldBrush = SelectObject(bigDc, white);
+        HGDIOBJ oldPen = SelectObject(bigDc, GetStockObject(NULL_PEN));
+        Ellipse(bigDc, 19, 20, 28, 29); // The knot, at the bow's center (23, 24).
+        SelectObject(bigDc, oldPen);
+        SelectObject(bigDc, oldBrush);
+        DeleteObject(white);
+    }, size);
+    if (!crossed) return;
+    DrawSmoothShape(hdc, rc, RGB(220, 38, 38), [](HDC bigDc) {
+        HPEN pen = CreateRoundPen(10);
+        HGDIOBJ oldPen = SelectObject(bigDc, pen);
+        MoveToEx(bigDc, 14, 14, nullptr);
+        LineTo(bigDc, 66, 66);
+        MoveToEx(bigDc, 66, 14, nullptr);
+        LineTo(bigDc, 14, 66);
+        SelectObject(bigDc, oldPen);
+        DeleteObject(pen);
+    }, size);
+}
+

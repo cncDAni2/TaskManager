@@ -1,12 +1,34 @@
-// Logic tests: sync merge, sync and local files, JSON, recurring dates, cutoffs. Run tests\run_tests.bat.
+// Logic tests: sync merge, sync and local files, JSON, recurring dates and tasks, cutoffs, work
+// history, settings round trip, assignment, and the timed flows (work-time counting, interval
+// timer, STRICT MODE, 20-20-20, PIN timer buttons) on a hand-driven clock, and the Laura link
+// protocol. Run tests\run_tests.bat.
 // Everything happens in the test EXE's own folder (dist\test), never on real data.
+#include "Clock.h"
+#include "IntervalTimer.h"
+#include "JsonLite.h"
+#include "LauraProtocol.h"
+#include "PinTimerButtons.h"
 #include "Task.h"
 #include "Version.h"
+#include "WorkTick.h"
 #include <cstdio>
 #include <functional>
 
 // Hotkeys.cpp needs the whole app; the store only asks this one thing from it.
 namespace Hotkeys { bool IsValidCombo(long long) { return true; } }
+
+// The hand-driven clock of the test build (Clock.h).
+unsigned long long Clock::testMs = 0;
+DWORD Clock::testLastInputTick = 0;
+
+// The cues the timers asked for, in order, instead of sounds.
+std::vector<std::string> g_cues;
+namespace AudioCue {
+void PlayTimerWorkMelody() { g_cues.push_back("work"); }
+void PlayTimerRestMelody() { g_cues.push_back("rest"); }
+void PlayVisionBreakStart() { g_cues.push_back("vision start"); }
+void PlayVisionBreakEnd() { g_cues.push_back("vision end"); }
+}
 
 namespace {
 int g_checks = 0;
@@ -660,11 +682,764 @@ void TestSearchText() {
     CHECK(!ContainsText(L"", L"a"));
 }
 
+const Task* FindById(const TaskStore& store, int id) {
+    for (const Task& task : store.tasks) {
+        if (task.id == id) return &task;
+    }
+    return nullptr;
+}
+
+void TestWorkHistoryFile() {
+    // Days with nothing are left out; a manual-only day keeps a zero measured value.
+    const WorkHistory::Records measured{ { "2026-11-02", 3600 }, { "2026-11-03", 0 }, { "2026-11-04", 120 } };
+    const WorkHistory::Records manual{ { "2026-11-04", 600 }, { "2026-11-05", 900 } };
+    TaskUtils::TextBuffer out;
+    WorkHistory::WriteJson(out, measured, manual);
+    WorkHistory::Records readMeasured;
+    WorkHistory::Records readManual;
+    WorkHistory::LoadFromJson("{\n" + out.str() + "}\n", readMeasured, readManual);
+    const WorkHistory::Records expectedMeasured{ { "2026-11-02", 3600 }, { "2026-11-04", 120 }, { "2026-11-05", 0 } };
+    CHECK(readMeasured == expectedMeasured);
+    CHECK(readManual == manual);
+
+    // Weeks newest first, the summary on the Sunday (or the newest day), manual time counted in.
+    const WorkHistory::Records days{ { "2026-11-02", 3600 }, { "2026-11-08", 60 }, { "2026-11-09", 100 } };
+    const WorkHistory::Records manualDays{ { "2026-11-04", 600 } };
+    const auto entries = WorkHistory::GetDisplayEntries(days, manualDays, LocalTime(2026, 11, 10, 10, 0), 30);
+    CHECK(entries.size() == 7);
+    if (entries.size() != 7) return;
+    CHECK(entries[0].isWeeklySummary && entries[0].label == L"46. hét" && entries[0].seconds == 130);
+    CHECK(entries[1].label == L"11.10" && entries[1].isCurrentDay && entries[1].seconds == 30);
+    CHECK(entries[2].label == L"11.09" && !entries[2].isCurrentDay);
+    CHECK(entries[3].isWeeklySummary && entries[3].label == L"45. hét" && entries[3].seconds == 4260 &&
+        entries[3].manualSeconds == 600);
+    CHECK(entries[4].label == L"11.08");
+    CHECK(entries[5].label == L"11.04" && entries[5].seconds == 600 && entries[5].manualSeconds == 600);
+    CHECK(entries[6].label == L"11.02" && entries[6].seconds == 3600);
+}
+
+void TestWorkDayRollover() {
+    CleanFiles();
+    std::string previousDay;
+    {
+        TaskStore store; // First run: the work day starts now.
+        const time_t cutoff = store.last_reset_time;
+        CHECK(cutoff == TaskUtils::GetLastResetCutoff(time(nullptr), store.work_reset_hour, store.work_reset_minute));
+        const time_t previous = TaskUtils::GetLastResetCutoff(cutoff - 1, store.work_reset_hour, store.work_reset_minute);
+        previousDay = WorkHistory::DateKey(previous);
+        store.last_reset_time = previous; // As if the app had been running since yesterday.
+        store.work_seconds_today = 4321;
+        store.CheckWorkReset();
+        CHECK(store.work_history.size() == 1 && store.work_history[previousDay] == 4321);
+        CHECK(store.work_seconds_today == 0 && store.last_reset_time == cutoff);
+        store.work_seconds_today = 50;
+        store.CheckWorkReset(); // Same work day: nothing moves.
+        CHECK(store.work_history.size() == 1 && store.work_seconds_today == 50);
+        store.Save();
+    }
+    {
+        TaskStore store;
+        CHECK(store.work_history.size() == 1 && store.work_history[previousDay] == 4321);
+        CHECK(store.work_seconds_today == 50);
+    }
+}
+
+void TestWorkHistoryCleanup() {
+    CleanFiles();
+    TaskStore store;
+    store.work_history = { { "2026-01-05", 100 }, { "2026-02-01", 200 }, { "2026-03-01", 300 } };
+    store.manual_work_history = { { "2026-01-10", 50 }, { "2026-03-02", 60 } };
+    CHECK(store.CountWorkHistoryBefore("2026-02-01") == 2);
+
+    // What UndoToast::PurgeWorkHistory keeps for the undo.
+    const WorkHistory::Records keptMeasured(store.work_history.begin(), store.work_history.lower_bound("2026-02-01"));
+    const WorkHistory::Records keptManual(store.manual_work_history.begin(),
+        store.manual_work_history.lower_bound("2026-02-01"));
+    store.PurgeWorkHistoryBefore("2026-02-01");
+    CHECK(store.work_history.size() == 2 && store.work_history.count("2026-02-01") == 1);
+    CHECK(store.manual_work_history.size() == 1 && store.manual_work_history.count("2026-03-02") == 1);
+    CHECK(store.CountWorkHistoryBefore("2026-02-01") == 0);
+
+    store.manual_work_history["2026-03-01"] = 999; // Changed after the delete: the undo must not overwrite it.
+    store.RestoreWorkHistory(keptMeasured, keptManual);
+    CHECK(store.work_history.size() == 3 && store.work_history["2026-01-05"] == 100);
+    CHECK(store.manual_work_history.size() == 3 && store.manual_work_history["2026-01-10"] == 50);
+    CHECK(store.manual_work_history["2026-03-01"] == 999);
+
+    // Clearing the manual time of a day with no measured time removes the day.
+    store.work_history["2026-04-01"] = 0;
+    store.SetManualWork("2026-04-01", 120);
+    CHECK(store.manual_work_history["2026-04-01"] == 120);
+    store.SetManualWork("2026-04-01", 0);
+    CHECK(store.manual_work_history.count("2026-04-01") == 0 && store.work_history.count("2026-04-01") == 0);
+    store.SetManualWork("2026-03-01", 0); // Measured time stays.
+    CHECK(store.manual_work_history.count("2026-03-01") == 0 && store.work_history["2026-03-01"] == 300);
+}
+
+int CountRecurringTasks(const TaskStore& store, const std::string& ruleUid) {
+    int count = 0;
+    for (const Task& task : store.tasks) {
+        if (task.recurring_uid == ruleUid) ++count;
+    }
+    return count;
+}
+
+void TestRecurringTasks() {
+    CleanFiles();
+    std::string ruleUid;
+    std::string nextDue;
+    {
+        TaskStore store;
+        store.work_reset_hour = 0; // The work day is the calendar day, like SaveRecurringRule's "today".
+        store.work_reset_minute = 0;
+        const std::string today = Recurring::Today();
+
+        RecurringRule rule;
+        rule.text = L"Heti jelentés ő";
+        rule.start_date = today;
+        rule.repeat_count = 1;
+        rule.repeat_unit = RepeatUnit::Week;
+        std::vector<int> created = store.SaveRecurringRule(rule);
+        CHECK(created.size() == 1 && store.recurring_rules.size() == 1);
+        if (created.size() != 1 || store.recurring_rules.size() != 1) return;
+        ruleUid = store.recurring_rules[0].uid;
+        CHECK(!ruleUid.empty() && store.recurring_rules[0].next_due > today);
+        const Task* task = FindById(store, created[0]);
+        CHECK(task && task->text == rule.text && task->recurring_uid == ruleUid && !task->is_sync);
+        CHECK(task && store.recurring_rules[0].last_task_uid == task->uid);
+
+        CHECK(store.RunDueRecurring().empty()); // A restart on the same day creates nothing twice.
+
+        // Due again while the last one is still open: no second copy, but the rule moves on.
+        store.recurring_rules[0].next_due = "2020-01-01";
+        CHECK(store.RunDueRecurring().empty());
+        CHECK(store.recurring_rules[0].next_due > today);
+        CHECK(CountRecurringTasks(store, ruleUid) == 1);
+
+        // Finished: the next due day gives a new one, missed periods only one.
+        store.ToggleCompleted(created[0]);
+        store.recurring_rules[0].next_due = "2020-01-01";
+        created = store.RunDueRecurring();
+        CHECK(created.size() == 1 && CountRecurringTasks(store, ruleUid) == 2);
+        nextDue = store.recurring_rules[0].next_due;
+
+        // A one-off rule whose target file was removed: a local task, and the rule is not kept.
+        RecurringRule once;
+        once.text = L"Egyszeri";
+        once.start_date = today;
+        once.targets = { 42 };
+        created = store.SaveRecurringRule(once);
+        CHECK(created.size() == 1 && store.recurring_rules.size() == 1);
+        task = created.empty() ? nullptr : FindById(store, created[0]);
+        CHECK(task && task->text == L"Egyszeri" && !task->is_sync && task->recurring_uid.empty());
+
+        // A later one-off waits.
+        once.start_date = "2999-01-01";
+        CHECK(store.SaveRecurringRule(once).empty());
+        CHECK(store.recurring_rules.size() == 2 && store.recurring_rules[1].next_due == "2999-01-01");
+        store.DeleteRecurringRule(store.recurring_rules[1].uid);
+        CHECK(store.recurring_rules.size() == 1);
+        store.Save();
+    }
+    {
+        TaskStore store; // Startup runs the due rules: nothing is due.
+        CHECK(store.recurring_rules.size() == 1);
+        if (store.recurring_rules.empty()) return;
+        const RecurringRule& rule = store.recurring_rules[0];
+        CHECK(rule.uid == ruleUid && rule.text == L"Heti jelentés ő" && rule.next_due == nextDue);
+        CHECK(rule.repeat_count == 1 && rule.repeat_unit == RepeatUnit::Week);
+        CHECK(CountRecurringTasks(store, ruleUid) == 2);
+    }
+}
+
+void TestSettingsRoundTrip() {
+    CleanFiles();
+    std::string saved;
+    {
+        TaskStore store;
+        // Every saved value differs from its default, so a value that is not saved or not loaded shows.
+        store.work_seconds_today = 777;
+        store.work_reset_hour = 7;
+        store.work_reset_minute = 45;
+        store.last_reset_time = TaskUtils::GetLastResetCutoff(time(nullptr), 7, 45); // No rollover on load.
+        store.timer_work_minutes = 25.5;
+        store.timer_rest_minutes = 4.5;
+        store.timer_repetitions = 3;
+        store.timer_2020_enabled = true;
+        store.timer_strict_mode = true;
+        store.timer_start_with_app = true;
+        store.sounds_enabled = false;
+        for (int i = 0; i < Hotkeys::ACTION_COUNT; ++i) store.hotkeys[i] = Hotkeys::Make(MOD_ALT, 'A' + i);
+        store.work_tracking_enabled = false;
+        store.update_check_enabled = false;
+        store.laura_enabled = false;
+        store.update_last_check = 1700000000;
+        store.update_failures = 2;
+        store.update_last_failure = 1700000500;
+        store.update_latest_version = "9.8.7";
+        store.update_dismissed_date = "2026-11-01";
+        store.excluded_window_keywords = L"Zoom, \"Teams\" ő";
+        store.pin_buttons = "drag,pin,-timer,add,focus,-mute";
+        store.pin_list_mode = 0;
+        store.pin_list_count = 7;
+        store.cleanup_days = 30;
+        store.cleanup_weeks = 12;
+        store.theme_mode = ThemeMode::Pink;
+        store.work_history = { { "2026-11-02", 3600 } };
+        store.manual_work_history = { { "2026-11-03", 600 } };
+        SyncSource source = Source(store.next_source_id++, SyncPath(L"a.json"));
+        source.name = L"Közös \"lista\"";
+        source.isDefault = true;
+        store.syncSources = { source };
+        RecurringRule rule;
+        rule.uid = "szabály-1";
+        rule.text = L"Havi zárás";
+        rule.start_date = "2999-01-31";
+        rule.next_due = "2999-01-31";
+        rule.repeat_count = 2;
+        rule.repeat_unit = RepeatUnit::Month;
+        rule.targets = { source.id };
+        rule.last_task_uid = "előző";
+        rule.created_at = 1600000000;
+        store.recurring_rules = { rule };
+        const int id = store.Add(L"Feladat \"idézőjellel\" és \\ jellel", {});
+        store.CycleMarker(id);
+        store.Save();
+        saved = ReadText(LocalPath());
+    }
+    {
+        TaskStore store;
+        CHECK(!store.localLoadFailed);
+        CHECK(store.work_seconds_today == 777);
+        CHECK(store.work_reset_hour == 7 && store.work_reset_minute == 45);
+        CHECK(store.timer_work_minutes == 25.5 && store.timer_rest_minutes == 4.5 && store.timer_repetitions == 3);
+        CHECK(store.timer_2020_enabled && store.timer_strict_mode && store.timer_start_with_app);
+        CHECK(!store.sounds_enabled && !store.work_tracking_enabled);
+        for (int i = 0; i < Hotkeys::ACTION_COUNT; ++i) CHECK(store.hotkeys[i] == Hotkeys::Make(MOD_ALT, 'A' + i));
+        CHECK(!store.update_check_enabled && store.update_last_check == 1700000000 && store.update_failures == 2);
+        CHECK(!store.laura_enabled);
+        CHECK(store.update_last_failure == 1700000500 && store.update_latest_version == "9.8.7");
+        CHECK(store.update_dismissed_date == "2026-11-01");
+        CHECK(store.excluded_window_keywords == L"Zoom, \"Teams\" ő");
+        CHECK(store.pin_buttons == "drag,pin,-timer,add,focus,-mute");
+        CHECK(store.pin_list_mode == 0 && store.pin_list_count == 7);
+        CHECK(store.cleanup_days == 30 && store.cleanup_weeks == 12);
+        CHECK(store.theme_mode == ThemeMode::Pink);
+        // A manual-only day comes back with a zero measured value.
+        const WorkHistory::Records expectedMeasured{ { "2026-11-02", 3600 }, { "2026-11-03", 0 } };
+        CHECK(store.work_history == expectedMeasured);
+        CHECK(store.manual_work_history.size() == 1 && store.manual_work_history["2026-11-03"] == 600);
+        CHECK(store.syncSources.size() == 1);
+        if (!store.syncSources.empty()) {
+            const SyncSource& source = store.syncSources[0];
+            CHECK(source.name == L"Közös \"lista\"" && source.path == SyncPath(L"a.json") && source.isDefault);
+            CHECK(store.next_source_id == source.id + 1);
+        }
+        CHECK(store.recurring_rules.size() == 1);
+        if (!store.recurring_rules.empty()) {
+            const RecurringRule& rule = store.recurring_rules[0];
+            CHECK(rule.uid == "szabály-1" && rule.text == L"Havi zárás" && rule.start_date == "2999-01-31");
+            CHECK(rule.next_due == "2999-01-31" && rule.repeat_count == 2 && rule.repeat_unit == RepeatUnit::Month);
+            CHECK(rule.targets.size() == 1 && rule.last_task_uid == "előző" && rule.created_at == 1600000000);
+        }
+        CHECK(store.tasks.size() == 1);
+        if (!store.tasks.empty()) {
+            CHECK(store.tasks[0].text == L"Feladat \"idézőjellel\" és \\ jellel");
+            CHECK(store.tasks[0].marker != TaskMarker::None);
+        }
+        // Loading then saving changes nothing: every saved value is also read back.
+        store.SaveLocal();
+        CHECK(ReadText(LocalPath()) == saved);
+    }
+}
+
+void TestAssignment() {
+    CleanFiles();
+    const std::wstring path = SyncPath(L"a.json");
+    WriteSync(path, { Record("x", L"közös feladat", 100) });
+    TaskStore store;
+    store.SetSyncSources({ Source(1, path) });
+    const int id = FindByUid(store, "x")->id;
+
+    // Taking it and giving it back both reach the shared file.
+    CHECK(store.ToggleAssignment(id, L"én").empty());
+    CHECK(FindByUid(store, "x")->assignee == L"én" && ReadSync(path)[0].assignee == L"én");
+    CHECK(store.ToggleAssignment(id, L"én").empty());
+    CHECK(FindByUid(store, "x")->assignee.empty() && ReadSync(path)[0].assignee.empty());
+
+    // A colleague took it in the meantime: the toggle names them and overwrites nothing.
+    std::vector<SyncRecord> records = ReadSync(path);
+    records[0].assignee = L"kolléga";
+    records[0].updated_at += 100;
+    WriteSync(path, records);
+    CHECK(store.ToggleAssignment(id, L"én") == L"kolléga");
+    CHECK(FindByUid(store, "x")->assignee == L"kolléga" && ReadSync(path)[0].assignee == L"kolléga");
+
+    // A local task has no one to share it with.
+    const int localId = store.Add(L"saját", {});
+    CHECK(store.ToggleAssignment(localId, L"én").empty());
+    for (const Task& task : store.tasks) {
+        if (task.id == localId) CHECK(task.assignee.empty());
+    }
+}
+
+// The one-second IDT_WORK_TIMER of MainWindow on the hand-driven clock, without the window.
+std::wstring g_foregroundTitle;
+int g_titleReads = 0;
+
+void ReadForegroundTitle(std::wstring& title) {
+    ++g_titleReads;
+    title = g_foregroundTitle;
+}
+
+struct SimulatedApp {
+    TaskStore& store;
+    IntervalTimer timer;
+    WorkTick work;
+    WorkTick::Status status;
+    WorkTick::Result last;
+    std::wstring excludedName;
+    bool userPresent = true; // Gives input every second.
+    int phaseChanges = 0;
+
+    explicit SimulatedApp(TaskStore& s) : store(s) {
+        Clock::testMs = 100000000;
+        Clock::testLastInputTick = Clock::InputTick();
+        g_cues.clear();
+        g_foregroundTitle = L"Visual Studio";
+    }
+
+    void Second() {
+        Clock::testMs += 1000;
+        if (userPresent) Clock::testLastInputTick = Clock::InputTick();
+        if (WorkTick::AdvanceTimer(store, timer)) {
+            ++phaseChanges;
+            bool stop = false;
+            if (WorkTick::StrictStopAfterPhaseChange(store, timer, stop)) status.measurementStopped = stop;
+        }
+        last = work.Run(store, timer, status, ReadForegroundTitle, excludedName);
+    }
+
+    void Seconds(int count) {
+        for (int i = 0; i < count; ++i) Second();
+    }
+};
+
+int SavedWorkSeconds() {
+    TaskStore saved;
+    return saved.work_seconds_today;
+}
+
+void TestWorkTimeCounting() {
+    CleanFiles();
+    TaskStore store;
+    store.excluded_window_keywords = ExcludedApps::Normalize(L" YouTube ,, discord,  ");
+    CHECK(store.excluded_window_keywords == L"YouTube, discord");
+    SimulatedApp app(store);
+    const int& work = store.work_seconds_today;
+
+    app.Seconds(60);
+    CHECK(work == 60 && app.last.countWork && app.excludedName.empty());
+
+    // An excluded window pauses counting and shows the keyword as typed.
+    g_foregroundTitle = L"Zene - youtube - Chrome";
+    app.Seconds(30);
+    CHECK(work == 60 && !app.last.countWork && app.excludedName == L"YouTube");
+    // Focus mode counts anyway and does not even read the title.
+    app.status.focusMode = true;
+    int reads = g_titleReads;
+    app.Seconds(10);
+    CHECK(work == 70 && g_titleReads == reads && app.excludedName.empty());
+    app.status.focusMode = false;
+    // A changed keyword list applies from the next second.
+    g_foregroundTitle = L"Visual Studio";
+    store.excluded_window_keywords = L"studio";
+    app.Second();
+    CHECK(work == 70 && app.excludedName == L"studio");
+    store.excluded_window_keywords = L"YouTube";
+    app.Second();
+    CHECK(work == 71);
+
+    // Away: counting goes on until 2 minutes without input, then stops and saves once.
+    app.userPresent = false;
+    app.Seconds(200);
+    CHECK(work == 71 + 119 && app.last.idlePaused && !app.last.countWork);
+    CHECK(SavedWorkSeconds() == 190);
+    // Focus mode counts even without input (reading, a call).
+    app.status.focusMode = true;
+    app.Seconds(5);
+    CHECK(work == 195);
+    app.status.focusMode = false;
+    // Back: the first second counts again.
+    app.userPresent = true;
+    app.Second();
+    CHECK(work == 196 && app.last.countWork && !app.last.idlePaused);
+
+    // A locked session and "Mérés leállítása" stop it.
+    app.status.sessionLocked = true;
+    app.Seconds(10);
+    app.status.sessionLocked = false;
+    app.status.measurementStopped = true;
+    app.Seconds(10);
+    app.status.measurementStopped = false;
+    CHECK(work == 196);
+
+    // A late timer counts the real elapsed time, a stall at most 5 seconds.
+    Clock::testMs += 2500;
+    app.Second();
+    CHECK(work == 199);
+    Clock::testMs += 60000;
+    app.Second();
+    CHECK(work == 204);
+
+    // Every 10 counted minutes are saved.
+    app.Seconds(395);
+    CHECK(work == 599 && SavedWorkSeconds() == 190);
+    app.Second();
+    CHECK(work == 600 && SavedWorkSeconds() == 600 && app.last.historyChanged);
+
+    // Measurement switched off: nothing counts and no title is read.
+    store.work_tracking_enabled = false;
+    reads = g_titleReads;
+    app.Seconds(10);
+    CHECK(work == 600 && !app.last.countWork && g_titleReads == reads);
+}
+
+void TestIntervalTimerCycle() {
+    CleanFiles();
+    TaskStore store;
+    SimulatedApp app(store);
+    IntervalTimer& timer = app.timer;
+    timer.Start(60, 30, 2, false);
+    CHECK(timer.IsRunning() && timer.IsWorkPhase() && timer.SecondsRemaining() == 60);
+    CHECK(timer.CurrentRepetition() == 1 && timer.RepetitionCount() == 2);
+
+    app.Seconds(59);
+    CHECK(timer.SecondsRemaining() == 1 && app.phaseChanges == 0);
+    app.Second();
+    CHECK(app.phaseChanges == 1 && !timer.IsWorkPhase() && timer.SecondsRemaining() == 30);
+    CHECK(g_cues == std::vector<std::string>({ "rest" }));
+    app.Seconds(30);
+    CHECK(timer.IsWorkPhase() && timer.CurrentRepetition() == 2 && g_cues.back() == "work");
+
+    // A pause keeps the remaining time, however long it lasts.
+    app.Seconds(20);
+    CHECK(timer.SecondsRemaining() == 40);
+    timer.Pause();
+    app.Seconds(300);
+    CHECK(timer.IsPaused() && timer.IsActive() && timer.SecondsRemaining() == 40 && app.phaseChanges == 2);
+    timer.Resume();
+    app.Seconds(39);
+    CHECK(timer.IsWorkPhase() && timer.SecondsRemaining() == 1);
+    app.Second();
+    CHECK(!timer.IsWorkPhase() && app.phaseChanges == 3);
+
+    // The last rest ends the run.
+    app.Seconds(30);
+    CHECK(!timer.IsActive() && app.phaseChanges == 4 && g_cues.size() == 4 && g_cues.back() == "work");
+    app.Seconds(100);
+    CHECK(app.phaseChanges == 4 && timer.SecondsRemaining() == 0);
+
+    // A manual step skips to the next phase.
+    timer.Start(600, 60, 2, false);
+    CHECK(timer.AdvancePhase() && !timer.IsWorkPhase() && timer.SecondsRemaining() == 60);
+}
+
+void TestIntervalTimerWaitsForUser() {
+    CleanFiles();
+    TaskStore store;
+    SimulatedApp app(store);
+    IntervalTimer& timer = app.timer;
+    timer.Start(600, 300, 3, false);
+
+    // Without STRICT MODE an idle user does not stop the work countdown.
+    app.userPresent = false;
+    app.Seconds(300);
+    CHECK(timer.IsRunning() && timer.SecondsRemaining() == 300);
+    app.Seconds(300);
+    CHECK(!timer.IsWorkPhase() && timer.IsRunning());
+
+    // The rest ends while the user is away: the next work phase waits for them.
+    app.Seconds(300);
+    CHECK(timer.IsWorkPhase() && timer.IsAwaitingActivity() && !timer.IsRunning() && timer.IsActive());
+    CHECK(timer.SecondsRemaining() == 600);
+    app.Seconds(100);
+    CHECK(timer.IsAwaitingActivity() && timer.SecondsRemaining() == 600);
+
+    // Back: the full work phase starts now.
+    app.userPresent = true;
+    app.Second();
+    CHECK(app.last.timerResumed && timer.IsRunning() && timer.SecondsRemaining() == 600);
+    CHECK(timer.CurrentRepetition() == 2);
+    app.Seconds(600);
+    CHECK(!timer.IsWorkPhase());
+
+    // A present user gets the next work phase straight away.
+    app.Seconds(300);
+    CHECK(timer.IsWorkPhase() && timer.IsRunning() && !timer.IsAwaitingActivity());
+}
+
+void TestStrictMode() {
+    CleanFiles();
+    TaskStore store;
+    store.timer_strict_mode = true;
+    SimulatedApp app(store);
+    IntervalTimer& timer = app.timer;
+    const int& work = store.work_seconds_today;
+    timer.Start(600, 60, 2, false);
+
+    // The rest phase stops work measurement, the next work phase restarts it.
+    app.Seconds(600);
+    CHECK(!timer.IsWorkPhase() && app.status.measurementStopped);
+    const int workBeforeRest = work;
+    app.Seconds(59);
+    CHECK(work == workBeforeRest && !app.last.countWork);
+    app.Second();
+    CHECK(timer.IsWorkPhase() && !app.status.measurementStopped && work == workBeforeRest + 1);
+
+    // Idle during work pauses the countdown too, and input continues it.
+    app.userPresent = false;
+    app.Seconds(119);
+    CHECK(timer.IsRunning() && timer.SecondsRemaining() == 481);
+    app.Second();
+    CHECK(timer.IsPaused() && timer.SecondsRemaining() == 480);
+    app.Seconds(100);
+    CHECK(timer.IsPaused() && timer.SecondsRemaining() == 480);
+    app.userPresent = true;
+    app.Second();
+    CHECK(timer.IsRunning() && timer.SecondsRemaining() == 480);
+
+    // So do "Mérés leállítása" and a locked session.
+    app.status.measurementStopped = true;
+    app.Seconds(30);
+    CHECK(timer.IsPaused() && timer.SecondsRemaining() == 479);
+    app.status.measurementStopped = false;
+    app.status.sessionLocked = true;
+    app.Seconds(30);
+    CHECK(timer.IsPaused() && timer.SecondsRemaining() == 479);
+    app.status.sessionLocked = false;
+    app.Second();
+    CHECK(timer.IsRunning() && timer.SecondsRemaining() == 479);
+
+    // With work measurement off, STRICT MODE does nothing.
+    store.work_tracking_enabled = false;
+    app.status.measurementStopped = true;
+    app.Seconds(10);
+    CHECK(timer.IsRunning() && timer.SecondsRemaining() == 469);
+}
+
+void TestVisionBreak() {
+    CleanFiles();
+    TaskStore store;
+    store.timer_2020_enabled = true;
+    SimulatedApp app(store);
+    IntervalTimer& timer = app.timer;
+
+    // 20 minutes of screen time, then a 25-second break.
+    app.Seconds(1200);
+    CHECK(!timer.IsVisionBreakActive() && g_cues.empty());
+    app.Second();
+    CHECK(timer.IsVisionBreakActive() && g_cues == std::vector<std::string>({ "vision start" }));
+    app.userPresent = false; // Looks away.
+    app.Seconds(24);
+    CHECK(timer.IsVisionBreakActive());
+    app.Second();
+    CHECK(!timer.IsVisionBreakActive() && g_cues.back() == "vision end");
+
+    // The next 20 minutes start only with the first input after the break.
+    app.Seconds(60);
+    app.userPresent = true;
+    app.Second();
+    app.Seconds(1199);
+    CHECK(!timer.IsVisionBreakActive());
+    app.Second();
+    CHECK(timer.IsVisionBreakActive());
+    app.Seconds(25);
+    CHECK(!timer.IsVisionBreakActive());
+
+    // Time away from the screen (locked) does not count toward the 20 minutes.
+    app.Second(); // The input that restarts the 20 minutes.
+    app.Seconds(600);
+    app.status.sessionLocked = true;
+    app.Seconds(900);
+    app.status.sessionLocked = false;
+    app.Seconds(599);
+    CHECK(!timer.IsVisionBreakActive());
+    app.Second();
+    CHECK(timer.IsVisionBreakActive());
+
+    // A manual interval-timer step restarts the full 20 minutes.
+    timer.Start(3600, 60, 1, true);
+    timer.AdvancePhase();
+    CHECK(!timer.IsVisionBreakActive());
+    app.Seconds(1199);
+    CHECK(!timer.IsVisionBreakActive());
+    app.Second();
+    CHECK(timer.IsVisionBreakActive());
+
+    // Switching it off ends a running break.
+    store.timer_2020_enabled = false;
+    app.Second();
+    CHECK(!timer.IsVisionBreakActive() && g_cues.back() == "vision end");
+    app.Seconds(1500);
+    CHECK(!timer.IsVisionBreakActive());
+}
+
 void Run(const char* name, const std::function<void()>& test) {
     const int failuresBefore = g_failures;
     test();
     std::printf("%s %s\n", g_failures == failuresBefore ? "ok    " : "FAILED", name);
 }
+}
+
+// The PIN strip's pause and next buttons through a whole run: what they show and which timer-view
+// button they press (carried out here with the same timer calls as TimerView::HandleCommand).
+void TestPinTimerButtons() {
+    CleanFiles();
+    TaskStore store;
+    SimulatedApp app(store);
+    IntervalTimer& timer = app.timer;
+    using PinTimerButtons::Icon;
+    using PinTimerButtons::Press;
+    auto icons = [&timer](Icon pause, Icon next) {
+        return PinTimerButtons::IconFor(false, timer) == pause && PinTimerButtons::IconFor(true, timer) == next;
+    };
+    auto click = [&timer](bool nextButton) {
+        const Press press = PinTimerButtons::PressFor(nextButton, timer);
+        if (press == Press::Start) timer.Start(60, 30, 1, false);
+        else if (press == Press::PauseResume) timer.IsPaused() ? timer.Resume() : timer.Pause();
+        else timer.AdvancePhase();
+        return press;
+    };
+
+    // Not started: both buttons show restart and press Start.
+    CHECK(icons(Icon::Restart, Icon::Restart));
+    CHECK(PinTimerButtons::PressFor(true, timer) == Press::Start);
+    CHECK(click(false) == Press::Start && timer.IsRunning() && timer.IsWorkPhase());
+    CHECK(icons(Icon::Play, Icon::Next));
+
+    // Pause / continue.
+    CHECK(click(false) == Press::PauseResume && timer.IsPaused() && icons(Icon::Pause, Icon::Next));
+    app.Seconds(10);
+    CHECK(timer.SecondsRemaining() == 60);
+    CHECK(click(false) == Press::PauseResume && !timer.IsPaused() && icons(Icon::Play, Icon::Next));
+    // A STRICT MODE pause shows as paused too.
+    timer.PauseForMeasurement();
+    CHECK(icons(Icon::Pause, Icon::Next));
+    timer.ResumeFromMeasurement();
+
+    // Next steps to the rest phase; at the end of the run both switch back to restart.
+    CHECK(click(true) == Press::Next && !timer.IsWorkPhase() && timer.SecondsRemaining() == 30);
+    CHECK(icons(Icon::Play, Icon::Next));
+    app.Seconds(30);
+    CHECK(!timer.IsActive() && icons(Icon::Restart, Icon::Restart));
+    CHECK(click(true) == Press::Start && timer.IsRunning() && timer.IsWorkPhase());
+
+    // A stopped timer shows restart as well.
+    timer.Stop();
+    CHECK(icons(Icon::Restart, Icon::Restart) && PinTimerButtons::PressFor(false, timer) == Press::Start);
+}
+
+// Laura link: handshake in either start order, crash versus Bye, switching off and on, and the
+// messages both ways.
+void TestLauraLink() {
+    using namespace LauraProtocol;
+    const HWND laura = reinterpret_cast<HWND>(static_cast<INT_PTR>(0x100));
+    const HWND restarted = reinterpret_cast<HWND>(static_cast<INT_PTR>(0x200));
+    Session session(true);
+    CHECK(!session.Detected() && !session.Connected());
+
+    // Laura starts after the TaskManager: her Hello gets an answer and the catalog.
+    Actions a = session.OnHello(laura);
+    CHECK(a.watch && !a.unwatch && a.sendAck && a.sendCatalog && a.changed && a.found);
+    CHECK(session.Connected() && session.Peer() == laura);
+    a = session.OnHello(laura); // She says Hello again (her matcher restarted): no new watch.
+    CHECK(!a.watch && a.sendAck && a.sendCatalog && !a.changed && !a.found);
+
+    // She crashes: the live link is reported lost.
+    a = session.OnPeerExited();
+    CHECK(a.unwatch && a.lost && a.changed && !session.Detected());
+    CHECK(!session.OnPeerExited().changed);
+
+    // The TaskManager starts after Laura: its Hello is answered with HelloAck.
+    a = session.OnHelloAck(restarted);
+    CHECK(a.watch && !a.sendAck && a.sendCatalog && session.Connected() && !a.found); // Laura tells this one.
+
+    // Switched off in Settings: Bye, still detected, her Hello is not answered.
+    a = session.SetEnabled(false);
+    CHECK(a.sendBye && a.changed && session.Detected() && !session.Connected());
+    a = session.OnHello(restarted);
+    CHECK(!a.sendAck && !a.sendCatalog && !a.found && !session.Connected());
+    CHECK(session.OnHelloAck(restarted).sendBye); // A late answer to an earlier Hello.
+    // Closing Laura now is no lost link.
+    a = session.OnPeerExited();
+    CHECK(!a.lost && a.changed && !session.Detected());
+
+    // Switched on again while she runs: Hello, connected once she answers.
+    session.OnHello(laura);
+    a = session.SetEnabled(true);
+    CHECK(a.sendHello && !session.Connected());
+    a = session.OnHelloAck(laura);
+    CHECK(a.sendCatalog && a.changed && session.Connected());
+    // Bye from someone else is ignored; hers closes quietly.
+    CHECK(!session.OnBye(restarted).changed && session.Connected());
+    a = session.OnBye(laura);
+    CHECK(a.unwatch && !a.lost && !session.Detected());
+    CHECK(Session(false).SetEnabled(false).changed == false);
+
+    // Every catalog command is known and described.
+    std::vector<std::string> commands;
+    CHECK(JsonLite::ReadObjectArray(Catalog(), "parancsok", commands));
+    CHECK(commands.size() == 9);
+    for (const std::string& command : commands) {
+        std::string id, description;
+        CHECK(JsonLite::GetString(command, "id", id) && Lookup(id) != Command::Unknown);
+        CHECK(JsonLite::GetString(command, "leiras", description) && !description.empty());
+    }
+    std::string type;
+    CHECK(JsonLite::GetString(Catalog(), "t", type) && type == "katalogus");
+
+    // Laura's command, with an escaped accented text.
+    Request request;
+    CHECK(ParseRequest(u8R"({"t": "parancs", "req": 7, "id": "feladat.uj", "szoveg": "Számla \"befizetés\""})", request));
+    CHECK(request.req == 7 && request.command == Command::TaskAdd && request.text == L"Számla \"befizetés\"");
+    CHECK(ParseRequest(R"({"t": "parancs", "req": 8, "id": "ismeretlen"})", request));
+    CHECK(request.command == Command::Unknown && request.text.empty());
+    CHECK(!ParseRequest(R"({"t": "valasz", "req": 1})", request));
+
+    // "Pipáld ki a …": the open task the spoken name means.
+    auto task = [](int id, const wchar_t* text, bool completed = false) {
+        Task t;
+        t.id = id;
+        t.text = text;
+        t.completed = completed;
+        return t;
+    };
+    const std::vector<Task> tasks = { task(1, L"Számla befizetés"), task(2, L"Tej vásárlás"),
+        task(3, L"Számla kiküldése Péternek"), task(4, L"Régi jelentés", true), task(5, L"Jelentés megírása") };
+    CHECK(FindOpenTask(tasks, L"a számla befizetést") == 1);   // Ending and accents do not matter.
+    CHECK(FindOpenTask(tasks, L"SZAMLA BEFIZETES feladatot") == 1);
+    CHECK(FindOpenTask(tasks, L"tejet") == 0);                 // Shorter than 4 letters: whole word only.
+    CHECK(FindOpenTask(tasks, L"tej vásárlást") == 2);
+    CHECK(FindOpenTask(tasks, L"kiküldés Péternek") == 3);
+    CHECK(FindOpenTask(tasks, L"számla") == AMBIGUOUS_TASK);   // Two tasks, neither named in full.
+    CHECK(FindOpenTask(tasks, L"jelentést") == 5);              // The finished one does not count.
+    CHECK(FindOpenTask(tasks, L"porszívózás") == 0);
+    CHECK(FindOpenTask(tasks, L"") == 0);
+
+    // Reply and spoken text.
+    const std::string reply = BuildReply(7, true, L"Felvettem: \"ő\".");
+    long long req = 0;
+    bool ok = false;
+    std::wstring text;
+    CHECK(JsonLite::GetString(reply, "t", type) && type == "valasz");
+    CHECK(JsonLite::GetInt64(reply, "req", req) && req == 7 && JsonLite::GetBool(reply, "ok", ok) && ok);
+    CHECK(JsonLite::GetWideString(reply, "szoveg", text) && text == L"Felvettem: \"ő\".");
+    const std::string say = BuildSay("pihenes", L"Pihenj 5 percet.");
+    std::string event;
+    CHECK(JsonLite::GetString(say, "t", type) && type == "mond");
+    CHECK(JsonLite::GetString(say, "esemeny", event) && event == "pihenes");
+    CHECK(JsonLite::GetWideString(say, "szoveg", text) && text == L"Pihenj 5 percet.");
 }
 
 int main() {
@@ -691,6 +1466,19 @@ int main() {
     Run("work day cutoffs", TestWorkDayCutoffs);
     Run("version compare", TestVersionCompare);
     Run("search text", TestSearchText);
+    Run("work history file", TestWorkHistoryFile);
+    Run("work day rollover", TestWorkDayRollover);
+    Run("work history cleanup", TestWorkHistoryCleanup);
+    Run("recurring tasks", TestRecurringTasks);
+    Run("settings round trip", TestSettingsRoundTrip);
+    Run("assignment", TestAssignment);
+    Run("work time counting", TestWorkTimeCounting);
+    Run("interval timer cycle", TestIntervalTimerCycle);
+    Run("interval timer waits for user", TestIntervalTimerWaitsForUser);
+    Run("strict mode", TestStrictMode);
+    Run("vision break", TestVisionBreak);
+    Run("pin timer buttons", TestPinTimerButtons);
+    Run("laura link", TestLauraLink);
     CleanFiles();
     std::printf("\n%d checks, %d failed\n", g_checks, g_failures);
     return g_failures == 0 ? 0 : 1;

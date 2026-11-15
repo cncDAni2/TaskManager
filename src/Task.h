@@ -21,7 +21,7 @@
 //   damaged, localLoadFailed blocks every save and wWinMain exits with a message, so it is never
 //   overwritten.
 // - Call Save() after a change (identical content is not written). Work seconds are saved every 10
-//   counted minutes and when counting stops (idle, lock, Időstop, hiding, suspend, Windows
+//   counted minutes and when counting stops (idle, lock, hiding, suspend, Windows
 //   shutdown, exit), so a power cut loses at most the last 10 minutes.
 
 #include "AppTypes.h"
@@ -66,13 +66,14 @@ public:
     bool work_tracking_enabled = true; // Off: no work-time measurement and no work bar; history is kept.
     // GitHub release check (UpdateCheck / UpdateOverlay).
     bool update_check_enabled = true;
+    bool laura_enabled = true; // Link to the Laura voice assistant (LauraLink); off: detected only.
     time_t update_last_check = 0;     // Last completed check (also set after giving up retries).
     int update_failures = 0;          // Consecutive failed attempts since then.
     time_t update_last_failure = 0;
     std::string update_latest_version; // Latest release seen, e.g. "1.18.0".
     std::string update_dismissed_date; // YYYY-MM-DD when the overlay was closed.
     std::wstring excluded_window_keywords = ExcludedApps::DEFAULT_KEYWORDS;
-    std::string pin_buttons = "timer,-add,-focus,-mute,-hold,pin,drag"; // PinButtons::DEFAULT_CONFIG; "-" = hidden.
+    std::string pin_buttons = "timer,-add,-focus,-mute,pin,drag"; // New users' PIN strip (PinButtons); "-" = hidden.
     int pin_list_mode = 2;  // PIN task list: 0 = never, 1 = while the mouse is over it, 2 = always (PinList::Mode).
     int pin_list_count = 0; // The first this many tasks of the PIN list; 0 = all.
     int cleanup_days = 14;
@@ -118,8 +119,6 @@ public:
 
     // Puts open tasks missing from `order` (e.g. new ones from a sync file) on top, newest first.
     void PrependUnorderedActive(std::vector<int>& order) const;
-    std::vector<Task> GetActiveTasks() const;
-    std::vector<Task> GetRecentCompletedTasks() const;
     std::vector<Task> GetAllCompletedTasks() const;
     std::vector<WorkHistory::DisplayEntry> GetWorkHistory() const;
     void SetManualWork(const std::string& date, int seconds);

@@ -11,19 +11,19 @@
 #include "SettingsDialog.h"
 #include "TaskUtils.h"
 #include "IntervalTimer.h"
-#include "TimerHold.h"
 #include "TimerView.h"
 #include "MemoryTrim.h"
-#include "ExcludedApps.h"
 #include "SyncPicker.h"
 #include "Cleanup.h"
 #include "WorkTracking.h"
+#include "WorkTick.h"
 #include "SelfUpdate.h"
 #include "UpdateCheck.h"
 #include "UpdateOverlay.h"
 #include "RecurringView.h"
 #include "Hotkeys.h"
 #include "AudioCue.h"
+#include "LauraLink.h"
 #include "PinButtons.h"
 #include "PinList.h"
 #include "StateToast.h"
@@ -192,6 +192,8 @@ static LRESULT MainProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         Shell_NotifyIconW(NIM_ADD, &g_nid);
         return 0;
     }
+    LRESULT lauraResult = 0;
+    if (LauraLink::HandleMessage(msg, wParam, lParam, lauraResult)) return lauraResult;
 
     switch (msg) {
         case WM_CREATE: {
@@ -233,7 +235,6 @@ static LRESULT MainProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             g_hFocusModeBtn = CreateWindowW(L"BUTTON", L"",
                 WS_CHILD | WS_VISIBLE | BS_OWNERDRAW | WS_TABSTOP,
                 252, 10, 28, 28, hWnd, (HMENU)IDC_FOCUS_MODE_BTN, hInst, nullptr);
-            TimerHold::CreateButton(hWnd, hInst);
 
             g_hManualWorkBtn = CreateWindowW(L"BUTTON", L"Manuális",
                 WS_CHILD | BS_OWNERDRAW | WS_TABSTOP,
@@ -375,6 +376,7 @@ static LRESULT MainProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             SyncPicker::ResetSelection();
             UpdateControlsVisibility();
             RecalculateLayout();
+            LauraLink::Start(hWnd);
             MemoryTrim::Request(hWnd);
             return 0;
         }
@@ -431,8 +433,7 @@ static LRESULT MainProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             if (wParam == IDT_WORK_TIMER) {
                 const bool timerWasRunning = g_intervalTimer.IsRunning();
                 const bool visionBreakWasActive = g_intervalTimer.IsVisionBreakActive();
-                g_intervalTimer.SetVisionBreakEnabled(g_store.timer_2020_enabled);
-                if (g_intervalTimer.Tick()) {
+                if (WorkTick::AdvanceTimer(g_store, g_intervalTimer)) {
                     TimerView::HandlePhaseChange();
                     TimerView::RefreshRunState();
                     RecalculateLayout();
@@ -475,8 +476,9 @@ static LRESULT MainProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                     InvalidateRect(hWnd, nullptr, FALSE);
                 }
 
+                const bool timerButtonsChanged = PinButtons::TimerStateChanged();
                 if (g_isMiniMode && IsWindowVisible(hWnd) &&
-                    (timerWasRunning || g_intervalTimer.IsRunning())) {
+                    (timerButtonsChanged || timerWasRunning || g_intervalTimer.IsRunning())) {
                     RECT rcClient{};
                     UiScale::ClientRect(hWnd, &rcClient);
                     RECT rcTimerText = { 0, 0, rcClient.right, PinButtons::STRIP_BOTTOM + 2 };
@@ -487,58 +489,27 @@ static LRESULT MainProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                 g_store.CheckWorkReset();
                 RecurringView::TakeNewTasks(hWnd);
 
-                LASTINPUTINFO lii = { sizeof(LASTINPUTINFO) };
-                GetLastInputInfo(&lii);
-                DWORD nowTick = GetTickCount();
-                DWORD idleMs = (nowTick >= lii.dwTime) ? (nowTick - lii.dwTime) : 0;
-                g_isIdlePaused = (idleMs >= 120000);
-
-                g_isExcludedApp = false;
-                g_excludedAppName = L"";
+                static WorkTick s_workTick;
+                WorkTick::Status workStatus;
+                workStatus.measurementStopped = g_workMeasurementStopped;
+                workStatus.sessionLocked = g_isSessionLocked;
+                workStatus.focusMode = g_focusMode;
+                const WorkTick::Result work = s_workTick.Run(g_store, g_intervalTimer, workStatus,
+                    [](std::wstring& title) {
+                        HWND hFore = GetForegroundWindow();
+                        if (!hFore) return;
+                        wchar_t titleBuf[512] = { 0 };
+                        GetWindowTextW(hFore, titleBuf, 512);
+                        title = titleBuf;
+                    }, g_excludedAppName);
+                g_isIdlePaused = work.idlePaused;
+                g_isExcludedApp = !g_excludedAppName.empty();
+                g_isWorkActive = work.countWork;
                 const bool tracking = WorkTracking::IsEnabled();
-                HWND hFore = tracking ? GetForegroundWindow() : nullptr;
-                if (hFore) {
-                    wchar_t titleBuf[512] = { 0 };
-                    GetWindowTextW(hFore, titleBuf, 512);
-                    g_excludedAppName = ExcludedApps::FindMatch(g_store.excluded_window_keywords, titleBuf);
-                    g_isExcludedApp = !g_excludedAppName.empty();
-                }
-
-                bool countWork = tracking && !g_workMeasurementStopped && !TimerHold::IsActive() && !g_isSessionLocked &&
-                    (g_focusMode || (!g_isIdlePaused && !g_isExcludedApp));
-                g_isWorkActive = countWork;
-
-                const int countedSeconds = WorkTracking::TakeCountedSeconds(countWork);
-                if (countedSeconds > 0) {
-                    const int workBefore = g_store.work_seconds_today;
-                    g_store.work_seconds_today += countedSeconds;
-                    const int workNow = g_store.work_seconds_today;
-                    if (workBefore / 600 != workNow / 600) g_store.Save();
-                    if (workBefore / 30 != workNow / 30 &&
-                        g_viewMode == ViewMode::WorkHistory && IsWindowVisible(hWnd)) {
-                        InvalidateRect(hWnd, nullptr, FALSE);
-                    }
-                }
-
-                // Besides every 10 counted minutes, work time is saved when counting stops.
-                static bool s_wasIdleStopped = false;
-                const bool idleStopped = g_isIdlePaused && !countWork;
-                if (idleStopped && !s_wasIdleStopped) g_store.Save();
-                s_wasIdleStopped = idleStopped;
-
-                const bool shouldPauseStrictWorkTimer = tracking && g_store.timer_strict_mode &&
-                    g_intervalTimer.IsActive() && g_intervalTimer.IsWorkPhase() &&
-                    (g_workMeasurementStopped || g_isSessionLocked ||
-                        (g_isIdlePaused && !g_focusMode));
-                if (shouldPauseStrictWorkTimer) g_intervalTimer.PauseForMeasurement();
-                else g_intervalTimer.ResumeFromMeasurement();
-                const bool userActive = !g_isSessionLocked && (g_focusMode || !g_isIdlePaused);
-                g_intervalTimer.SetVisionBreakScreenActive(userActive);
-                const bool timerWasAwaiting = g_intervalTimer.IsAwaitingActivity();
-                g_intervalTimer.SetUserActive(userActive);
-                if (timerWasAwaiting && !g_intervalTimer.IsAwaitingActivity() && IsWindowVisible(hWnd)) {
+                if (work.historyChanged && g_viewMode == ViewMode::WorkHistory && IsWindowVisible(hWnd)) {
                     InvalidateRect(hWnd, nullptr, FALSE);
                 }
+                if (work.timerResumed && IsWindowVisible(hWnd)) InvalidateRect(hWnd, nullptr, FALSE);
 
                 static int s_syncTimer = 0;
                 s_syncTimer++;
@@ -581,9 +552,6 @@ static LRESULT MainProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         case WM_HOTKEY: {
             if (wParam == ID_HOTKEY_TOGGLE) {
                 ToggleWindow();
-            } else if (wParam == ID_HOTKEY_HOLD) {
-                TimerHold::Toggle();
-                StateToast::ShowToggled(PinButtons::Hold);
             } else if (wParam == ID_HOTKEY_MUTE) {
                 AudioCue::ToggleSounds();
                 StateToast::ShowToggled(PinButtons::Mute);
@@ -697,7 +665,6 @@ static LRESULT MainProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             if (TaskSearch::HandleCommand(wParam)) return 0;
             if (Cleanup::HandleCommand(hWnd, wParam)) return 0;
             if (RecurringView::HandleCommand(hWnd, wParam)) return 0;
-            if (TimerHold::HandleCommand(LOWORD(wParam))) return 0;
             if (HandleCommand(hWnd, LOWORD(wParam))) return 0;
             break;
         }
@@ -757,6 +724,14 @@ static LRESULT MainProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         case WM_LBUTTONDBLCLK: {
             if (UpdateOverlay::IsVisible()) return 0;
             if (g_isMiniMode) {
+                // A double click on the move handle opens the main window.
+                RECT rcClient{}, rcDrag{};
+                UiScale::ClientRect(hWnd, &rcClient);
+                const POINT pt{ GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam) };
+                if (PinButtons::GetRect(rcClient.right, PinButtons::Drag, rcDrag) && PtInRect(&rcDrag, pt)) {
+                    ToggleWindow();
+                    return 0;
+                }
                 return MainProc(hWnd, WM_LBUTTONDOWN, wParam, lParam);
             }
             int mx = GET_X_LPARAM(lParam);
@@ -849,6 +824,7 @@ static LRESULT MainProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         }
 
         case WM_DESTROY: {
+            LauraLink::Stop();
             g_store.Save();
             FocusMode::UnregisterSessionNotifications(hWnd);
             Hotkeys::UnregisterAll(hWnd);

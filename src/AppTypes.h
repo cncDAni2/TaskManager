@@ -37,7 +37,6 @@
 #define IDC_TIMER_NEXT_BTN 2023
 #define IDC_CLEANUP_EDIT    2024
 #define IDC_CLEANUP_BTN     2025
-#define IDC_TIMER_HOLD_BTN  2026
 #define IDC_WORK_TRACKING_BTN 2027
 #define IDC_RECURRING_BTN   2028
 #define IDC_RECURRING_TEXT_EDIT 2029
@@ -57,22 +56,22 @@
 #define IDM_TRAY_AUTORUN    3004
 #define IDM_TRAY_TIMER      3005
 #define IDM_TRAY_EXIT       3006
-#define IDM_TRAY_HOLD       3007
 #define IDM_TRAY_MUTE       3008
 #define IDM_TRAY_FOCUS      3009
 
 // Hotkey IDs (ID_HOTKEY_TOGGLE + Hotkeys::Action)
 #define ID_HOTKEY_TOGGLE    1001
 #define ID_HOTKEY_UNPIN     1002
-#define ID_HOTKEY_HOLD      1003
-#define ID_HOTKEY_MUTE      1004
-#define ID_HOTKEY_FOCUS     1005
+#define ID_HOTKEY_MUTE      1003
+#define ID_HOTKEY_FOCUS     1004
 
 // Custom Messages and Timers
 #define WM_APP_TRAY         (WM_APP + 100)
 #define WM_APP_UPDATE_RESULT (WM_APP + 101)
 #define WM_APP_SELF_UPDATE_RESULT (WM_APP + 102)
 #define WM_APP_SYNC_POLL_RESULT (WM_APP + 103)
+#define WM_APP_LAURA_COMMAND (WM_APP + 104) // LauraLink: a received command waits in its queue.
+#define WM_APP_LAURA_EXITED (WM_APP + 105)  // LauraLink: the watched Laura process ended (wParam = watch number).
 #define IDT_WORK_TIMER      4001
 #define IDT_MINI_TIMER_FLASH 4002
 #define IDT_MEMORY_TRIM     4003
@@ -278,7 +277,6 @@ inline ThemeColors GetThemeColors(ThemeMode mode) {
 struct HistoryColors {
     COLORREF background;  // List area and footer.
     COLORREF header;      // Title bar.
-    COLORREF subBar;      // Cleanup bar.
     COLORREF separator;
     COLORREF title;
     COLORREF tableHeader; // "Nap" / "Idő" column captions.
@@ -292,14 +290,14 @@ inline HistoryColors GetHistoryColors(ThemeMode mode) {
     const ThemeColors th = GetThemeColors(mode);
     if (mode == ThemeMode::Dark) {
         const COLORREF navy = RGB(8, 25, 54);
-        return { navy, navy, RGB(12, 33, 66), RGB(16, 43, 78), RGB(235, 242, 252), RGB(153, 183, 219),
+        return { navy, navy, RGB(16, 43, 78), RGB(235, 242, 252), RGB(153, 183, 219),
             RGB(235, 242, 252), RGB(16, 43, 78), RGB(104, 139, 181), navy };
     }
     if (mode == ThemeMode::Pink) {
         const COLORREF darkPink = RGB(108, 0, 54);
-        return { th.bgHeader, th.bgHeader, th.bgSubBar, th.borderSep, darkPink, darkPink,
+        return { th.bgHeader, th.bgHeader, th.borderSep, darkPink, darkPink,
             darkPink, th.bgCardSelected, th.bgCardHover, th.bgHeader };
     }
-    return { th.bgWindow, th.bgHeader, th.bgSubBar, th.borderSep, th.textTitle, th.textSecondary,
+    return { th.bgWindow, th.bgHeader, th.borderSep, th.textTitle, th.textSecondary,
         th.textPrimary, th.borderSep, th.textSecondary, th.bgSubBar };
 }

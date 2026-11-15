@@ -81,10 +81,6 @@ void SetDpi(UINT dpi) {
     for (const auto& font : oldFonts) DeleteObject(font.second);
 }
 
-double Factor() {
-    return g_factor;
-}
-
 int Px(int units) {
     return static_cast<int>(std::lround(units * g_factor));
 }

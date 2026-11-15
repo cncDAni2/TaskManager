@@ -39,15 +39,6 @@ std::wstring FormatDate(time_t t) {
     return buf;
 }
 
-std::wstring FormatTime(time_t t) {
-    if (t == 0) return L"-";
-    struct tm lt;
-    localtime_s(&lt, &t);
-    wchar_t buf[64];
-    swprintf_s(buf, L"%02d:%02d", lt.tm_hour, lt.tm_min);
-    return buf;
-}
-
 std::wstring FormatDateTime(time_t t) {
     if (t == 0) return L"-";
     struct tm lt;
@@ -55,17 +46,6 @@ std::wstring FormatDateTime(time_t t) {
     wchar_t buf[64];
     swprintf_s(buf, L"%04d.%02d.%02d %02d:%02d", lt.tm_year + 1900, lt.tm_mon + 1, lt.tm_mday, lt.tm_hour, lt.tm_min);
     return buf;
-}
-
-time_t GetYesterday930Cutoff(time_t now) {
-    struct tm lt;
-    localtime_s(&lt, &now);
-    lt.tm_hour = 9;
-    lt.tm_min = 30;
-    lt.tm_sec = 0;
-    lt.tm_isdst = -1;
-    lt.tm_mday -= 1;
-    return mktime(&lt);
 }
 
 time_t GetLastResetCutoff(time_t now, int hour, int minute) {

@@ -10,7 +10,7 @@ Ultra-lightweight native Windows C++ task and work time tracking application des
 
 - **Build**: `cmd.exe /c "cd /d C:\work\TaskManager && .\build.bat"` (MSVC x64; flags are in [build.bat](build.bat)). Measured: `/O1` uses no less memory than the current `/O2`, it only makes the EXE smaller. Intermediates go to `dist\` (ignored by Git). Output: `TaskManager.exe`, kept beside `tasks-local.json`, which the app locates relative to its executable.
 - **Process lifecycle**: Before building or testing, stop any running instance (`Stop-Process -Name TaskManager -Force -ErrorAction SilentlyContinue`). After a successful build, reopen it with `Start-Process .\TaskManager.exe` from the repository root; `build.bat` does not launch it.
-- **Logic tests**: `cmd.exe /c ".\tests\run_tests.bat"` builds and runs [tests/test_core.cpp](tests/test_core.cpp) in `dist\test` with its own files, never real data. Run it after changing `TaskStore`, `SyncFiles`, `JsonLite` or date logic, and add a case for what you changed. In this environment bat files need the `.\` prefix.
+- **Logic tests**: `cmd.exe /c ".\tests\run_tests.bat"` builds and runs [tests/test_core.cpp](tests/test_core.cpp) in `dist\test` with its own files, never real data. Run it after changing `TaskStore`, `SyncFiles`, `JsonLite`, date logic, `WorkTick`, `IntervalTimer`, `PinTimerButtons` or `LauraProtocol`, and add a case for what you changed. Tests cover whole flows, not single helper functions; timed flows run on the hand-driven clock of `Clock.h`. In this environment bat files need the `.\` prefix.
 - **UI code has no automated tests**: use the full build for compile/resource validation and manually exercise affected behavior; a successful build does not verify appearance. Process status and working set: `Get-Process -Name TaskManager`.
 - **Versioning**: The values are in [src/Version.h](src/Version.h); the Settings dialog and [TaskManager.rc](TaskManager.rc) derive from them, so never duplicate version literals. Preserve that file's final newline (`rc.exe` reports `RC1004` otherwise).
   - Bump automatically for requests that change application code; not for questions or documentation-only changes. Check the version against `HEAD` first: do not bump again if an increase is already uncommitted. A release happens when changes are committed.
@@ -41,12 +41,15 @@ Everything is in `src/`, as `.h` / `.cpp` pairs unless noted. Keep new modules u
 - `RecurringView`: "Ütemezett feladatok" page. `ThemedDatePicker`: themed date control. `SyncPicker`: new-task target selection (cloud button, checklist menu, badges, tooltip).
 
 **Time tracking**
-- `WorkTracking`: measurement on/off and the one-second tick. `ExcludedApps`: title keywords that pause counting. `IntervalTimer`: work/rest cycles, 20-20-20 reminder. `TimerView`: timer controls. `TimerHold`: "Időstop". `FocusMode`: focus mode, session lock. `WorkTimeDialog`: manual work entries.
+- `WorkTracking`: measurement on/off. `WorkTick`: the work-time part of the one-second tick (idle, excluded apps, accrual, interval-timer coupling), without UI. `Clock.h` (header only): time and input sources, hand-driven in the test build. `ExcludedApps`: title keywords that pause counting. `IntervalTimer`: work/rest cycles, 20-20-20 reminder. `TimerView`: timer controls. `FocusMode`: focus mode, session lock. `WorkTimeDialog`: manual work entries.
 
 **Other windows and feedback**
-- `SettingsDialog`, `SettingsSyncRows` (sync file table), `HotkeyDialog`, `Hotkeys` (global hotkeys), `PinButtons` (PIN top strip), `PinButtonsEditor`, `PinList` (PIN task list display).
+- `SettingsDialog`, `SettingsSyncRows` (sync file table), `HotkeyDialog`, `Hotkeys` (global hotkeys), `PinButtons` (PIN top strip), `PinButtonsEditor`, `PinList` (PIN task list display), `PinTimerButtons.h` (header only: icon and press of the PIN timer pause/next buttons, without UI).
 - `PopupNotice`, `StateToast`, `UndoToast`, `BarTooltips` (dynamic tooltip regions), `AudioCue`.
 - `UpdateCheck`, `UpdateOverlay`, `SelfUpdate`, `Version.h`.
+
+**Laura voice assistant (C:\Work\Laura)**
+- `LauraProtocol`: handshake states, command catalog, message JSON, without UI (tested). `LauraLink`: window messages, process watch, command execution, `Say` for the timer cues.
 
 ## Data Safety
 
@@ -64,10 +67,9 @@ These protect user data, wherever you are working.
 
 - **User-facing documentation and controls**: [README.md](README.md) is a short user guide: for a new feature add only what a user would miss (usually one or two sentences), no edge cases or internals; minor or technical features get a brief note or nothing. Give buttons clear labels. Add concise tooltips for icon-only, abbreviated, state-dependent or ambiguous actions; a tooltip clarifies the effect rather than repeating the label.
 - **Performance**: Preserve the event-driven, non-polling design. Do not add unrelated periodic work: reuse the one-second `IDT_WORK_TIMER`. Rendering is double-buffered GDI with dirty rectangles (see `Paint.h`). The README's resource figures are estimates; do not present them as measured without checking the running process.
-- **Threads**: Single-threaded design. The only exceptions are thread-pool callbacks in `AudioCue`, `UpdateCheck`, `SelfUpdate` and `SyncPoll`; the last three touch no shared state and report back only via `PostMessage`.
+- **Threads**: Single-threaded design. The only exceptions are thread-pool callbacks in `AudioCue`, `UpdateCheck`, `SelfUpdate`, `SyncPoll` and `LauraLink` (process-exit wait); the last four touch no shared state and report back only via `PostMessage`.
 - **Display scaling**: Main-window code works in 96-DPI units: use `UiScale` helpers instead of `GetClientRect`, child `SetWindowPos`, `InvalidateRect` with a rect, or `GetCursorPos` (see `UiScale.h`).
 - **Character encoding**: Keep UTF-8 and the compile flags (`/utf-8`, `UNICODE`, `_UNICODE`). Use `std::wstring` and `W` Win32 functions in the UI. Fonts must use `DEFAULT_CHARSET` for Hungarian accents.
 - **Single instance**: Named mutex `TaskManager_SingleInstance_Mutex_98741`. A second launch signals the existing window via `WM_HOTKEY` and exits.
-- **Work reset vs completed filter**: The daily work reset is configurable in Settings (default 09:15); the completed-task recent filter has a separate yesterday-09:30 cutoff. Do not conflate them.
 - **Escape key dual path**: `VK_ESCAPE` can be intercepted both in the `wWinMain` message loop and in `WndProc (WM_KEYDOWN)`. Keep both in sync (for example pinned-to-mini versus unpinned-to-tray).
 - **Edit Enter handling**: If an edit control consumes `VK_RETURN` in `WM_KEYDOWN`, suppress the translated `WM_CHAR` carriage return when needed, or the default system sound can still play.

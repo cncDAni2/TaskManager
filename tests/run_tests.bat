@@ -9,10 +9,10 @@ call "%VSINSTALL%\VC\Auxiliary\Build\vcvars64.bat" >nul
 
 if not exist dist\test mkdir dist\test
 
-cl.exe /nologo /MP /EHsc /W3 /MT /utf-8 /std:c++17 /DUNICODE /D_UNICODE /Isrc /Fodist\test\ /Fedist\test\test_core.exe ^
+cl.exe /nologo /MP /EHsc /W3 /MT /utf-8 /std:c++17 /DUNICODE /D_UNICODE /DTASKMANAGER_TEST /Isrc /Fodist\test\ /Fedist\test\test_core.exe ^
     tests\test_core.cpp src\Task.cpp src\TaskLocalFile.cpp src\TaskSync.cpp src\TaskUndo.cpp src\TaskRecurring.cpp ^
     src\SyncFiles.cpp src\JsonLite.cpp src\TaskUtils.cpp src\Recurring.cpp src\VersionHint.cpp src\WorkHistory.cpp ^
-    src\ExcludedApps.cpp src\TaskGroups.cpp ^
+    src\ExcludedApps.cpp src\TaskGroups.cpp src\IntervalTimer.cpp src\WorkTick.cpp src\LauraProtocol.cpp ^
     /link user32.lib secur32.lib advapi32.lib rpcrt4.lib
 if %ERRORLEVEL% NEQ 0 (
     echo Test build failed.
