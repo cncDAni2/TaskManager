@@ -1,4 +1,5 @@
 #include "TimerView.h"
+#include "AudioCue.h"
 #include "AppState.h"
 #include "IntervalTimer.h"
 #include "Layout.h"
@@ -146,7 +147,7 @@ LRESULT CALLBACK TimerControlSubclassProc(HWND control, UINT message, WPARAM wPa
     // characters (Backspace, Ctrl+V, ...) pass; a pasted invalid value is still rejected by Start.
     if (message == WM_CHAR && (control == g_workEdit || control == g_restEdit) && wParam >= L' ' &&
         !(wParam >= L'0' && wParam <= L'9') && wParam != L',' && wParam != L'.') {
-        if (g_store.sounds_enabled) MessageBeep(MB_OK);
+        if (AudioCue::BeepsAllowed()) MessageBeep(MB_OK);
         return 0;
     }
     if (message == WM_CHAR && (wParam == L'\t' || wParam == L'\r' ||
@@ -402,17 +403,17 @@ bool TimerView::HandleCommand(HWND owner, WPARAM wParam) {
             int restSeconds = 0;
             int repetitions = 0;
             if (!ReadMinutesValue(g_workEdit, workSeconds)) {
-                if (g_store.sounds_enabled) MessageBeep(MB_ICONWARNING);
+                if (AudioCue::BeepsAllowed()) MessageBeep(MB_ICONWARNING);
                 SetFocus(g_workEdit);
                 return true;
             }
             if (!ReadMinutesValue(g_restEdit, restSeconds)) {
-                if (g_store.sounds_enabled) MessageBeep(MB_ICONWARNING);
+                if (AudioCue::BeepsAllowed()) MessageBeep(MB_ICONWARNING);
                 SetFocus(g_restEdit);
                 return true;
             }
             if (!ReadValue(g_repetitionsEdit, 1, 99, repetitions)) {
-                if (g_store.sounds_enabled) MessageBeep(MB_ICONWARNING);
+                if (AudioCue::BeepsAllowed()) MessageBeep(MB_ICONWARNING);
                 SetFocus(g_repetitionsEdit);
                 return true;
             }

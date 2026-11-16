@@ -1,6 +1,6 @@
 #pragma once
 
-// PIN-window top strip (timer badge, new task, focus, mute, unpin, move handle, timer pause/next): configured
+// PIN-window button strip, on top or (task list on hover) at the bottom (timer badge, new task, focus, mute, unpin, move handle, timer pause/next): configured
 // order and visibility (pin_buttons, e.g. "timer,-add,focus,-mute,-pin,drag", - = hidden; a
 // file without "add" gets it hidden right after the timer), right-aligned
 // layout, rounded window-region tabs, painting (idle = no fill or border, on = blue), tooltips via
@@ -30,8 +30,18 @@ using Config = std::array<Slot, COUNT>;
 
 // A file from before this setting existed keeps the old strip; new users get TaskStore::pin_buttons.
 constexpr char LEGACY_CONFIG[] = "timer,-add,focus,-mute,-pin,drag";
-// Top edge of the window body: the strip's tabs sit on it, the task list starts below.
+// Height of the strip: its tabs sit on the window body's top edge (or bottom edge, see AtBottom).
 constexpr int STRIP_BOTTOM = 20;
+
+// While the task list opens on mouse hover (PinList::OnHover) the window is flipped: the strip
+// sits below the body with tabs rounded at the bottom, the work bar right above the strip, and the
+// list rises above them, so the buttons stay in place when it opens.
+bool AtBottom();
+// RecalculateMiniLayout sets the window's height (96-DPI units) before placing the strip.
+void SetWindowHeight(int height);
+// The window body (task list, work bar) between the strip and the opposite edge.
+int BodyTop();
+int BodyBottom();
 
 Config Parse(const std::string& text);
 std::string Serialize(const Config& config);

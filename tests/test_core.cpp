@@ -1390,7 +1390,7 @@ void TestLauraLink() {
     // Every catalog command is known and described.
     std::vector<std::string> commands;
     CHECK(JsonLite::ReadObjectArray(Catalog(), "parancsok", commands));
-    CHECK(commands.size() == 9);
+    CHECK(commands.size() == 12);
     for (const std::string& command : commands) {
         std::string id, description;
         CHECK(JsonLite::GetString(command, "id", id) && Lookup(id) != Command::Unknown);
@@ -1426,6 +1426,65 @@ void TestLauraLink() {
     CHECK(FindOpenTask(tasks, L"jelentést") == 5);              // The finished one does not count.
     CHECK(FindOpenTask(tasks, L"porszívózás") == 0);
     CHECK(FindOpenTask(tasks, L"") == 0);
+
+    // Reading the list out: most important first, a group's neighbours said together.
+    const std::vector<ListedTask> listed = { { L"Számla", L"", L"" }, { L"Terv", L"Munka", L"Anna" },
+        { L"Teszt", L"Munka", L"" }, { L"Tej", L"", L"" }, { L"Hívás", L"Otthon", L"" }, { L"Posta", L"", L"" } };
+    CHECK(DescribeTasks({}, 5) == L"Nincs nyitott feladatod.");
+    CHECK(DescribeTasks({ { L"Tej", L"", L"" } }, 5) == L"Egy feladatod van: Tej.");
+    CHECK(DescribeTasks(listed, 4) ==
+        L"6 feladatod van, az első 4 a legfontosabbal kezdve: Számla, a Munka csoportban Terv és Teszt, majd Tej.");
+    CHECK(DescribeTasks(listed, 9) == L"6 feladatod van, a legfontosabbal kezdve: Számla, a Munka csoportban "
+        L"Terv és Teszt, Tej, az Otthon csoportban Hívás, majd Posta.");
+    CHECK(DescribeFirstTask(listed) == L"A legfontosabb feladatod: Számla.");
+    CHECK(DescribeFirstTask({ listed[4] }) == L"A legfontosabb feladatod az Otthon csoportban: Hívás.");
+    // For Claude: the whole list in order, groups as blocks, the assignee where there is one.
+    const std::string listJson = TasksJson(listed);
+    long long total = 0;
+    std::vector<std::string> items;
+    CHECK(JsonLite::GetInt64(listJson, "osszes", total) && total == 6);
+    CHECK(JsonLite::ReadObjectArray(listJson, "elemek", items) && items.size() == 5);
+    std::wstring value;
+    CHECK(items.size() == 5 && JsonLite::GetWideString(items[0], "szoveg", value) && value == L"Számla");
+    CHECK(items.size() == 5 && JsonLite::GetWideString(items[1], "csoport", value) && value == L"Munka");
+    std::vector<std::string> groupTasks;
+    CHECK(items.size() == 5 && JsonLite::ReadObjectArray(items[1], "feladatok", groupTasks) && groupTasks.size() == 2);
+    CHECK(groupTasks.size() == 2 && JsonLite::GetWideString(groupTasks[0], "felelos", value) && value == L"Anna");
+    CHECK(groupTasks.size() == 2 && !JsonLite::GetWideString(groupTasks[1], "felelos", value));
+    const std::string withData = BuildReply(3, true, L"Kész.", listJson);
+    std::vector<std::string> sent;
+    CHECK(JsonLite::ReadObjectArray(withData, "elemek", sent) && sent.size() == 5);
+
+    // Timer and work-time status for Claude: the timer details only while it runs.
+    Status status;
+    status.measuring = true;
+    status.pausedFor = L"kizárt ablak: \"YouTube\"";
+    status.workedSeconds = 3 * 3600 + 125;
+    status.manualSeconds = 1800;
+    status.dailyTargetSeconds = 6 * 3600 + 50 * 60;
+    status.workMinutes = 50;
+    status.restMinutes = 7.5;
+    std::string statusJson = StatusJson(status);
+    std::string paused;
+    bool flag = true;
+    long long minutes = 0;
+    CHECK(JsonLite::GetString(statusJson, "szunetel_mert", paused) && paused == u8"kizárt ablak: \"YouTube\"");
+    CHECK(JsonLite::GetBool(statusJson, "most_szamol", flag) && !flag);
+    CHECK(JsonLite::GetInt64(statusJson, "mai_mert_perc", minutes) && minutes == 182);
+    CHECK(JsonLite::GetInt64(statusJson, "mai_osszes_perc", minutes) && minutes == 212);
+    CHECK(JsonLite::GetInt64(statusJson, "napi_cel_perc", minutes) && minutes == 410);
+    CHECK(JsonLite::GetBool(statusJson, "fut", flag) && !flag && statusJson.find("hatra_mp") == std::string::npos);
+    CHECK(statusJson.find("\"piheno_perc\": 7.5") != std::string::npos);
+    status.timerActive = true;
+    status.workPhase = false;
+    status.secondsLeft = 95;
+    status.round = 2;
+    status.rounds = 8;
+    statusJson = StatusJson(status);
+    std::string phase;
+    CHECK(JsonLite::GetString(statusJson, "szakasz", phase) && phase == u8"pihenő");
+    CHECK(JsonLite::GetInt64(statusJson, "hatra_mp", minutes) && minutes == 95);
+    CHECK(JsonLite::GetInt64(statusJson, "korok", minutes) && minutes == 8);
 
     // Reply and spoken text.
     const std::string reply = BuildReply(7, true, L"Felvettem: \"ő\".");

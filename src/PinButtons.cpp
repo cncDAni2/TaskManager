@@ -17,6 +17,7 @@ namespace {
 constexpr const char* KEYS[COUNT] = { "timer", "focus", "mute", "pin", "drag", "add", "playpause", "next" };
 constexpr COLORREF ACTIVE_BG = RGB(30, 58, 138); // Same blue as the main window's toggles.
 constexpr int GAP = 3;
+int g_windowHeight = 0;
 
 struct Placed {
     Id id;
@@ -41,18 +42,22 @@ bool IsOn(Id id) {
 std::vector<Placed> Place(int clientWidth) {
     const Config config = Current();
     std::vector<Placed> placed;
+    const bool bottom = AtBottom();
+    const int top = bottom ? g_windowHeight - STRIP_BOTTOM : 0;
+    // The timer badge is shorter and touches the body.
+    const int badgeTop = bottom ? top : top + STRIP_BOTTOM - 14;
     int right = clientWidth - 4;
     for (auto it = config.rbegin(); it != config.rend(); ++it) {
         if (!it->enabled || !IsVisible(it->id)) continue;
         const int width = it->id == Timer ? 38 : (it->id == Drag ? 28 : 30);
-        const RECT rect = it->id == Timer ? RECT{ right - width, STRIP_BOTTOM - 14, right, STRIP_BOTTOM }
-            : RECT{ right - width, 0, right, STRIP_BOTTOM };
+        const RECT rect = it->id == Timer ? RECT{ right - width, badgeTop, right, badgeTop + 14 }
+            : RECT{ right - width, top, right, top + STRIP_BOTTOM };
         placed.insert(placed.begin(), { it->id, rect });
         right -= width + GAP;
     }
     // Without the task list an empty strip would leave nothing to show that PIN mode is on.
     if (placed.empty() && PinList::CurrentMode() != PinList::Always) {
-        placed.push_back({ Status, RECT{ right - 30, 0, right, STRIP_BOTTOM } });
+        placed.push_back({ Status, RECT{ right - 30, top, right, top + STRIP_BOTTOM } });
     }
     return placed;
 }
@@ -272,6 +277,22 @@ Config Current() {
     return Parse(g_store.pin_buttons);
 }
 
+bool AtBottom() {
+    return PinList::CurrentMode() == PinList::OnHover;
+}
+
+void SetWindowHeight(int height) {
+    g_windowHeight = height;
+}
+
+int BodyTop() {
+    return AtBottom() ? 0 : STRIP_BOTTOM;
+}
+
+int BodyBottom() {
+    return AtBottom() ? g_windowHeight - STRIP_BOTTOM : g_windowHeight;
+}
+
 void Apply(const Config& config) {
     g_store.pin_buttons = Serialize(config);
     g_store.SaveLocal();
@@ -325,13 +346,16 @@ bool GetRect(int clientWidth, Id id, RECT& rect) {
 }
 
 void AddToRegion(HRGN region, int clientWidth) {
+    const bool bottom = AtBottom();
     for (const Placed& placed : Place(clientWidth)) {
         const RECT r = UiScale::Px(placed.rect);
-        // Rounded like the painted shapes, so no square corners stick out above the window. Tabs
-        // reach into the body so only their top corners are rounded.
+        // Rounded like the painted shapes, so no square corners stick out of the window. Tabs
+        // reach into the body so only their outer corners are rounded.
+        const int reach = UiScale::Px(8);
         HRGN part = placed.id == Timer
             ? CreateRoundRectRgn(r.left, r.top, r.right + 1, r.bottom + 1, UiScale::Px(5), UiScale::Px(5))
-            : CreateRoundRectRgn(r.left, r.top, r.right + 1, r.bottom + UiScale::Px(8), UiScale::Px(6), UiScale::Px(6));
+            : CreateRoundRectRgn(r.left, bottom ? r.top - reach : r.top, r.right + 1,
+                bottom ? r.bottom + 1 : r.bottom + reach, UiScale::Px(6), UiScale::Px(6));
         CombineRgn(region, region, part, RGN_OR);
         DeleteObject(part);
     }
@@ -346,15 +370,16 @@ void Paint(HDC hdc, int clientWidth) {
         }
         const bool on = IsOn(placed.id);
         if (on) {
-            // Rounded top, flat bottom on the window's edge: drawn taller and clipped at the edge.
+            // Rounded outer side, flat on the body's edge: drawn taller and clipped at the edge.
             const RECT& r = placed.rect;
+            const bool bottom = AtBottom();
             const int saved = SaveDC(hdc);
             IntersectClipRect(hdc, r.left, r.top, r.right, r.bottom);
             HBRUSH brush = CreateSolidBrush(ACTIVE_BG);
             HPEN pen = CreatePen(PS_SOLID, 1, ACTIVE_BG);
             SelectObject(hdc, brush);
             SelectObject(hdc, pen);
-            RoundRect(hdc, r.left, r.top, r.right, r.bottom + 8, 6, 6);
+            RoundRect(hdc, r.left, bottom ? r.top - 8 : r.top, r.right, bottom ? r.bottom : r.bottom + 8, 6, 6);
             RestoreDC(hdc, saved);
             DeleteObject(pen);
             DeleteObject(brush);

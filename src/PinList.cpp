@@ -5,8 +5,10 @@
 namespace PinList {
 namespace {
 constexpr UINT HIDE_DELAY_MS = 2000;
+constexpr UINT FLASH_MS = 5000;
 
 bool g_open = false;     // Mouse mode: the list is out.
+bool g_flash = false;    // The list shows for a while after the PIN window appeared.
 bool g_tracking = false; // A WM_MOUSELEAVE is requested.
 
 bool PinWindowOnScreen() {
@@ -45,7 +47,7 @@ int Limit() {
 
 bool IsShown() {
     const Mode mode = CurrentMode();
-    return mode == Always || (mode == OnHover && g_open);
+    return mode == Always || g_flash || (mode == OnHover && g_open);
 }
 
 void Apply(Mode mode, int limit) {
@@ -59,7 +61,14 @@ void Apply(Mode mode, int limit) {
 void Reset(HWND hWnd) {
     KillTimer(hWnd, IDT_PIN_LIST_HIDE);
     g_open = false;
+    g_flash = false;
     g_tracking = false;
+}
+
+void Flash(HWND hWnd) {
+    if (CurrentMode() == Always) return;
+    g_flash = true;
+    SetTimer(hWnd, IDT_PIN_LIST_HIDE, FLASH_MS, nullptr);
 }
 
 void HandleMouseMove(HWND hWnd) {
@@ -68,6 +77,10 @@ void HandleMouseMove(HWND hWnd) {
     KillTimer(hWnd, IDT_PIN_LIST_HIDE);
     if (g_open) return;
     g_open = true;
+    if (g_flash) {
+        g_flash = false; // Already out: the mouse mode takes it over.
+        return;
+    }
     Refresh();
 }
 
@@ -81,10 +94,13 @@ bool HandleTimer(HWND hWnd, WPARAM timerId) {
     // A drag keeps the rows it points into; the timer fires again after it.
     if (g_taskDragging || g_dragPotentialSourceIndex != -1) return true;
     KillTimer(hWnd, IDT_PIN_LIST_HIDE);
-    if (CursorOverWindow(hWnd)) {
+    if (CurrentMode() == OnHover && CursorOverWindow(hWnd)) {
+        g_open = true;
+        g_flash = false;
         TrackLeave(hWnd); // Back over it without a move message yet.
         return true;
     }
+    g_flash = false;
     g_open = false;
     Refresh();
     return true;

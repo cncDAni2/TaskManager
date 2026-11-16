@@ -1,6 +1,6 @@
 # Ultra-könnyű Windows Feladatkezelő (TaskManager)
 
-Az alkalmazás elsősorban a teendők gyors és egyszerű kezelésére szolgál, másodsorban pedig a munkaidőd nyomon követésére. Indítása a `TaskManager.exe` fájllal történik. Ha a GitHubon újabb verzió jelenik meg, a program jelzi, és a "Frissítés" gombbal magát frissíti, majd újraindul (a Beállításokban kikapcsolható). A Beállításokban a verzióra kattintva megnyílik a kiadások oldala, és engedélyezett frissítéskeresés mellett azonnali ellenőrzés is indul.
+Az alkalmazás elsősorban a teendők gyors és egyszerű kezelésére szolgál, másodsorban pedig a munkaidőd nyomon követésére. Indítása a `TaskManager.exe` fájllal történik. Ha a GitHubon újabb verzió jelenik meg, a program jelzi, és a "Frissítés" gombbal magát frissíti, majd újraindul (a Beállításokban kikapcsolható).
 
 ## Feladatok kezelése
 
@@ -95,9 +95,10 @@ STRICT MODE: Ha ezt is bepipálod, akkor az időzítő kihatással lesz a munkai
 
 20-20-20 szabály: A szem egészségének megőrzése érdekében minden 20 perc képernyőnézés után nézz 20 másodpercig 20 láb (kb. 6 méter) távolságra. A program hangjelzéssel emlékeztet, amikor ideje szünetet tartani (2 csippanás), és mikor vissza kell térni (1 csippanás). A PIN ablakban a számláló szem ikonra vált a szem-pihenő alatt.
 
-### Laura hangasszisztens
+### Laura Ai-asszisztens
 
-Ha a gépen fut Laura, a TaskManager magától kapcsolódik hozzá: Laurának szólva felvehetsz feladatot, késznek jelölheted a nevével ("pipáld ki a számla befizetést"), indíthatod és leállíthatod a mérést és az időzítőt, megnyithatod a főablakot vagy a PIN ablakot, és csipogás helyett Laura mondja be az időzítő eseményeit. A kapcsolatot a Beállítások bal alsó Laura gombjával bonthatod és kapcsolhatod vissza.
+Ha a gépen fut Laura, a TaskManager magától kapcsolódik hozzá, és egy közös kapcsolatot épít. Laura képes a feladatkezelővel kapcsolatos parancsokat végrehajtani, pl. felvehetsz/késznek jelölhetsz feladatot, állíthatod az időzítőt, valamint lekérheted az időket/feladatokat is. A TaskManager csipogások helyett pedig Laura hangját használja.
+Ha létezik Laura, akkor a beállításokban megjelenik - rákattintva kikapcsolhatod.
 
 ### Fókusz mód
 

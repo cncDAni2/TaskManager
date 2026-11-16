@@ -100,6 +100,9 @@ void CALLBACK PlayMelody(PTP_CALLBACK_INSTANCE, void* context) {
             };
         } else if (melody == 4) {
             notes = { { kVisionBeepFrequency, kVisionBeepDurationMs, 0, kVisionBeepAmplitude } };
+        } else if (melody == 5) {
+            // "Ti-tü", high then low, like Windows' device-disconnected sound.
+            notes = { { 988, 110, 40, 6000.0 }, { 659, 170, 0, 6000.0 } };
         } else {
             notes.assign(std::begin(newTaskNotes), std::end(newTaskNotes));
         }
@@ -141,10 +144,14 @@ void SubmitMelody(std::uintptr_t melody) {
     }
 }
 
-// While Laura is connected she says it instead of the melody; muted sounds silence her too.
+// While Laura is connected she says it instead of the melody, and nothing beeps even if she did
+// not take it; muted sounds silence her too.
 void Cue(std::uintptr_t melody, const char* event, const std::wstring& text) {
     if (!g_store.sounds_enabled) return;
-    if (LauraLink::Say(event, text)) return;
+    if (LauraLink::IsConnected()) {
+        LauraLink::Say(event, text);
+        return;
+    }
     SubmitMelody(melody);
 }
 
@@ -169,11 +176,19 @@ void AudioCue::PlayTimerRestMelody() {
 }
 
 void AudioCue::PlayVisionBreakStart() {
-    Cue(3, "szem_pihenes", L"Pihentesd a szemed, nézz húsz másodpercig a távolba.");
+    Cue(3, "szem_pihenes", L"Pihentesd a szemed húsz másodpercre.");
 }
 
 void AudioCue::PlayVisionBreakEnd() {
-    Cue(4, "szem_pihenes_vege", L"Letelt a húsz másodperc.");
+    Cue(4, "szem_pihenes_vege", L"Letelt.");
+}
+
+bool AudioCue::BeepsAllowed() {
+    return g_store.sounds_enabled && !LauraLink::IsConnected();
+}
+
+void AudioCue::PlayLinkLost() {
+    SubmitMelody(5);
 }
 
 void AudioCue::ToggleSounds() {
@@ -182,5 +197,5 @@ void AudioCue::ToggleSounds() {
     Hotkeys::UpdateTrayTip();
     RefreshSettingsSounds();
     if (g_hWnd) InvalidateRect(g_hWnd, nullptr, FALSE); // The PIN window's mute button.
-    if (g_store.sounds_enabled) MessageBeep(MB_OK); // Audible confirmation only when unmuting.
+    if (BeepsAllowed()) MessageBeep(MB_OK); // Audible confirmation only when unmuting.
 }

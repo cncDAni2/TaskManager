@@ -1,4 +1,5 @@
 #include "WorkTimeDialog.h"
+#include "AudioCue.h"
 #include "AppState.h"
 #include "WorkHistory.h"
 #include <commctrl.h>
@@ -131,7 +132,7 @@ namespace {
                 int seconds = 0;
                 if (!ParseHours(input, seconds)) {
                     MessageBoxW(hWnd, L"Adj meg 0 és 1000 közötti óraszámot, legfeljebb 4 tizedessel.",
-                        L"Manuális munkaidő", MB_OK | (g_store.sounds_enabled ? MB_ICONWARNING : 0));
+                        L"Manuális munkaidő", MB_OK | (AudioCue::BeepsAllowed() ? MB_ICONWARNING : 0));
                     SetFocus(state->hoursEdit);
                     return 0;
                 }

@@ -55,7 +55,7 @@ void ToggleTaskAssignment(HWND hWnd, int taskId) {
     bool wasInContextMenu = g_inContextMenu;
     g_inContextMenu = true;
     MessageBoxW(hWnd, message.c_str(), L"Feladat már foglalt",
-        MB_OK | (g_store.sounds_enabled ? MB_ICONINFORMATION : 0));
+        MB_OK | (AudioCue::BeepsAllowed() ? MB_ICONINFORMATION : 0));
     g_inContextMenu = wasInContextMenu;
 }
 
@@ -80,7 +80,7 @@ LRESULT CALLBACK CenterMessageBoxHook(int code, WPARAM wParam, LPARAM lParam) {
 } // namespace
 
 int ShowCenteredMessageBox(HWND owner, const std::wstring& text, const wchar_t* caption, UINT flags) {
-    if (!g_store.sounds_enabled) flags &= ~MB_ICONMASK; // Icons also play the system sound.
+    if (!AudioCue::BeepsAllowed()) flags &= ~MB_ICONMASK; // Icons also play the system sound.
     bool wasInContextMenu = g_inContextMenu;
     g_inContextMenu = true;
     g_messageBoxOwner = owner;
@@ -317,8 +317,8 @@ bool HandleLButtonDown(HWND hWnd, LPARAM lParam) {
             }
         }
 
-        // Empty space below the top strip opens the main window; the strip itself still drags.
-        if (my > PinButtons::STRIP_BOTTOM + 6) {
+        // Empty space in the body opens the main window; the strip itself still drags.
+        if (PinButtons::AtBottom() ? my < PinButtons::BodyBottom() - 6 : my > PinButtons::STRIP_BOTTOM + 6) {
             ToggleWindow();
             return true;
         }

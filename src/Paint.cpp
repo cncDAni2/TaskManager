@@ -19,7 +19,6 @@
 #include "GroupView.h"
 
 namespace {
-    constexpr int DAILY_WORK_TARGET_SECONDS = 6 * 3600 + 50 * 60;
     constexpr int WEEKLY_WORK_TARGET_SECONDS = 34 * 3600 + 10 * 60;
 
     int CurrentManualWorkSeconds() {
@@ -102,6 +101,8 @@ void PaintMiniWindow(HWND hWnd, HDC hdc, const RECT& dirty) {
     DeleteObject(hBrushBg);
 
     PinButtons::Paint(hdcMem, clientW);
+    // The work bar lies on the body's bottom edge: above the strip when that is at the bottom.
+    const int bodyBottom = PinButtons::AtBottom() ? PinButtons::BodyBottom() : clientH;
 
     if (!PinList::IsShown()) {
         // Only the top strip and the work bar.
@@ -109,7 +110,7 @@ void PaintMiniWindow(HWND hWnd, HDC hdc, const RECT& dirty) {
         SelectObject(hdcMem, g_hFontNormal);
         SetTextColor(hdcMem, th.textEmpty);
         SetBkMode(hdcMem, TRANSPARENT);
-        RECT rcEmpty = { 10, 0, clientW - 10, clientH - 3 };
+        RECT rcEmpty = { 10, 0, clientW - 10, bodyBottom - 3 };
         DrawTextW(hdcMem, L"Nincs aktív feladat! 🎉", -1, &rcEmpty, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
     } else {
         GroupView::PaintPin(hdcMem, th);
@@ -227,7 +228,7 @@ void PaintMiniWindow(HWND hWnd, HDC hdc, const RECT& dirty) {
     }
 
     if (WorkTracking::IsEnabled()) {
-        RECT rcTrackBg = { 0, clientH - 3, clientW, clientH };
+        RECT rcTrackBg = { 0, bodyBottom - 3, clientW, bodyBottom };
         const bool miniWorkGray = g_workMeasurementStopped;
         COLORREF bgTrack = miniWorkGray ? RGB(75, 85, 99)
             : (g_themeMode == ThemeMode::Pink ? RGB(217, 0, 108) : th.borderSep);
@@ -238,7 +239,7 @@ void PaintMiniWindow(HWND hWnd, HDC hdc, const RECT& dirty) {
         int workSec = g_store.work_seconds_today;
         const int targetWorkSec = DAILY_WORK_TARGET_SECONDS;
         int manualSec = CurrentManualWorkSeconds();
-        RECT rcMiniBar = { 0, clientH - 3, clientW, clientH };
+        RECT rcMiniBar = { 0, bodyBottom - 3, clientW, bodyBottom };
         COLORREF miniBarFill = miniWorkGray ? RGB(156, 163, 175)
             : (g_isWorkActive ? RGB(34, 197, 94) : RGB(239, 68, 68));
         DrawBarSegments(hdcMem, rcMiniBar, workSec, manualSec, targetWorkSec,

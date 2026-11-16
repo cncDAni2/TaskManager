@@ -30,10 +30,10 @@ struct Geometry {
 
 Geometry Measure(const RECT& client) {
     Geometry g;
-    // The PIN window's region starts below its button strip; lay out in the visible part.
-    const int top = g_isMiniMode ? PinButtons::STRIP_BOTTOM : 0;
+    // The PIN window's body lies beside its button strip (above or below); lay out in that part.
+    const int top = g_isMiniMode ? PinButtons::BodyTop() : 0;
     const int w = client.right - client.left;
-    const int h = client.bottom - top;
+    const int h = (g_isMiniMode ? PinButtons::BodyBottom() : client.bottom) - top;
     const int cx = w / 2;
     const int cy = top + h / 2;
     g.compact = h < UpdateOverlay::FULL_LAYOUT_MIN_HEIGHT;

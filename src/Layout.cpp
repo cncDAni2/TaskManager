@@ -226,7 +226,8 @@ void RecalculateMiniLayout() {
     int miniW = g_fullWinW / 2;
     if (miniW < 260) miniW = 292;
 
-    int curY = 26;
+    const bool stripAtBottom = PinButtons::AtBottom();
+    int curY = (stripAtBottom ? 0 : PinButtons::STRIP_BOTTOM) + 6;
     const int itemH = 22;
     const int spacing = 4;
     const time_t now = time(nullptr);
@@ -298,7 +299,7 @@ void RecalculateMiniLayout() {
     } else if (activeCount == 0) {
         totalH = 70 + WorkTracking::MiniBarHeight();
     } else {
-        totalH = curY - spacing + 6 + WorkTracking::MiniBarHeight();
+        totalH = curY - spacing + 6 + WorkTracking::MiniBarHeight() + (stripAtBottom ? PinButtons::STRIP_BOTTOM : 0);
     }
 
     if (UpdateOverlay::IsVisible()) {
@@ -328,7 +329,9 @@ void RecalculateMiniLayout() {
     g_miniPositionValid = true;
     previousMiniHeight = pixelH;
 
-    HRGN hMiniRegion = CreateRectRgn(0, UiScale::Px(PinButtons::STRIP_BOTTOM), pixelW, pixelH);
+    PinButtons::SetWindowHeight(totalH);
+    HRGN hMiniRegion = CreateRectRgn(0, UiScale::Px(PinButtons::BodyTop()), pixelW,
+        UiScale::Px(PinButtons::BodyBottom()));
     PinButtons::AddToRegion(hMiniRegion, miniW);
     if (!SetWindowRgn(g_hWnd, hMiniRegion, TRUE)) {
         DeleteObject(hMiniRegion);
@@ -375,6 +378,7 @@ void EnterMiniMode() {
 
     g_isMiniMode = true;
     PinList::Reset(g_hWnd);
+    PinList::Flash(g_hWnd);
     g_scrollbarHovered = false;
     g_scrollbarDragging = false;
 

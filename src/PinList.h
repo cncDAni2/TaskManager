@@ -3,9 +3,10 @@
 // PIN window task list display (pin_list_mode, pin_list_count in tasks-local.json; Settings row
 // "PIN feladatlista"): never, while the mouse is over the window, or always; and how many tasks of
 // the PIN order show (0 = all). In the mouse mode the list opens on the first mouse move over the
-// window (the window grows upwards, it is anchored at the bottom) and closes 2 s after the mouse
+// window (the window grows upwards, it is anchored at the bottom; the button strip is then at the
+// bottom, see PinButtons::AtBottom) and closes 2 s after the mouse
 // left it (one-shot IDT_PIN_LIST_HIDE, re-armed while a drag still runs). Without the list only the
-// top strip and the work bar show (with work tracking off, only the strip's tabs); PinButtons draws a status ring when the strip would be empty.
+// strip and the work bar show (with work tracking off, only the strip's tabs); PinButtons draws a status ring when the strip would be empty.
 
 #include <windows.h>
 
@@ -22,6 +23,9 @@ bool IsShown();
 void Apply(Mode mode, int limit);
 // The PIN window opens or closes: the mouse mode starts with the list closed.
 void Reset(HWND hWnd);
+// The PIN window appeared: a hidden list (never / mouse mode) still shows for 5 s
+// (IDT_PIN_LIST_HIDE); a mouse move over it in the mouse mode takes it over.
+void Flash(HWND hWnd);
 
 // PIN window messages.
 void HandleMouseMove(HWND hWnd);

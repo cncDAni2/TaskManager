@@ -1,5 +1,6 @@
 #include "LauraLink.h"
 #include "AppState.h"
+#include "AudioCue.h"
 #include "IntervalTimer.h"
 #include "Layout.h"
 #include "LauraProtocol.h"
@@ -10,6 +11,7 @@
 #include "TimerView.h"
 #include "UIEventHandler.h"
 #include "WorkTracking.h"
+#include <algorithm>
 #include <cwctype>
 #include <deque>
 
@@ -75,7 +77,7 @@ void Apply(const LauraProtocol::Actions& actions) {
     if (actions.sendCatalog) Send(LauraProtocol::Catalog());
     if (actions.lost) {
         StateToast::ShowLaura(false);
-        if (g_store.sounds_enabled) MessageBeep(MB_ICONWARNING);
+        AudioCue::PlayLinkLost();
     }
     if (actions.found) StateToast::ShowLaura(true);
     if (actions.changed) RefreshSettingsLaura();
@@ -96,8 +98,25 @@ std::wstring Trim(std::wstring text) {
     return text;
 }
 
+// Open tasks in the order of the list (most important first), with their group names.
+std::vector<LauraProtocol::ListedTask> OpenTasksInOrder() {
+    std::vector<int> order = g_sessionActiveIdsInitialized ? g_sessionActiveTaskIds : g_store.active_order;
+    g_store.PrependUnorderedActive(order);
+    std::vector<LauraProtocol::ListedTask> list;
+    for (int id : order) {
+        for (const Task& task : g_store.tasks) {
+            if (task.id != id || task.completed) continue;
+            const TaskGroup* group = task.group_uid.empty() ? nullptr : g_store.FindGroup(task.group_uid);
+            list.push_back({ task.text, group ? group->name : std::wstring(), task.assignee });
+            break;
+        }
+    }
+    return list;
+}
+
 // Runs one command; the reply is the sentence Laura reads aloud (empty: a cue already spoke).
-std::wstring Run(const LauraProtocol::Request& request, bool& ok) {
+// `data` (JSON) goes along for Claude, who may need more than the spoken sentence.
+std::wstring Run(const LauraProtocol::Request& request, bool& ok, std::string& data) {
     using LauraProtocol::Command;
     ok = true;
     switch (request.command) {
@@ -168,6 +187,44 @@ std::wstring Run(const LauraProtocol::Request& request, bool& ok) {
         Repaint();
         return L"Késznek jelöltem: " + text + L".";
     }
+    case Command::TaskList: {
+        const auto tasks = OpenTasksInOrder();
+        data = LauraProtocol::TasksJson(tasks);
+        return LauraProtocol::DescribeTasks(tasks, 5);
+    }
+    case Command::TaskFirst: {
+        const auto tasks = OpenTasksInOrder();
+        data = LauraProtocol::TasksJson(tasks);
+        return LauraProtocol::DescribeFirstTask(tasks);
+    }
+    case Command::Status: {
+        LauraProtocol::Status s;
+        s.measuring = WorkTracking::IsEnabled() && !g_workMeasurementStopped;
+        s.counting = s.measuring && g_isWorkActive;
+        if (s.measuring && !s.counting) {
+            s.pausedFor = g_isSessionLocked ? L"zárolt gép"
+                : g_isExcludedApp ? L"kizárt ablak: " + g_excludedAppName
+                : g_isIdlePaused ? L"inaktivitás" : L"";
+        }
+        s.focusMode = g_focusMode;
+        s.workedSeconds = g_store.work_seconds_today;
+        const time_t day = g_store.last_reset_time != 0 ? g_store.last_reset_time : time(nullptr);
+        const auto manual = g_store.manual_work_history.find(WorkHistory::DateKey(day));
+        s.manualSeconds = manual == g_store.manual_work_history.end() ? 0 : (std::max)(0, manual->second);
+        s.dailyTargetSeconds = DAILY_WORK_TARGET_SECONDS;
+        s.timerActive = g_intervalTimer.IsActive();
+        s.timerPaused = g_intervalTimer.IsPaused();
+        s.workPhase = g_intervalTimer.IsWorkPhase();
+        s.secondsLeft = g_intervalTimer.SecondsRemaining();
+        s.round = g_intervalTimer.CurrentRepetition();
+        s.rounds = g_intervalTimer.RepetitionCount();
+        s.workMinutes = g_store.timer_work_minutes;
+        s.restMinutes = g_store.timer_rest_minutes;
+        s.visionRule = g_store.timer_2020_enabled;
+        s.visionBreak = g_intervalTimer.IsVisionBreakActive();
+        data = LauraProtocol::StatusJson(s);
+        return L"";
+    }
     case Command::OpenWindow:
         ShowAppWindow();
         return L"";
@@ -190,10 +247,11 @@ void RunPending() {
     bool ok = true;
     g_spokeDuringCommand = false;
     g_runningCommand = true;
-    std::wstring reply = Run(request, ok);
+    std::string data;
+    std::wstring reply = Run(request, ok, data);
     g_runningCommand = false;
     if (g_spokeDuringCommand) reply.clear(); // The timer cue already told what happened.
-    Send(LauraProtocol::BuildReply(request.req, ok, reply));
+    Send(LauraProtocol::BuildReply(request.req, ok, reply, data));
 }
 }
 

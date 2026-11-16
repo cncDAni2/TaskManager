@@ -6,7 +6,7 @@
 // HelloAck straight to the sender, so the link forms whichever starts first. The TaskManager then
 // sends its command catalog. Content goes as WM_COPYDATA (dwData = COPYDATA_TAG, UTF-8 JSON
 // object with "t"): TaskManager -> Laura "katalogus", "valasz" (reply to "req"), "mond" (text to
-// read aloud instead of a beep); Laura -> TaskManager "parancs" ("id", "req", optional "szoveg").
+// read aloud instead of a beep; a reply may carry "adat", e.g. the task list for Claude); Laura -> TaskManager "parancs" ("id", "req", optional "szoveg").
 // Laura matches speech to the catalog herself, so no LLM is needed for these commands.
 // Session is the connection state: the user can switch the link off (the Settings button); then
 // Laura is still detected but gets Bye and no answers.
@@ -20,7 +20,7 @@ constexpr wchar_t MESSAGE_NAME[] = L"LauraTaskmanager_v1";
 constexpr ULONG_PTR COPYDATA_TAG = 0x4C544D31; // "LTM1"
 enum Signal : LPARAM { Hello = 1, HelloAck = 2, Bye = 3 };
 
-enum class Command { Unknown, MeasureOn, MeasureOff, TimerStart, TimerPause, TimerNext, TaskAdd, TaskDone, OpenWindow, OpenPin };
+enum class Command { Unknown, MeasureOn, MeasureOff, TimerStart, TimerPause, TimerNext, TaskAdd, TaskDone, TaskList, TaskFirst, Status, OpenWindow, OpenPin };
 
 struct Request {
     long long req = 0;
@@ -34,13 +34,50 @@ const std::string& Catalog();
 Command Lookup(const std::string& id);
 // False when it is not a "parancs" message.
 bool ParseRequest(const std::string& json, Request& request);
-std::string BuildReply(long long req, bool ok, const std::wstring& text);
+// `data`: raw JSON value sent as "adat" (empty: none).
+std::string BuildReply(long long req, bool ok, const std::wstring& text, const std::string& data = "");
 std::string BuildSay(const char* event, const std::wstring& text);
 
 // The open task the spoken name refers to (accents, case and word endings do not matter): its id,
 // 0 when none fits, -1 when several fit equally well.
 constexpr int AMBIGUOUS_TASK = -1;
 int FindOpenTask(const std::vector<Task>& tasks, const std::wstring& spoken);
+
+// An open task in list order (most important first) with its group's name (empty: none).
+struct ListedTask {
+    std::wstring text;
+    std::wstring group;
+    std::wstring assignee;
+};
+// The first `limit` tasks as one spoken sentence; a group's tasks are named together.
+std::wstring DescribeTasks(const std::vector<ListedTask>& tasks, size_t limit);
+// The most important task as a sentence.
+std::wstring DescribeFirstTask(const std::vector<ListedTask>& tasks);
+// The whole list for Claude, in list order: {"osszes": N, "elemek": [task | {"csoport", "feladatok": [task]}]},
+// a task being {"szoveg", "felelos" (only when assigned)}.
+std::string TasksJson(const std::vector<ListedTask>& tasks);
+
+// Work time and interval timer as they are now (idozito.allapot, for Claude only).
+struct Status {
+    bool measuring = false;         // Work-time measurement switched on and not stopped.
+    bool counting = false;          // Counting this second (not idle, no excluded window).
+    std::wstring pausedFor;         // Why it is not counting: "inaktivitás", "kizárt ablak: X", "zárolt gép".
+    bool focusMode = false;
+    int workedSeconds = 0;          // Measured today.
+    int manualSeconds = 0;          // Entered by hand for today.
+    int dailyTargetSeconds = 0;
+    bool timerActive = false;
+    bool timerPaused = false;
+    bool workPhase = true;
+    int secondsLeft = 0;
+    int round = 0;
+    int rounds = 0;
+    double workMinutes = 0;
+    double restMinutes = 0;
+    bool visionRule = false;        // 20-20-20 on.
+    bool visionBreak = false;       // In a 20-second eye break now.
+};
+std::string StatusJson(const Status& status);
 
 // What the caller has to do after a state change.
 struct Actions {

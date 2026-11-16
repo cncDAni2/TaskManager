@@ -69,7 +69,7 @@ void ApplyPolledSync(std::vector<SyncFiles::PollFile>& files) {
         bool wasInContextMenu = g_inContextMenu;
         g_inContextMenu = true;
         MessageBoxW(g_hWnd, conflictMessage.c_str(), L"A feladat felelőse megváltozott",
-            MB_OK | (g_store.sounds_enabled ? MB_ICONINFORMATION : 0));
+            MB_OK | (AudioCue::BeepsAllowed() ? MB_ICONINFORMATION : 0));
         g_inContextMenu = wasInContextMenu;
     }
 }
@@ -481,7 +481,8 @@ static LRESULT MainProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                     (timerButtonsChanged || timerWasRunning || g_intervalTimer.IsRunning())) {
                     RECT rcClient{};
                     UiScale::ClientRect(hWnd, &rcClient);
-                    RECT rcTimerText = { 0, 0, rcClient.right, PinButtons::STRIP_BOTTOM + 2 };
+                    const int stripTop = PinButtons::AtBottom() ? PinButtons::BodyBottom() - 2 : 0;
+                    RECT rcTimerText = { 0, stripTop, rcClient.right, stripTop + PinButtons::STRIP_BOTTOM + 2 };
                     UiScale::Invalidate(hWnd, &rcTimerText, FALSE);
                     UpdateWindow(hWnd); // Painted now, so it does not merge with the bottom bar below.
                 }
@@ -522,8 +523,9 @@ static LRESULT MainProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                     RECT rcClient;
                     UiScale::ClientRect(hWnd, &rcClient);
                     if (g_isMiniMode) {
-                        RECT rcMiniBottom = { 0, rcClient.bottom - WorkTracking::MiniBarHeight(),
-                            rcClient.right, rcClient.bottom };
+                        const int barBottom = PinButtons::AtBottom() ? PinButtons::BodyBottom() : rcClient.bottom;
+                        RECT rcMiniBottom = { 0, barBottom - WorkTracking::MiniBarHeight(),
+                            rcClient.right, barBottom };
                         if (tracking && MiniWorkBarChanged()) UiScale::Invalidate(hWnd, &rcMiniBottom, FALSE);
                         if (visionBreakWasActive != g_intervalTimer.IsVisionBreakActive()) {
                             RedrawWindow(hWnd, nullptr, nullptr,

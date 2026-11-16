@@ -78,6 +78,7 @@
 #define IDT_GROUP_HOLD      4004
 #define IDT_PIN_LIST_HIDE   4005
 #define BOTTOM_BAR_HEIGHT   28
+constexpr int DAILY_WORK_TARGET_SECONDS = 6 * 3600 + 50 * 60; // The work bar's full length (Paint, LauraLink).
 #define WORK_MEASURE_FOOTER_HEIGHT 40
 #define TIMER_STATUS_HEIGHT 22
 

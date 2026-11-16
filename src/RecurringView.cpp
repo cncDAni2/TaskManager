@@ -1,4 +1,5 @@
 #include "RecurringView.h"
+#include "AudioCue.h"
 #include "AppState.h"
 #include "Drawing.h"
 #include "InlineEdit.h"
@@ -133,7 +134,7 @@ void InsertOnTop(const std::vector<int>& ids) {
 void Save() {
     const std::wstring text = Trimmed(g_textEdit);
     if (text.empty()) {
-        if (g_store.sounds_enabled) MessageBeep(MB_ICONWARNING);
+        if (AudioCue::BeepsAllowed()) MessageBeep(MB_ICONWARNING);
         SetFocus(g_textEdit);
         return;
     }

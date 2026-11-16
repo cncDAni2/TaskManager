@@ -1,6 +1,8 @@
 #include "LauraProtocol.h"
 #include "JsonLite.h"
 #include "TaskUtils.h"
+#include <algorithm>
+#include <cstdio>
 #include <cwctype>
 
 namespace LauraProtocol {
@@ -33,6 +35,14 @@ const char kCatalog[] = R"json({"t": "katalogus", "v": 1, "parancsok": [
   "szoveg": true,
   "kezdet": ["pipald ki", "jelold kesznek", "jelold meg kesznek", "jelold be kesznek", "huzd ki", "kesz a feladat",
    "kesz feladat", "feladat kesz", "feladat keszen", "elkeszult", "vegeztem a", "vegeztem ezzel", "teljesitettem"]},
+ {"id": "feladat.lista", "leiras": "Felolvassa a nyitott feladatokat fontossági sorrendben (a legfontosabb az első, csoportokkal). Az adat a teljes lista csoportokkal.",
+  "igek": ["olvas", "olvas fel", "sorol", "sorol fel", "mondd", "mond el", "mik", "milyen", "listaz"],
+  "targyak": ["feladat", "feladataim", "teendo", "tennivalo", "feladatlista"]},
+ {"id": "feladat.elso", "leiras": "Megmondja a legfontosabb (a lista első) nyitott feladatot.",
+  "igek": ["mi", "melyik", "mondd", "mond", "olvas", "olvas fel"],
+  "targyak": ["legfontosabb feladat", "kovetkezo feladat", "elso feladat", "legfontosabb teendo",
+   "kovetkezo teendo", "legfontosabb"]},
+ {"id": "idozito.allapot", "leiras": "Csak lekérdezés: a munkaidő-mérés és az időzítő mostani állapota az adatban (mai munkaidő, napi cél, fut-e a mérés, időzítő szakasza, hátralévő idő, körök, beállított munka- és pihenőidő). Ebből válaszolj arra, amit kérdeztek."},
  {"id": "ablak.megnyit", "leiras": "Megnyitja a TaskManager főablakát (feladatlista).",
   "igek": ["nyis meg", "nyit meg", "megnyit", "nyisd", "mutas", "mutat", "hozd elo", "hoz elo"],
   "targyak": ["taszkmenedzser", "taskmanager", "task manager", "feladatlista", "feladataim", "foablak",
@@ -47,7 +57,8 @@ constexpr Entry kCommands[] = {
     { "meres.be", Command::MeasureOn }, { "meres.ki", Command::MeasureOff },
     { "idozito.indit", Command::TimerStart }, { "idozito.szunet", Command::TimerPause },
     { "idozito.kovetkezo", Command::TimerNext }, { "feladat.uj", Command::TaskAdd },
-    { "feladat.kesz", Command::TaskDone },
+    { "feladat.kesz", Command::TaskDone }, { "feladat.lista", Command::TaskList },
+    { "feladat.elso", Command::TaskFirst }, { "idozito.allapot", Command::Status },
     { "ablak.megnyit", Command::OpenWindow }, { "pin.megnyit", Command::OpenPin },
 };
 }
@@ -75,9 +86,10 @@ bool ParseRequest(const std::string& json, Request& request) {
     return true;
 }
 
-std::string BuildReply(long long req, bool ok, const std::wstring& text) {
+std::string BuildReply(long long req, bool ok, const std::wstring& text, const std::string& data) {
     return "{\"t\": \"valasz\", \"req\": " + std::to_string(req) + ", \"ok\": " + (ok ? "true" : "false") +
-        ", \"szoveg\": \"" + TaskUtils::EscapeJsonString(TaskUtils::WideToUtf8(text)) + "\"}";
+        ", \"szoveg\": \"" + TaskUtils::EscapeJsonString(TaskUtils::WideToUtf8(text)) + "\"" +
+        (data.empty() ? std::string() : ", \"adat\": " + data) + "}";
 }
 
 namespace {
@@ -152,6 +164,118 @@ int FindOpenTask(const std::vector<Task>& tasks, const std::wstring& spoken) {
         }
     }
     return tie ? AMBIGUOUS_TASK : bestId;
+}
+
+namespace {
+// "a" or "az" before a word, as Hungarian needs it.
+std::wstring Article(const std::wstring& word) {
+    static const wchar_t kVowels[] = L"aáeéiíoóöőuúüűAÁEÉIÍOÓÖŐUÚÜŰ";
+    return !word.empty() && wcschr(kVowels, word[0]) ? L"az" : L"a";
+}
+
+// "A", "A és B", "A, B és C".
+std::wstring JoinNames(const std::vector<std::wstring>& names) {
+    std::wstring out;
+    for (size_t i = 0; i < names.size(); ++i) {
+        if (i > 0) out += i + 1 == names.size() ? L" és " : L", ";
+        out += names[i];
+    }
+    return out;
+}
+
+std::string Quote(const std::wstring& text) {
+    return "\"" + TaskUtils::EscapeJsonString(TaskUtils::WideToUtf8(text)) + "\"";
+}
+
+std::string TaskValue(const ListedTask& task) {
+    return "{\"szoveg\": " + Quote(task.text) +
+        (task.assignee.empty() ? std::string() : ", \"felelos\": " + Quote(task.assignee)) + "}";
+}
+}
+
+std::wstring DescribeTasks(const std::vector<ListedTask>& tasks, size_t limit) {
+    if (tasks.empty()) return L"Nincs nyitott feladatod.";
+    const size_t shown = (std::min)(tasks.size(), limit);
+    std::wstring out;
+    if (tasks.size() == 1) out = L"Egy feladatod van: ";
+    else if (shown == tasks.size()) out = std::to_wstring(tasks.size()) + L" feladatod van, a legfontosabbal kezdve: ";
+    else out = std::to_wstring(tasks.size()) + L" feladatod van, az első " + std::to_wstring(shown) +
+        L" a legfontosabbal kezdve: ";
+    // Neighbours of one group are said together: "A, a Munka csoportban B és C, majd D."
+    std::vector<std::wstring> parts;
+    for (size_t i = 0; i < shown;) {
+        if (tasks[i].group.empty()) {
+            parts.push_back(tasks[i++].text);
+            continue;
+        }
+        const std::wstring group = tasks[i].group;
+        std::vector<std::wstring> names;
+        while (i < shown && tasks[i].group == group) names.push_back(tasks[i++].text);
+        parts.push_back(Article(group) + L" " + group + L" csoportban " + JoinNames(names));
+    }
+    for (size_t i = 0; i < parts.size(); ++i) {
+        if (i > 0) out += i + 1 == parts.size() ? L", majd " : L", ";
+        out += parts[i];
+    }
+    return out + L".";
+}
+
+std::wstring DescribeFirstTask(const std::vector<ListedTask>& tasks) {
+    if (tasks.empty()) return L"Nincs nyitott feladatod.";
+    const ListedTask& first = tasks.front();
+    if (first.group.empty()) return L"A legfontosabb feladatod: " + first.text + L".";
+    return L"A legfontosabb feladatod " + Article(first.group) + L" " + first.group + L" csoportban: " +
+        first.text + L".";
+}
+
+std::string TasksJson(const std::vector<ListedTask>& tasks) {
+    std::string out = "{\"osszes\": " + std::to_string(tasks.size()) + ", \"elemek\": [";
+    for (size_t i = 0; i < tasks.size();) {
+        if (i > 0) out += ", ";
+        if (tasks[i].group.empty()) {
+            out += TaskValue(tasks[i++]);
+            continue;
+        }
+        const std::wstring group = tasks[i].group;
+        out += "{\"csoport\": " + Quote(group) + ", \"feladatok\": [";
+        for (bool first = true; i < tasks.size() && tasks[i].group == group; first = false) {
+            if (!first) out += ", ";
+            out += TaskValue(tasks[i++]);
+        }
+        out += "]}";
+    }
+    return out + "]}";
+}
+
+namespace {
+std::string Bool(bool value) { return value ? "true" : "false"; }
+
+std::string Minutes(double minutes) {
+    char text[32]{};
+    snprintf(text, sizeof(text), "%g", minutes);
+    return text;
+}
+}
+
+std::string StatusJson(const Status& s) {
+    std::string out = "{\"meres\": {\"bekapcsolva\": " + Bool(s.measuring) + ", \"most_szamol\": " + Bool(s.counting);
+    if (!s.pausedFor.empty()) out += ", \"szunetel_mert\": " + Quote(s.pausedFor);
+    out += ", \"fokusz_mod\": " + Bool(s.focusMode) +
+        ", \"mai_mert_perc\": " + std::to_string(s.workedSeconds / 60) +
+        ", \"mai_kezi_perc\": " + std::to_string(s.manualSeconds / 60) +
+        ", \"mai_osszes_perc\": " + std::to_string((s.workedSeconds + s.manualSeconds) / 60) +
+        ", \"napi_cel_perc\": " + std::to_string(s.dailyTargetSeconds / 60) + "}";
+    out += ", \"idozito\": {\"fut\": " + Bool(s.timerActive);
+    if (s.timerActive) {
+        out += ", \"szunetel\": " + Bool(s.timerPaused) +
+            ", \"szakasz\": \"" + (s.workPhase ? "munka" : "pihenő") + "\"" +
+            ", \"hatra_mp\": " + std::to_string(s.secondsLeft) +
+            ", \"kor\": " + std::to_string(s.round) + ", \"korok\": " + std::to_string(s.rounds);
+    }
+    out += ", \"munka_perc\": " + Minutes(s.workMinutes) + ", \"piheno_perc\": " + Minutes(s.restMinutes) +
+        ", \"szabaly_20_20_20\": " + Bool(s.visionRule);
+    if (s.visionBreak) out += ", \"szem_pihenes_most\": true";
+    return out + "}}";
 }
 
 std::string BuildSay(const char* event, const std::wstring& text) {
