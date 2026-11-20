@@ -45,7 +45,9 @@ void ApplyPolledSync(std::vector<SyncFiles::PollFile>& files) {
 
     g_store.ApplyPolled(files);
     for (const SyncNotice& notice : g_store.pendingNotices) {
-        if (notice.isNew) ShowNewTaskNotice(notice.text);
+        if (notice.isNew) {
+            if (!LauraLink::AnnounceNewTask(notice.changedBy, notice.text)) ShowNewTaskNotice(notice.text);
+        }
         else ShowTaskChangedNotice(notice.text, notice.previousText, notice.changedBy);
     }
     g_store.pendingNotices.clear();
@@ -211,7 +213,7 @@ static LRESULT MainProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                 OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE, L"Segoe UI");
             g_hFontSmall = CreateFontW(14, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET,
                 OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE, L"Segoe UI");
-            g_hFontMiniTimer = CreateFontW(13, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET,
+            g_hFontMiniTimer = CreateFontW(16, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET,
                 OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE, L"Segoe UI");
             g_hFontTimerLabel = CreateFontW(-14, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET,
                 OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE, L"Segoe UI");
@@ -431,6 +433,7 @@ static LRESULT MainProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                 return 0;
             }
             if (wParam == IDT_WORK_TIMER) {
+                LauraLink::Tick();
                 const bool timerWasRunning = g_intervalTimer.IsRunning();
                 const bool visionBreakWasActive = g_intervalTimer.IsVisionBreakActive();
                 if (WorkTick::AdvanceTimer(g_store, g_intervalTimer)) {
@@ -599,6 +602,18 @@ static LRESULT MainProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                 RecalculateLayout();
             }
             InvalidateRect(hWnd, nullptr, TRUE);
+            return 0;
+        }
+
+        case WM_DISPLAYCHANGE:
+        case WM_SETTINGCHANGE: {
+            // A swapped, removed or resized display: pull the PIN window back onto a live work area.
+            if (msg == WM_SETTINGCHANGE && wParam != SPI_SETWORKAREA) break;
+            if (g_isMiniMode && IsWindowVisible(hWnd)) {
+                UiScale::UpdateFromWindow(hWnd);
+                RecalculateMiniLayout();
+            }
+            if (msg == WM_SETTINGCHANGE) break;
             return 0;
         }
 

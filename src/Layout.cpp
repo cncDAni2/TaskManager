@@ -17,6 +17,19 @@
 #include <algorithm>
 #include <set>
 
+// Work area of the monitor nearest the saved PIN position, so a vanished or swapped display
+// brings the window back on screen; the primary one before any position is known.
+static RECT MiniWorkArea(int pixelW) {
+    RECT rcWork;
+    if (g_miniPositionValid) {
+        RECT saved = { g_miniWinX, g_miniWinY, g_miniWinX + pixelW, g_miniWinY + 1 };
+        MONITORINFO info = { sizeof(info) };
+        if (GetMonitorInfoW(MonitorFromRect(&saved, MONITOR_DEFAULTTONEAREST), &info)) return info.rcWork;
+    }
+    SystemParametersInfoW(SPI_GETWORKAREA, 0, &rcWork, 0);
+    return rcWork;
+}
+
 static int MeasureTaskTextHeight(HDC hdc, const std::wstring& text, int width) {
     RECT rc = { 0, 0, width, 0 };
     DrawTextW(hdc, text.c_str(), -1, &rc, DT_LEFT | DT_WORDBREAK | DT_NOPREFIX | DT_CALCRECT);
@@ -306,13 +319,12 @@ void RecalculateMiniLayout() {
         totalH = std::max(totalH, PinButtons::STRIP_BOTTOM + UpdateOverlay::FULL_LAYOUT_MIN_HEIGHT);
     }
 
-    RECT rcWork;
-    SystemParametersInfoW(SPI_GETWORKAREA, 0, &rcWork, 0);
+    // The window itself lives in real pixels.
+    const int pixelW = UiScale::Px(miniW);
+    const RECT rcWork = MiniWorkArea(pixelW);
     int maxH = UiScale::Units(rcWork.bottom - rcWork.top) - 30;
     if (totalH > maxH) totalH = maxH;
 
-    // The window itself lives in real pixels.
-    const int pixelW = UiScale::Px(miniW);
     const int pixelH = UiScale::Px(totalH);
     int x = g_miniPositionValid ? g_miniWinX : rcWork.right - pixelW - 4; // Snug in the corner above the taskbar.
     int y = g_miniPositionValid ? g_miniWinY : rcWork.bottom - pixelH - 4;

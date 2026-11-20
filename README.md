@@ -97,7 +97,8 @@ STRICT MODE: Ha ezt is bepipálod, akkor az időzítő kihatással lesz a munkai
 
 ### Laura Ai-asszisztens
 
-Ha a gépen fut Laura, a TaskManager magától kapcsolódik hozzá, és egy közös kapcsolatot épít. Laura képes a feladatkezelővel kapcsolatos parancsokat végrehajtani, pl. felvehetsz/késznek jelölhetsz feladatot, állíthatod az időzítőt, valamint lekérheted az időket/feladatokat is. A TaskManager csipogások helyett pedig Laura hangját használja.
+Ha a gépen fut Laura, a TaskManager magától kapcsolódik hozzá, és egy közös kapcsolatot épít. Laura képes a feladatkezelővel kapcsolatos parancsokat végrehajtani, pl. feladataid kezelése, időzítő állítása, munkaidő kezelése.  
+A TaskManager csipogások helyett pedig Laura hangját használja, és bemondja az közös feladatok eseményeit is.
 Ha létezik Laura, akkor a beállításokban megjelenik - rákattintva kikapcsolhatod.
 
 ### Fókusz mód

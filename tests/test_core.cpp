@@ -13,6 +13,7 @@
 #include "WorkTick.h"
 #include <cstdio>
 #include <functional>
+#include <set>
 
 // Hotkeys.cpp needs the whole app; the store only asks this one thing from it.
 namespace Hotkeys { bool IsValidCombo(long long) { return true; } }
@@ -1390,7 +1391,7 @@ void TestLauraLink() {
     // Every catalog command is known and described.
     std::vector<std::string> commands;
     CHECK(JsonLite::ReadObjectArray(Catalog(), "parancsok", commands));
-    CHECK(commands.size() == 12);
+    CHECK(commands.size() == 18);
     for (const std::string& command : commands) {
         std::string id, description;
         CHECK(JsonLite::GetString(command, "id", id) && Lookup(id) != Command::Unknown);
@@ -1454,6 +1455,113 @@ void TestLauraLink() {
     const std::string withData = BuildReply(3, true, L"Kész.", listJson);
     std::vector<std::string> sent;
     CHECK(JsonLite::ReadObjectArray(withData, "elemek", sent) && sent.size() == 5);
+
+    // The list also brings the scheduled tasks, which are not active yet.
+    const std::string withScheduled = TasksJson({ listed[0] },
+        { { L"Fogorvos", "2026-11-24", 0, RepeatUnit::Day }, { L"Jelentés", "2026-11-23", 1, RepeatUnit::Week } });
+    std::vector<std::string> scheduledItems;
+    CHECK(JsonLite::ReadObjectArray(withScheduled, "utemezett", scheduledItems) && scheduledItems.size() == 2);
+    std::string due;
+    CHECK(scheduledItems.size() == 2 && JsonLite::GetString(scheduledItems[0], "megjelenik", due) && due == "2026-11-24");
+    CHECK(scheduledItems.size() == 2 && JsonLite::GetWideString(scheduledItems[0], "ismetles", value) && value == L"egyszeri");
+    CHECK(scheduledItems.size() == 2 && JsonLite::GetWideString(scheduledItems[1], "ismetles", value) && value == L"hetente");
+    CHECK(TasksJson({ listed[0] }).find("utemezett") == std::string::npos);
+
+    // Editing, work time by days and the manual entry arrive with their own fields.
+    Request more;
+    CHECK(ParseRequest(u8R"({"t": "parancs", "id": "feladat.modosit", "szoveg": "tej", "uj_szoveg": "Kakaó"})", more));
+    CHECK(more.command == Command::TaskEdit && more.text == L"tej" && more.newText == L"Kakaó");
+    CHECK(ParseRequest(R"({"t": "parancs", "id": "munkaido.napok", "tol": "2026-11-16", "ig": "2026-11-20"})", more));
+    CHECK(more.command == Command::WorkDays && more.from == "2026-11-16" && more.to == "2026-11-20");
+    CHECK(ParseRequest(R"({"t": "parancs", "id": "munkaido.kezi", "perc": -30})", more));
+    CHECK(more.command == Command::ManualWork && more.minutes == -30 && more.date.empty());
+
+    // Work time of a range: only days with work, today from the live counter, with the weekday.
+    const WorkHistory::Records measured = { { "2026-11-13", 7200 }, { "2026-11-16", 3600 }, { "2026-11-18", 0 },
+        { "2026-11-20", 60 } };
+    const WorkHistory::Records manual = { { "2026-11-17", 1800 }, { "2026-11-21", 600 } };
+    const std::string daysJson = WorkDaysJson(measured, manual, "2026-11-20", 5400, "2026-11-16", "2026-11-20", 24600);
+    std::vector<std::string> days;
+    long long dayMinutes = 0;
+    CHECK(JsonLite::ReadObjectArray(daysJson, "napok", days) && days.size() == 3);
+    std::string dayName;
+    CHECK(days.size() == 3 && JsonLite::GetString(days[0], "nap", dayName) && dayName == u8"hétfő");
+    CHECK(days.size() == 3 && JsonLite::GetInt64(days[1], "kezi_perc", dayMinutes) && dayMinutes == 30);
+    CHECK(days.size() == 3 && JsonLite::GetInt64(days[2], "mert_perc", dayMinutes) && dayMinutes == 90); // Live, not 1.
+    CHECK(JsonLite::GetInt64(daysJson, "teljes_perc", dayMinutes) && dayMinutes == 60 + 30 + 90);
+    CHECK(JsonLite::GetInt64(daysJson, "napi_cel_perc", dayMinutes) && dayMinutes == 410);
+
+    // Deleting: only a task written in the last 24 hours.
+    const time_t now = 1800000000;
+    CHECK(ParseRequest(R"({"t": "parancs", "id": "feladat.torol", "szoveg": "tej"})", more));
+    CHECK(more.command == Command::TaskDelete && more.text == L"tej");
+    CHECK(CheckDelete(now - 60, now).empty());
+    CHECK(CheckDelete(now - DELETE_WINDOW_SECONDS, now).empty());
+    CHECK(!CheckDelete(now - DELETE_WINDOW_SECONDS - 1, now).empty());
+    CHECK(!CheckDelete(0, now).empty()); // Unknown age: kept.
+
+    // Announcements: always something to say, and the wording changes with the random number.
+    for (int kind = 0; kind <= static_cast<int>(Announce::WorkNinety); ++kind) {
+        std::set<std::wstring> wordings;
+        for (unsigned random = 0; random < 50; ++random) {
+            const std::wstring text = AnnouncementText(static_cast<Announce>(kind), random, 10);
+            CHECK(!text.empty() && text.find(L'{') == std::wstring::npos);
+            wordings.insert(text);
+        }
+        CHECK(wordings.size() > 1);
+    }
+
+    // Spoken bits.
+    CHECK(FormatDuration(45) == L"45 perc" && FormatDuration(120) == L"2 óra" && FormatDuration(80) == L"1 óra 20 perc");
+    CHECK(CrossesShare(22139, 22140, 24600, 90) && !CrossesShare(22140, 22141, 24600, 90));
+    CHECK(!CrossesShare(20000, 21000, 24600, 90) && !CrossesShare(0, 0, 0, 90));
+    CHECK(NewTaskSentence(L"Anna", L"Számla") == L"Anna új feladatot írt ki: Számla.");
+    CHECK(NewTaskSentence(L"", L"Számla") == L"Új közös feladat: Számla.");
+
+    // Finished tasks for Claude: when, shared or not and where, newest first, at most `limit`.
+    tm finishedAt{};
+    finishedAt.tm_year = 2026 - 1900;
+    finishedAt.tm_mon = 10;
+    finishedAt.tm_mday = 16;
+    finishedAt.tm_hour = 14;
+    finishedAt.tm_min = 32;
+    finishedAt.tm_isdst = -1;
+    const std::vector<DoneTask> done = {
+        { L"Riport", mktime(&finishedAt), true, L"Közös \"lista\"", L"Anna", L"Béla" },
+        { L"Tej", mktime(&finishedAt) - 86400, false, L"", L"", L"" },
+        { L"Régi", 1, false, L"", L"", L"" } };
+    const std::string doneJson = DoneTasksJson(done, 2);
+    std::vector<std::string> doneItems;
+    CHECK(JsonLite::GetInt64(doneJson, "osszes", total) && total == 3);
+    CHECK(JsonLite::ReadObjectArray(doneJson, "elemek", doneItems) && doneItems.size() == 2);
+    std::string when;
+    bool shared = false;
+    CHECK(doneItems.size() == 2 && JsonLite::GetString(doneItems[0], "kesz", when) && when == "2026-11-16 14:32");
+    CHECK(doneItems.size() == 2 && JsonLite::GetBool(doneItems[0], "kozos", shared) && shared);
+    CHECK(doneItems.size() == 2 && JsonLite::GetWideString(doneItems[0], "fajl", value) && value == L"Közös \"lista\"");
+    CHECK(doneItems.size() == 2 && JsonLite::GetWideString(doneItems[0], "modositotta", value) && value == L"Béla");
+    CHECK(doneItems.size() == 2 && JsonLite::GetBool(doneItems[1], "kozos", shared) && !shared);
+    CHECK(doneItems.size() == 2 && !JsonLite::GetWideString(doneItems[1], "fajl", value));
+    CHECK(doneItems.size() == 2 && JsonLite::GetString(doneItems[1], "kesz", when) && when == "2026-11-15 14:32");
+
+    // A task for a later day, repeating only when asked.
+    Request scheduled;
+    CHECK(ParseRequest(u8R"({"t": "parancs", "req": 9, "id": "feladat.idozit", "szoveg": "Számla", "datum": "2026-12-03", "ismetles": 2, "egyseg": "het"})", scheduled));
+    CHECK(scheduled.command == Command::TaskSchedule && scheduled.date == "2026-12-03");
+    CHECK(scheduled.repeatCount == 2 && scheduled.repeatUnit == RepeatUnit::Week);
+    CHECK(CheckSchedule(scheduled, "2026-11-17").empty());
+    CHECK(CheckSchedule(scheduled, "2026-12-03").empty());               // Today is fine: it appears at once.
+    CHECK(CheckSchedule(scheduled, "2026-12-04") == L"Ez a nap már elmúlt.");
+    CHECK(DescribeSchedule(scheduled.text, scheduled.date, 2, RepeatUnit::Week) == L"Ütemeztem: Számla, 2026.12.03., 2 hetente.");
+    CHECK(DescribeSchedule(L"Zárás", "2027-01-31", 1, RepeatUnit::Month) == L"Ütemeztem: Zárás, 2027.01.31., havonta.");
+    CHECK(DescribeSchedule(L"Fogorvos", "2026-11-20", 0, RepeatUnit::Day) == L"Ütemeztem: Fogorvos, 2026.11.20.");
+    CHECK(ParseRequest(R"({"t": "parancs", "id": "feladat.idozit", "szoveg": "x", "datum": "2026-02-30"})", scheduled));
+    CHECK(scheduled.repeatCount == 0 && scheduled.repeatUnit == RepeatUnit::Day);
+    CHECK(CheckSchedule(scheduled, "2026-01-01") == L"Nem értem a dátumot.");
+    CHECK(ParseRequest(R"({"t": "parancs", "id": "feladat.idozit", "szoveg": " ", "datum": "2026-12-01"})", scheduled));
+    CHECK(CheckSchedule(scheduled, "2026-01-01") == L"Mi legyen a feladat szövege?");
+    CHECK(ParseRequest(R"({"t": "parancs", "id": "feladat.idozit", "szoveg": "x", "datum": "2026-12-01", "ismetles": 5000})", scheduled));
+    CHECK(CheckSchedule(scheduled, "2026-01-01") == L"Ilyen ismétlést nem tudok beállítani.");
 
     // Timer and work-time status for Claude: the timer details only while it runs.
     Status status;

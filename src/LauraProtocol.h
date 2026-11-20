@@ -12,6 +12,8 @@
 // Laura is still detected but gets Bye and no answers.
 
 #include "AppTypes.h"
+#include "Recurring.h"
+#include "WorkHistory.h"
 #include <string>
 #include <vector>
 
@@ -20,13 +22,20 @@ constexpr wchar_t MESSAGE_NAME[] = L"LauraTaskmanager_v1";
 constexpr ULONG_PTR COPYDATA_TAG = 0x4C544D31; // "LTM1"
 enum Signal : LPARAM { Hello = 1, HelloAck = 2, Bye = 3 };
 
-enum class Command { Unknown, MeasureOn, MeasureOff, TimerStart, TimerPause, TimerNext, TaskAdd, TaskDone, TaskList, TaskFirst, Status, OpenWindow, OpenPin };
+enum class Command { Unknown, MeasureOn, MeasureOff, TimerStart, TimerPause, TimerNext, TaskAdd, TaskDone, TaskList, TaskFirst, Status, TaskSchedule, DoneList, TaskEdit, WorkDays, ManualWork, TaskDelete, OpenWindow, OpenPin };
 
 struct Request {
     long long req = 0;
     Command command = Command::Unknown;
     std::string id;
     std::wstring text;
+    // feladat.idozit: first day, and the repeat (0: once).
+    std::string date;
+    int repeatCount = 0;
+    RepeatUnit repeatUnit = RepeatUnit::Day;
+    std::wstring newText;           // feladat.modosit
+    std::string from, to;           // munkaido.napok
+    int minutes = 0;                // munkaido.kezi (negative: take away)
 };
 
 // The commands Laura may send, with the word stems she recognizes them by (JSON, UTF-8).
@@ -53,9 +62,17 @@ struct ListedTask {
 std::wstring DescribeTasks(const std::vector<ListedTask>& tasks, size_t limit);
 // The most important task as a sentence.
 std::wstring DescribeFirstTask(const std::vector<ListedTask>& tasks);
-// The whole list for Claude, in list order: {"osszes": N, "elemek": [task | {"csoport", "feladatok": [task]}]},
-// a task being {"szoveg", "felelos" (only when assigned)}.
-std::string TasksJson(const std::vector<ListedTask>& tasks);
+// A scheduled task that is not in the list yet (a recurring rule).
+struct ScheduledTask {
+    std::wstring text;
+    std::string nextDue;            // YYYY-MM-DD
+    int repeatCount = 0;
+    RepeatUnit repeatUnit = RepeatUnit::Day;
+};
+// The whole list for Claude, in list order: {"osszes": N, "elemek": [task | {"csoport", "feladatok": [task]}],
+// "utemezett": [{"szoveg", "megjelenik", "ismetles"}]}, a task being {"szoveg", "felelos" (only when assigned)}.
+// The scheduled ones are not active yet; they come in the order they appear.
+std::string TasksJson(const std::vector<ListedTask>& tasks, const std::vector<ScheduledTask>& scheduled = {});
 
 // Work time and interval timer as they are now (idozito.allapot, for Claude only).
 struct Status {
@@ -78,6 +95,46 @@ struct Status {
     bool visionBreak = false;       // In a 20-second eye break now.
 };
 std::string StatusJson(const Status& status);
+
+// A finished task for Claude (feladat.keszek).
+struct DoneTask {
+    std::wstring text;
+    time_t completedAt = 0;
+    bool shared = false;            // In a sync file, seen by others too.
+    std::wstring files;             // Names of those sync files, ", " between them.
+    std::wstring assignee;
+    std::wstring changedBy;         // Last to change it; for a shared task usually who finished it.
+};
+// {"osszes": N, "elemek": [{"szoveg", "kesz": "YYYY-MM-DD HH:MM", "kozos", "fajl"?, "felelos"?, "modositotta"?}]}:
+// the newest `limit`, newest first (`tasks` already sorted so).
+std::string DoneTasksJson(const std::vector<DoneTask>& tasks, size_t limit);
+
+// Work time of the days from `from` to `to` (YYYY-MM-DD, inclusive) for Claude:
+// {"tol", "ig", "napok": [{"datum", "nap", "mert_perc", "kezi_perc", "osszes_perc"}], "teljes_perc", "napi_cel_perc"},
+// only days with work. `currentDay` counts `currentSeconds` measured (it is not in `measured` yet).
+std::string WorkDaysJson(const WorkHistory::Records& measured, const WorkHistory::Records& manual,
+    const std::string& currentDay, int currentSeconds, const std::string& from, const std::string& to, int dailyTarget);
+// "45 perc", "2 óra", "1 óra 20 perc".
+std::wstring FormatDuration(int minutes);
+// True when the day's work time reaches `percent` of the target with this second.
+bool CrossesShare(int beforeSeconds, int nowSeconds, int targetSeconds, int percent);
+// What the TaskManager says through Laura instead of a sound, in a few wordings each.
+enum class Announce { Rest, Work, TimerEnd, VisionStart, VisionEnd, WorkNinety };
+// A wording of `kind` chosen by `random`; Rest names the break's minutes.
+std::wstring AnnouncementText(Announce kind, unsigned random, double restMinutes = 0);
+
+// "Anna új feladatot írt ki: Számla." (or "Új közös feladat: …" without a name).
+std::wstring NewTaskSentence(const std::wstring& author, const std::wstring& text);
+
+// feladat.torol: Laura may delete only tasks written in the last 24 hours. An error to read aloud,
+// or empty when it may go.
+constexpr time_t DELETE_WINDOW_SECONDS = 24 * 60 * 60;
+std::wstring CheckDelete(time_t createdAt, time_t now);
+
+// feladat.idozit: an error to read aloud when the request cannot be scheduled, else empty.
+std::wstring CheckSchedule(const Request& request, const std::string& today);
+// "Ütemeztem: Számla, 2026.12.03., hetente."
+std::wstring DescribeSchedule(const std::wstring& text, const std::string& date, int count, RepeatUnit unit);
 
 // What the caller has to do after a state change.
 struct Actions {

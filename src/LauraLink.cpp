@@ -4,11 +4,14 @@
 #include "IntervalTimer.h"
 #include "Layout.h"
 #include "LauraProtocol.h"
+#include "Clock.h"
 #include "MainWindow.h"
+#include "PopupNotice.h"
 #include "SettingsDialog.h"
 #include "StateToast.h"
 #include "TaskUtils.h"
 #include "TimerView.h"
+#include "UndoToast.h"
 #include "UIEventHandler.h"
 #include "WorkTracking.h"
 #include <algorithm>
@@ -25,6 +28,9 @@ HANDLE g_wait = nullptr;
 UINT_PTR g_watchNumber = 0;
 std::deque<std::string> g_pending; // Commands copied out of WM_COPYDATA, run from the queue.
 bool g_spokeDuringCommand = false;
+struct NewTask { std::wstring author, text; };
+std::deque<NewTask> g_newTasks;        // Waiting for the user to be active.
+int g_lastWorkTotal = -1;              // Today's work seconds at the previous tick (-1: not known).
 bool g_runningCommand = false;
 
 void CALLBACK OnProcessExit(void* context, BOOLEAN) {
@@ -68,6 +74,12 @@ bool Send(const std::string& json) {
     return sent && answer != 0;
 }
 
+// Announcements Laura can no longer make become the usual pop-ups.
+void FlushToPopups() {
+    for (const NewTask& task : g_newTasks) ShowNewTaskNotice(task.text);
+    g_newTasks.clear();
+}
+
 void Apply(const LauraProtocol::Actions& actions) {
     if (actions.unwatch) Unwatch();
     if (actions.watch && g_session.Peer()) Watch(g_session.Peer());
@@ -81,6 +93,7 @@ void Apply(const LauraProtocol::Actions& actions) {
     }
     if (actions.found) StateToast::ShowLaura(true);
     if (actions.changed) RefreshSettingsLaura();
+    if (!g_session.Connected()) FlushToPopups();
 }
 
 void Repaint() {
@@ -96,6 +109,30 @@ std::wstring Trim(std::wstring text) {
     while (!text.empty() && (std::iswspace(text.front()) || text.front() == L':')) text.erase(text.begin());
     while (!text.empty() && (std::iswspace(text.back()) || text.back() == L'.')) text.pop_back();
     return text;
+}
+
+std::string CurrentWorkDay() {
+    return WorkHistory::DateKey(g_store.last_reset_time != 0 ? g_store.last_reset_time : time(nullptr));
+}
+
+int ManualSeconds(const std::string& day) {
+    const auto it = g_store.manual_work_history.find(day);
+    return it == g_store.manual_work_history.end() ? 0 : (std::max)(0, it->second);
+}
+
+bool UserAway() {
+    DWORD lastInput = 0;
+    if (g_isSessionLocked) return true;
+    return Clock::LastInputTick(lastInput) && Clock::InputTick() - lastInput >= 120000;
+}
+
+std::vector<LauraProtocol::ScheduledTask> ScheduledInOrder() {
+    std::vector<LauraProtocol::ScheduledTask> list;
+    for (const RecurringRule& rule : g_store.recurring_rules) {
+        list.push_back({ rule.text, rule.next_due, rule.repeat_count, rule.repeat_unit });
+    }
+    std::stable_sort(list.begin(), list.end(), [](const auto& a, const auto& b) { return a.nextDue < b.nextDue; });
+    return list;
 }
 
 // Open tasks in the order of the list (most important first), with their group names.
@@ -189,12 +226,12 @@ std::wstring Run(const LauraProtocol::Request& request, bool& ok, std::string& d
     }
     case Command::TaskList: {
         const auto tasks = OpenTasksInOrder();
-        data = LauraProtocol::TasksJson(tasks);
+        data = LauraProtocol::TasksJson(tasks, ScheduledInOrder());
         return LauraProtocol::DescribeTasks(tasks, 5);
     }
     case Command::TaskFirst: {
         const auto tasks = OpenTasksInOrder();
-        data = LauraProtocol::TasksJson(tasks);
+        data = LauraProtocol::TasksJson(tasks, ScheduledInOrder());
         return LauraProtocol::DescribeFirstTask(tasks);
     }
     case Command::Status: {
@@ -208,9 +245,7 @@ std::wstring Run(const LauraProtocol::Request& request, bool& ok, std::string& d
         }
         s.focusMode = g_focusMode;
         s.workedSeconds = g_store.work_seconds_today;
-        const time_t day = g_store.last_reset_time != 0 ? g_store.last_reset_time : time(nullptr);
-        const auto manual = g_store.manual_work_history.find(WorkHistory::DateKey(day));
-        s.manualSeconds = manual == g_store.manual_work_history.end() ? 0 : (std::max)(0, manual->second);
+        s.manualSeconds = ManualSeconds(CurrentWorkDay());
         s.dailyTargetSeconds = DAILY_WORK_TARGET_SECONDS;
         s.timerActive = g_intervalTimer.IsActive();
         s.timerPaused = g_intervalTimer.IsPaused();
@@ -224,6 +259,124 @@ std::wstring Run(const LauraProtocol::Request& request, bool& ok, std::string& d
         s.visionBreak = g_intervalTimer.IsVisionBreakActive();
         data = LauraProtocol::StatusJson(s);
         return L"";
+    }
+    case Command::TaskSchedule: {
+        const std::wstring problem = LauraProtocol::CheckSchedule(request, Recurring::Today());
+        if (!problem.empty()) {
+            ok = false;
+            return problem;
+        }
+        RecurringRule rule;
+        rule.text = Trim(request.text);
+        rule.start_date = request.date;
+        rule.repeat_count = request.repeatCount;
+        rule.repeat_unit = request.repeatUnit;
+        rule.targets = g_store.DefaultSourceIds();
+        const std::vector<int> created = g_store.SaveRecurringRule(rule); // Today: the task appears at once.
+        if (g_sessionActiveIdsInitialized) {
+            for (auto it = created.rbegin(); it != created.rend(); ++it) {
+                g_sessionActiveTaskIds.insert(g_sessionActiveTaskIds.begin(), *it);
+            }
+        }
+        Repaint();
+        return LauraProtocol::DescribeSchedule(rule.text, rule.start_date, rule.repeat_count, rule.repeat_unit);
+    }
+    case Command::DoneList: {
+        std::vector<LauraProtocol::DoneTask> done;
+        for (const Task& task : g_store.GetAllCompletedTasks()) { // Newest first.
+            LauraProtocol::DoneTask item{ task.text, task.completed_at, task.is_sync, L"", task.assignee,
+                task.is_sync ? task.updated_by : L"" };
+            for (int sourceId : task.sources) {
+                const SyncSource* source = g_store.FindSource(sourceId);
+                if (!source) continue;
+                if (!item.files.empty()) item.files += L", ";
+                item.files += source->name;
+            }
+            done.push_back(std::move(item));
+        }
+        data = LauraProtocol::DoneTasksJson(done, 50);
+        return L"";
+    }
+    case Command::TaskEdit: {
+        const std::wstring newText = Trim(request.newText);
+        if (newText.empty()) {
+            ok = false;
+            return L"Mire írjam át?";
+        }
+        const int id = LauraProtocol::FindOpenTask(g_store.tasks, request.text);
+        if (id == LauraProtocol::AMBIGUOUS_TASK) {
+            ok = false;
+            return L"Több feladat is illik rá, mondd pontosabban.";
+        }
+        if (id == 0 || std::none_of(g_store.tasks.begin(), g_store.tasks.end(),
+                [id](const Task& task) { return task.id == id; })) {
+            ok = false;
+            return L"Nem találtam ilyen nyitott feladatot.";
+        }
+        g_store.UpdateText(id, newText);
+        Repaint();
+        return L"Átírtam: " + newText + L".";
+    }
+    case Command::WorkDays: {
+        const std::string today = CurrentWorkDay();
+        std::string from = request.from.empty() ? request.to : request.from;
+        std::string to = request.to.empty() ? from : request.to;
+        if (from.empty()) from = to = today;
+        if (!Recurring::IsValidDate(from) || !Recurring::IsValidDate(to) || from > to) {
+            ok = false;
+            return L"Nem értem, melyik napokra gondolsz.";
+        }
+        data = LauraProtocol::WorkDaysJson(g_store.work_history, g_store.manual_work_history, today,
+            g_store.work_seconds_today, from, to, DAILY_WORK_TARGET_SECONDS);
+        return L"";
+    }
+    case Command::ManualWork: {
+        const std::string today = CurrentWorkDay();
+        const std::string day = request.date.empty() ? today : request.date;
+        if (!Recurring::IsValidDate(day)) {
+            ok = false;
+            return L"Nem értem a dátumot.";
+        }
+        if (day > today) {
+            ok = false;
+            return L"Jövőbeli napra nem írhatok munkaidőt.";
+        }
+        if (request.minutes == 0) {
+            ok = false;
+            return L"Mennyi időt írjak be?";
+        }
+        const int seconds = (std::max)(0, ManualSeconds(day) + request.minutes * 60);
+        g_store.SetManualWork(day, seconds);
+        Repaint();
+        return std::wstring(request.minutes > 0 ? L"Beírtam" : L"Levontam") + L", a kézi munkaidő " +
+            (day == today ? L"ma" : Recurring::FormatDate(day)) + L" összesen " +
+            LauraProtocol::FormatDuration(seconds / 60) + L".";
+    }
+    case Command::TaskDelete: {
+        const int id = LauraProtocol::FindOpenTask(g_store.tasks, request.text);
+        if (id == LauraProtocol::AMBIGUOUS_TASK) {
+            ok = false;
+            return L"Több feladat is illik rá, mondd pontosabban.";
+        }
+        const auto task = std::find_if(g_store.tasks.begin(), g_store.tasks.end(),
+            [id](const Task& candidate) { return candidate.id == id; });
+        if (id == 0 || task == g_store.tasks.end()) {
+            ok = false;
+            return L"Nem találtam ilyen nyitott feladatot.";
+        }
+        const std::wstring refused = LauraProtocol::CheckDelete(task->created_at, time(nullptr));
+        if (!refused.empty()) {
+            ok = false;
+            return refused;
+        }
+        const std::wstring text = task->text;
+        UndoToast::DeleteTasks({ id }); // 5 seconds to undo it.
+        UpdateControlsVisibility();
+        if (g_selectedIndex >= static_cast<int>(g_displayItems.size())) {
+            g_selectedIndex = static_cast<int>(g_displayItems.size()) - 1;
+        }
+        Repaint();
+        return L"Töröltem: " + text + L".";
     }
     case Command::OpenWindow:
         ShowAppWindow();
@@ -314,6 +467,41 @@ void ToggleEnabled() {
     g_store.laura_enabled = on;
     g_store.SaveLocal();
     Apply(g_session.SetEnabled(on));
+}
+
+std::wstring Announcement(int kind, double restMinutes) {
+    static unsigned random = GetTickCount();
+    random = random * 1103515245u + 12345u;
+    return LauraProtocol::AnnouncementText(static_cast<LauraProtocol::Announce>(kind),
+        random >> 16, restMinutes);
+}
+
+bool AnnounceNewTask(const std::wstring& author, const std::wstring& text) {
+    if (!g_session.Connected() || !g_store.sounds_enabled) return false;
+    g_newTasks.push_back({ author, text });
+    Tick(); // At once when the user is here.
+    return true;
+}
+
+void Tick() {
+    if (!g_session.Connected()) {
+        g_lastWorkTotal = -1;
+        return;
+    }
+    const int total = g_store.work_seconds_today + ManualSeconds(CurrentWorkDay());
+    if (g_lastWorkTotal >= 0 && g_store.sounds_enabled &&
+        LauraProtocol::CrossesShare(g_lastWorkTotal, total, DAILY_WORK_TARGET_SECONDS, 90)) {
+        Say("munkaido_90", Announcement(static_cast<int>(LauraProtocol::Announce::WorkNinety)));
+    }
+    g_lastWorkTotal = total;
+    if (g_newTasks.empty() || UserAway()) return;
+    while (!g_newTasks.empty()) {
+        const NewTask task = g_newTasks.front();
+        g_newTasks.pop_front();
+        if (!Say("uj_kozos_feladat", LauraProtocol::NewTaskSentence(task.author, task.text))) {
+            ShowNewTaskNotice(task.text);
+        }
+    }
 }
 
 bool Say(const char* event, const std::wstring& text) {

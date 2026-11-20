@@ -9,7 +9,8 @@
 // - g_fullWinW / g_fullWinH are units, g_fullWinX / g_fullWinY and g_miniWinX / g_miniWinY real
 //   pixels (see UiScale.h).
 // - Mini mode anchors to the bottom-right of g_fullWinX / g_fullWinY / g_fullWinW / g_fullWinH,
-//   constrained to SPI_GETWORKAREA to stay above the taskbar across monitors.
+//   constrained to the work area of the monitor nearest the saved PIN position (primary before
+//   one is known), so it stays above the taskbar and returns on screen after a display change.
 
 #include "AppTypes.h"
 

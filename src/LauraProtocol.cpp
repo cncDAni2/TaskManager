@@ -3,6 +3,8 @@
 #include "TaskUtils.h"
 #include <algorithm>
 #include <cstdio>
+#include <cstdlib>
+#include <ctime>
 #include <cwctype>
 
 namespace LauraProtocol {
@@ -30,7 +32,13 @@ const char kCatalog[] = R"json({"t": "katalogus", "v": 1, "parancsok": [
   "targyak": ["idozito", "timer", "pomodoro", "szakasz", "fazis"]},
  {"id": "feladat.uj", "leiras": "Új feladatot vesz fel a megadott szöveggel.", "szoveg": true,
   "kezdet": ["vegyel fel feladatot", "vegyel fel feladatnak", "vedd fel feladatnak", "vedd fel feladatkent",
-   "uj feladat", "feladat", "jegyezd fel", "ird fel", "irj fel feladatot", "add hozza a feladatokhoz"]},
+   "uj feladat", "feladat", "jegyezd fel", "ird fel", "irj fel feladatot", "add hozza a feladatokhoz"],
+  "kizar": ["holnap", "holnaputan", "jovo", "mulva", "hetfo", "kedd", "szerda", "csutortok", "pentek", "szombat",
+   "vasarnap", "januar", "februar", "marcius", "aprilis", "majus", "junius", "julius", "augusztus", "szeptember",
+   "oktober", "november", "december", "minden", "naponta", "hetente", "havonta", "ismetl", "utemez",
+   "emlekeztet", "kesobb"]},
+ {"id": "feladat.idozit", "leiras": "Időre megjelenő (ütemezett) feladat: a megadott napon jelenik meg a listában, kérésre ismétlődve. szoveg: a feladat; datum: az első nap ÉÉÉÉ-HH-NN alakban (ma vagy később); ismetles: hányanként ismétlődjön (0 vagy elhagyva: egyszer); egyseg: nap, het vagy honap. Ismétlést csak akkor adj meg, ha a felhasználó kifejezetten kérte.",
+  "szoveg": true},
  {"id": "feladat.kesz", "leiras": "Késznek jelöli a megnevezett nyitott feladatot (a szöveg a feladat neve vagy egy része).",
   "szoveg": true,
   "kezdet": ["pipald ki", "jelold kesznek", "jelold meg kesznek", "jelold be kesznek", "huzd ki", "kesz a feladat",
@@ -43,6 +51,11 @@ const char kCatalog[] = R"json({"t": "katalogus", "v": 1, "parancsok": [
   "targyak": ["legfontosabb feladat", "kovetkezo feladat", "elso feladat", "legfontosabb teendo",
    "kovetkezo teendo", "legfontosabb"]},
  {"id": "idozito.allapot", "leiras": "Csak lekérdezés: a munkaidő-mérés és az időzítő mostani állapota az adatban (mai munkaidő, napi cél, fut-e a mérés, időzítő szakasza, hátralévő idő, körök, beállított munka- és pihenőidő). Ebből válaszolj arra, amit kérdeztek."},
+ {"id": "feladat.keszek", "leiras": "Csak lekérdezés: az elkészült feladatok az adatban, a legutóbbi elöl (legfeljebb 50): szöveg, mikor lett kész, közös (szinkronizált) volt-e és melyik közös listában, felelős, és ki módosította utoljára (közösnél általában ő jelölte késznek). Ebből válaszolj arra, amit kérdeztek."},
+ {"id": "feladat.modosit", "leiras": "Átírja egy nyitott feladat szövegét. szoveg: a mostani feladat neve vagy egy része; uj_szoveg: az új, teljes szöveg."},
+ {"id": "munkaido.napok", "leiras": "Csak lekérdezés: a munkaidő napokra bontva az adatban (mért és kézi perc, összesen, napi cél). tol, ig: ÉÉÉÉ-HH-NN (mindkét nap benne van; egy naphoz elég az egyik). Pl. tegnap, a héten (hétfőtől máig), a múlt hónapban. Csak a munkával töltött napok szerepelnek."},
+ {"id": "munkaido.kezi", "leiras": "Kézi munkaidő beírása egy napra: perc: hozzáadandó perc (negatív: levonás); datum: ÉÉÉÉ-HH-NN, elhagyva ma. Jövőbeli napra nem lehet."},
+ {"id": "feladat.torol", "leiras": "Töröl egy nyitott feladatot (szoveg: a neve vagy egy része), de csak ha az elmúlt 24 órában írták ki; a régebbit visszautasítja. 5 másodpercig visszavonható a TaskManagerben."},
  {"id": "ablak.megnyit", "leiras": "Megnyitja a TaskManager főablakát (feladatlista).",
   "igek": ["nyis meg", "nyit meg", "megnyit", "nyisd", "mutas", "mutat", "hozd elo", "hoz elo"],
   "targyak": ["taszkmenedzser", "taskmanager", "task manager", "feladatlista", "feladataim", "foablak",
@@ -59,6 +72,9 @@ constexpr Entry kCommands[] = {
     { "idozito.kovetkezo", Command::TimerNext }, { "feladat.uj", Command::TaskAdd },
     { "feladat.kesz", Command::TaskDone }, { "feladat.lista", Command::TaskList },
     { "feladat.elso", Command::TaskFirst }, { "idozito.allapot", Command::Status },
+    { "feladat.idozit", Command::TaskSchedule }, { "feladat.keszek", Command::DoneList },
+    { "feladat.modosit", Command::TaskEdit }, { "munkaido.napok", Command::WorkDays },
+    { "munkaido.kezi", Command::ManualWork }, { "feladat.torol", Command::TaskDelete },
     { "ablak.megnyit", Command::OpenWindow }, { "pin.megnyit", Command::OpenPin },
 };
 }
@@ -82,6 +98,22 @@ bool ParseRequest(const std::string& json, Request& request) {
     JsonLite::GetInt64(json, "req", request.req);
     JsonLite::GetString(json, "id", request.id);
     JsonLite::GetWideString(json, "szoveg", request.text);
+    JsonLite::GetString(json, "datum", request.date);
+    long long count = 0;
+    if (JsonLite::GetInt64(json, "ismetles", count)) {
+        request.repeatCount = static_cast<int>((std::max)(-1LL, (std::min)(count, 100000LL)));
+    }
+    std::string unit;
+    JsonLite::GetString(json, "egyseg", unit);
+    request.repeatUnit = unit.rfind("het", 0) == 0 ? RepeatUnit::Week
+        : unit.rfind("honap", 0) == 0 ? RepeatUnit::Month : RepeatUnit::Day;
+    JsonLite::GetWideString(json, "uj_szoveg", request.newText);
+    JsonLite::GetString(json, "tol", request.from);
+    JsonLite::GetString(json, "ig", request.to);
+    long long minutes = 0;
+    if (JsonLite::GetInt64(json, "perc", minutes)) {
+        request.minutes = static_cast<int>((std::max)(-100000LL, (std::min)(minutes, 100000LL)));
+    }
     request.command = Lookup(request.id);
     return true;
 }
@@ -228,7 +260,7 @@ std::wstring DescribeFirstTask(const std::vector<ListedTask>& tasks) {
         first.text + L".";
 }
 
-std::string TasksJson(const std::vector<ListedTask>& tasks) {
+std::string TasksJson(const std::vector<ListedTask>& tasks, const std::vector<ScheduledTask>& scheduled) {
     std::string out = "{\"osszes\": " + std::to_string(tasks.size()) + ", \"elemek\": [";
     for (size_t i = 0; i < tasks.size();) {
         if (i > 0) out += ", ";
@@ -244,7 +276,18 @@ std::string TasksJson(const std::vector<ListedTask>& tasks) {
         }
         out += "]}";
     }
-    return out + "]}";
+    out += "]";
+    if (!scheduled.empty()) {
+        out += ", \"utemezett\": [";
+        for (size_t i = 0; i < scheduled.size(); ++i) {
+            std::wstring repeat = Recurring::DescribeRepeat(scheduled[i].repeatCount, scheduled[i].repeatUnit);
+            repeat[0] = static_cast<wchar_t>(std::towlower(repeat[0]));
+            out += std::string(i > 0 ? ", " : "") + "{\"szoveg\": " + Quote(scheduled[i].text) +
+                ", \"megjelenik\": \"" + scheduled[i].nextDue + "\", \"ismetles\": " + Quote(repeat) + "}";
+        }
+        out += "]";
+    }
+    return out + "}";
 }
 
 namespace {
@@ -276,6 +319,149 @@ std::string StatusJson(const Status& s) {
         ", \"szabaly_20_20_20\": " + Bool(s.visionRule);
     if (s.visionBreak) out += ", \"szem_pihenes_most\": true";
     return out + "}}";
+}
+
+std::string DoneTasksJson(const std::vector<DoneTask>& tasks, size_t limit) {
+    std::string out = "{\"osszes\": " + std::to_string(tasks.size()) + ", \"elemek\": [";
+    for (size_t i = 0; i < tasks.size() && i < limit; ++i) {
+        const DoneTask& task = tasks[i];
+        char when[32] = "";
+        tm local{};
+        if (task.completedAt > 0 && localtime_s(&local, &task.completedAt) == 0) {
+            strftime(when, sizeof(when), "%Y-%m-%d %H:%M", &local);
+        }
+        if (i > 0) out += ", ";
+        out += "{\"szoveg\": " + Quote(task.text) + ", \"kesz\": \"" + when + "\", \"kozos\": " + Bool(task.shared);
+        if (!task.files.empty()) out += ", \"fajl\": " + Quote(task.files);
+        if (!task.assignee.empty()) out += ", \"felelos\": " + Quote(task.assignee);
+        if (!task.changedBy.empty()) out += ", \"modositotta\": " + Quote(task.changedBy);
+        out += "}";
+    }
+    return out + "]}";
+}
+
+namespace {
+// "hétfő" for a YYYY-MM-DD date.
+std::string DayName(const std::string& date) {
+    static const char* const kNames[] = { "vasárnap", "hétfő", "kedd", "szerda", "csütörtök", "péntek", "szombat" };
+    tm day{};
+    day.tm_year = std::atoi(date.substr(0, 4).c_str()) - 1900;
+    day.tm_mon = std::atoi(date.substr(5, 2).c_str()) - 1;
+    day.tm_mday = std::atoi(date.substr(8, 2).c_str());
+    day.tm_hour = 12;
+    day.tm_isdst = -1;
+    return mktime(&day) == -1 ? "" : kNames[day.tm_wday];
+}
+}
+
+std::string WorkDaysJson(const WorkHistory::Records& measured, const WorkHistory::Records& manual,
+    const std::string& currentDay, int currentSeconds, const std::string& from, const std::string& to, int dailyTarget) {
+    // Every day with measured or manual work in the range, the current one from the live counter.
+    WorkHistory::Records days;
+    for (auto it = measured.lower_bound(from); it != measured.end() && it->first <= to; ++it) days[it->first];
+    for (auto it = manual.lower_bound(from); it != manual.end() && it->first <= to; ++it) days[it->first];
+    if (currentDay >= from && currentDay <= to) days[currentDay];
+    std::string out = "{\"tol\": \"" + from + "\", \"ig\": \"" + to + "\", \"napok\": [";
+    int total = 0;
+    bool first = true;
+    for (const auto& day : days) {
+        auto measuredIt = measured.find(day.first);
+        auto manualIt = manual.find(day.first);
+        const int worked = day.first == currentDay ? currentSeconds
+            : (measuredIt == measured.end() ? 0 : (std::max)(0, measuredIt->second));
+        const int added = manualIt == manual.end() ? 0 : (std::max)(0, manualIt->second);
+        if (worked + added <= 0) continue;
+        total += worked + added;
+        out += std::string(first ? "" : ", ") + "{\"datum\": \"" + day.first + "\", \"nap\": \"" + DayName(day.first) +
+            "\", \"mert_perc\": " + std::to_string(worked / 60) + ", \"kezi_perc\": " + std::to_string(added / 60) +
+            ", \"osszes_perc\": " + std::to_string((worked + added) / 60) + "}";
+        first = false;
+    }
+    return out + "], \"teljes_perc\": " + std::to_string(total / 60) +
+        ", \"napi_cel_perc\": " + std::to_string(dailyTarget / 60) + "}";
+}
+
+std::wstring FormatDuration(int minutes) {
+    minutes = (std::max)(0, minutes);
+    if (minutes < 60) return std::to_wstring(minutes) + L" perc";
+    std::wstring out = std::to_wstring(minutes / 60) + L" óra";
+    if (minutes % 60) out += L" " + std::to_wstring(minutes % 60) + L" perc";
+    return out;
+}
+
+bool CrossesShare(int beforeSeconds, int nowSeconds, int targetSeconds, int percent) {
+    const long long threshold = static_cast<long long>(targetSeconds) * percent; // In hundredths.
+    return targetSeconds > 0 && beforeSeconds * 100LL < threshold && nowSeconds * 100LL >= threshold;
+}
+
+namespace {
+constexpr size_t MAX_VARIANTS = 5;
+// Fewer than MAX_VARIANTS: the rest are nullptr.
+const wchar_t* const kAnnouncements[][MAX_VARIANTS] = {
+        { L"Lejárt a munkaidő, pihenj {perc} percet.", L"Szünet jön, {perc} perc pihenő.",
+          L"Pihenőidő: {perc} perc, állj fel egy kicsit.", L"Jár egy kis szusszanás, {perc} perc.",
+          L"Most {perc} perc szünet, nyújtózz egyet." },
+        { L"Vége a pihenőnek, jöhet a munka.", L"Lejárt a szünet, folytassuk.", L"Pihenő vége, vissza a munkához.",
+          L"Újra munkaidő van.", L"Indulhat a következő kör." },
+        { L"Lejárt az időzítő.", L"Az időzítő lefutott.", L"A taszkmenedzser időzítője végzett." },
+        { L"Pihentesd a szemed húsz másodpercre.", L"Szempihenő, nézz a távolba.",
+          L"Húsz másodpercre nézz valami messzire.", L"Vedd le a szemed a képernyőről egy kicsit.",
+          L"Szemtorna: nézz ki az ablakon." },
+        { L"Letelt.", L"Mehet tovább.", L"Kész a szempihenő.", L"Folytathatod.", L"Ennyi volt." },
+        { L"Megvan a napi munkaidő 90 százaléka.", L"A napi munkaidő 90 százalékánál tartasz.",
+          L"Már csak egy kevés hiányzik, megvan a napi munkaidő 90 százaléka.",
+          L"Hajrá, a taszkmenedzser szerint megvan a 90 százalék.",
+          L"Lassan a végére érsz, a napi munkaidő 90 százalékon áll." },
+};
+
+size_t VariantCount(Announce kind) {
+    size_t count = 0;
+    while (count < MAX_VARIANTS && kAnnouncements[static_cast<int>(kind)][count]) ++count;
+    return count;
+}
+}
+
+std::wstring AnnouncementText(Announce kind, unsigned random, double restMinutes) {
+    std::wstring text = kAnnouncements[static_cast<int>(kind)][random % VariantCount(kind)];
+    const size_t at = text.find(L"{perc}");
+    if (at != std::wstring::npos) {
+        wchar_t minutes[32]{};
+        swprintf_s(minutes, L"%g", restMinutes);
+        text.replace(at, 6, minutes);
+    }
+    return text;
+}
+
+std::wstring NewTaskSentence(const std::wstring& author, const std::wstring& text) {
+    if (author.empty()) return L"Új közös feladat: " + text + L".";
+    return author + L" új feladatot írt ki: " + text + L".";
+}
+
+std::wstring CheckDelete(time_t createdAt, time_t now) {
+    if (createdAt <= 0 || now - createdAt > DELETE_WINDOW_SECONDS) {
+        return L"Ezt nem törlöm: csak az elmúlt 24 órában kiírt feladatot törölhetem.";
+    }
+    return L"";
+}
+
+std::wstring CheckSchedule(const Request& request, const std::string& today) {
+    if (request.text.find_first_not_of(L" \t.:") == std::wstring::npos) return L"Mi legyen a feladat szövege?";
+    if (!Recurring::IsValidDate(request.date)) return L"Nem értem a dátumot.";
+    if (request.date < today) return L"Ez a nap már elmúlt.";
+    if (request.repeatCount < 0 || request.repeatCount > Recurring::MAX_REPEAT_COUNT) {
+        return L"Ilyen ismétlést nem tudok beállítani.";
+    }
+    return L"";
+}
+
+std::wstring DescribeSchedule(const std::wstring& text, const std::string& date, int count, RepeatUnit unit) {
+    std::wstring out = L"Ütemeztem: " + text + L", " + Recurring::FormatDate(date);
+    if (count > 0) {
+        std::wstring repeat = Recurring::DescribeRepeat(count, unit);
+        repeat[0] = static_cast<wchar_t>(std::towlower(repeat[0]));
+        out += L", " + repeat;
+    }
+    return out.back() == L'.' ? out : out + L"."; // The date already ends with one.
 }
 
 std::string BuildSay(const char* event, const std::wstring& text) {

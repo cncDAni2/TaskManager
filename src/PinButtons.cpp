@@ -45,12 +45,12 @@ std::vector<Placed> Place(int clientWidth) {
     const bool bottom = AtBottom();
     const int top = bottom ? g_windowHeight - STRIP_BOTTOM : 0;
     // The timer badge is shorter and touches the body.
-    const int badgeTop = bottom ? top : top + STRIP_BOTTOM - 14;
+    const int badgeTop = bottom ? top : top + STRIP_BOTTOM - 17;
     int right = clientWidth - 4;
     for (auto it = config.rbegin(); it != config.rend(); ++it) {
         if (!it->enabled || !IsVisible(it->id)) continue;
-        const int width = it->id == Timer ? 38 : (it->id == Drag ? 28 : 30);
-        const RECT rect = it->id == Timer ? RECT{ right - width, badgeTop, right, badgeTop + 14 }
+        const int width = it->id == Timer ? 44 : (it->id == Drag ? 28 : 30);
+        const RECT rect = it->id == Timer ? RECT{ right - width, badgeTop, right, badgeTop + 17 }
             : RECT{ right - width, top, right, top + STRIP_BOTTOM };
         placed.insert(placed.begin(), { it->id, rect });
         right -= width + GAP;

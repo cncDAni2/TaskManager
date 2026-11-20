@@ -810,7 +810,7 @@ void PaintMainWindow(HWND hWnd, HDC hdc, const RECT& dirty) {
             DeleteObject(fillPen);
         }
 
-        SelectObject(hdcMem, g_hFontSmall);
+        SelectObject(hdcMem, g_hFontMiniTimer);
         SetBkMode(hdcMem, TRANSPARENT);
         SetTextColor(hdcMem, g_themeMode == ThemeMode::Dark ? RGB(255, 255, 255) : RGB(0, 0, 0));
         const std::wstring timerStatus = std::wstring(g_intervalTimer.IsPaused()
@@ -882,7 +882,7 @@ void PaintMainWindow(HWND hWnd, HDC hdc, const RECT& dirty) {
         DeleteObject(hBrDot);
         DeleteObject(hPenDot);
 
-        SelectObject(hdcMem, g_hFontSmall);
+        SelectObject(hdcMem, g_hFontMiniTimer);
         SetBkMode(hdcMem, TRANSPARENT);
         SetTextColor(hdcMem, isHistory ? hc.text : th.textPrimary);
 

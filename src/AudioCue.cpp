@@ -3,6 +3,7 @@
 #include "Hotkeys.h"
 #include "IntervalTimer.h"
 #include "LauraLink.h"
+#include "LauraProtocol.h"
 #include "SettingsDialog.h"
 #include <windows.h>
 #include <mmsystem.h>
@@ -155,32 +156,31 @@ void Cue(std::uintptr_t melody, const char* event, const std::wstring& text) {
     SubmitMelody(melody);
 }
 
-std::wstring Minutes(double minutes) {
-    wchar_t text[32]{};
-    swprintf_s(text, L"%g", minutes);
-    return text;
+// One of the wordings Laura says it with (it varies each time).
+std::wstring Spoken(LauraProtocol::Announce kind) {
+    return LauraLink::Announcement(static_cast<int>(kind), g_store.timer_rest_minutes);
 }
 }
 
 // Called before the timer counts the finished round, so the last round is still the current one.
 void AudioCue::PlayTimerWorkMelody() {
     if (g_intervalTimer.CurrentRepetition() >= g_intervalTimer.RepetitionCount()) {
-        Cue(1, "idozito_vege", L"Lejárt az időzítő, minden kör kész.");
+        Cue(1, "idozito_vege", Spoken(LauraProtocol::Announce::TimerEnd));
     } else {
-        Cue(1, "munka", L"Vége a pihenőnek, jöhet a munka.");
+        Cue(1, "munka", Spoken(LauraProtocol::Announce::Work));
     }
 }
 
 void AudioCue::PlayTimerRestMelody() {
-    Cue(2, "pihenes", L"Lejárt a munkaidő, pihenj " + Minutes(g_store.timer_rest_minutes) + L" percet.");
+    Cue(2, "pihenes", Spoken(LauraProtocol::Announce::Rest));
 }
 
 void AudioCue::PlayVisionBreakStart() {
-    Cue(3, "szem_pihenes", L"Pihentesd a szemed húsz másodpercre.");
+    Cue(3, "szem_pihenes", Spoken(LauraProtocol::Announce::VisionStart));
 }
 
 void AudioCue::PlayVisionBreakEnd() {
-    Cue(4, "szem_pihenes_vege", L"Letelt.");
+    Cue(4, "szem_pihenes_vege", Spoken(LauraProtocol::Announce::VisionEnd));
 }
 
 bool AudioCue::BeepsAllowed() {
